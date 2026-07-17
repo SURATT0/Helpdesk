@@ -1,0 +1,107 @@
+# Full local stack: Postgres + API + web. For DB-only local dev (running the
+# api/web from your shell), start just Postgres: `docker compose up -d postgres`.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: deskly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: deskly
+      POSTGRES_PASSWORD: deskly
+      POSTGRES_DB: deskly
+    ports:
+      - "5432:5432"
+    volumes:
+      - deskly-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deskly -d deskly"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    container_name: deskly-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: postgresql://deskly:deskly@postgres:5432/deskly?schema=public
+      WEB_ORIGIN: http://localhost:3000
+      # Attachment files live on a named volume so they survive image rebuilds
+      # (the default ./.uploads is inside the container's ephemeral filesystem).
+      LOCAL_STORAGE_DIR: /data/uploads
+      # This stack serves plain HTTP, so the refresh cookie must NOT be Secure
+      # (browsers drop Secure cookies over HTTP). Behind TLS, set this true.
+      COOKIE_SECURE: "false"
+      # Local-stack secrets. NODE_ENV=production makes the API enforce strong,
+      # non-default secrets at boot (validateEnv), so these must be unique and
+      # >=32 chars — they are NOT the code's dev fallbacks. Generate your own
+      # for any real deployment: `openssl rand -base64 48`.
+      JWT_ACCESS_SECRET: local-compose-access-8f3c1a9d2e7b4056a1c8f2e9d4b7a3c6
+      JWT_REFRESH_SECRET: local-compose-refresh-2b9e4f71c05a83d6e7104b2f9a8c3d5e
+      ACCESS_TTL_SEC: "900"
+      REFRESH_TTL_SEC: "604800"
+      # Email-to-ticket webhook. Setting the secret enables
+      # POST /api/v1/integrations/email-inbound (providers present it via the
+      # x-webhook-secret header). Change it for any real deployment.
+      EMAIL_WEBHOOK_SECRET: local-compose-email-secret-1f7c9a2b4d6e8035
+      EMAIL_DEFAULT_CATEGORY: Email
+      # Real-time SSE event bus. Left unset → in-process (single node). To run
+      # multiple API replicas, start the `redis` service (`--profile scale`) and
+      # uncomment this so events fan out across instances via Redis pub/sub.
+      # REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    volumes:
+      - deskly-uploads:/data/uploads
+    healthcheck:
+      # Readiness (DB-gated) so `web` only starts once the API can serve. Uses
+      # node's global fetch to avoid depending on curl/wget in the image.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:4000/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+  # Real-time event bus for multi-instance API. Off by default; start with
+  # `docker compose --profile scale up -d` (then set REDIS_URL on the api).
+  redis:
+    image: redis:7-alpine
+    container_name: deskly-redis
+    restart: unless-stopped
+    profiles: ["scale"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle — the URL the browser uses to reach the API.
+        NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+    container_name: deskly-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  deskly-pgdata:
+  deskly-uploads:

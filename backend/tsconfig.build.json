@@ -1,0 +1,8 @@
+{
+  // Production build config: same as tsconfig.json but excludes test files so
+  // `dist/` never ships compiled *.test.js (which pulls vitest into the runtime
+  // image and pollutes `vitest run`). `typecheck` still uses tsconfig.json, so
+  // tests remain type-checked.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "test"]
+}

@@ -1,0 +1,27 @@
+# Dependencies / build output (subdir .gitignores also cover their own trees)
+node_modules/
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.local
+.env*.local
+
+# Local file storage (attachments in dev)
+.uploads/
+
+# Test / tooling output
+playwright-report/
+test-results/
+coverage/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# Claude Code local machine settings (keep CLAUDE.md + .claude/skills)
+.claude/settings.local.json

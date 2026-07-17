@@ -1,0 +1,210 @@
+// Deskly database schema (production backbone — slice 1).
+//
+// Normalized: tickets reference users/categories by FK; the repository JOINs to
+// produce the display names the API/UI expect. Enums mirror src/shared/domain.ts
+// EXACTLY. ticket_status_history is the SLA source of truth, written on every
+// status change. Attachment / Comment / Notification / AuditLog / RefreshToken
+// are intentionally deferred to later milestones.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TicketStatus {
+  new
+  open
+  in_progress
+  pending
+  resolved
+  closed
+}
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+enum Role {
+  admin
+  manager
+  agent
+  requester
+}
+
+model Team {
+  id         Int        @id @default(autoincrement())
+  name       String     @unique
+  department String
+  members    User[]
+  categories Category[] // categories that default-route to this team
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@map("teams")
+}
+
+model User {
+  id               Int                   @id @default(autoincrement())
+  name             String
+  email            String                @unique
+  role             Role
+  teamId           Int?                  @map("team_id")
+  team             Team?                 @relation(fields: [teamId], references: [id])
+  passwordHash     String?               @map("password_hash") // filled by the auth milestone
+  requestedTickets Ticket[]              @relation("TicketRequester")
+  assignedTickets  Ticket[]              @relation("TicketAssignee")
+  statusChanges    TicketStatusHistory[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+  comments         Comment[]
+  notifications    Notification[]
+  attachments      Attachment[]
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// Rotating refresh tokens. One row per issued token; the raw value is never
+// stored (only its SHA-256 hash). `familyId` groups a login session's rotation
+// chain — presenting an already-revoked token (reuse) revokes the whole family.
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  familyId  String    @map("family_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model Category {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  defaultTeamId Int?     @map("default_team_id") // auto-assignment target
+  defaultTeam   Team?    @relation(fields: [defaultTeamId], references: [id])
+  tickets       Ticket[]
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+model Ticket {
+  id            Int                   @id @default(autoincrement())
+  subject       String
+  description   String
+  status        TicketStatus          @default(new)
+  priority      Priority              @default(medium)
+  requesterId   Int                   @map("requester_id")
+  requester     User                  @relation("TicketRequester", fields: [requesterId], references: [id])
+  assigneeId    Int?                  @map("assignee_id")
+  assignee      User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  categoryId    Int                   @map("category_id")
+  category      Category              @relation(fields: [categoryId], references: [id])
+  dueAt         DateTime?             @map("due_at") // computed from SLA policy at creation
+  resolvedAt    DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
+  closedAt      DateTime?             @map("closed_at")
+  statusHistory TicketStatusHistory[]
+  comments      Comment[]
+  attachments   Attachment[]
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([priority])
+  @@map("tickets")
+}
+
+// SLA source of truth: one row per status change (append-only).
+model TicketStatusHistory {
+  id          Int           @id @default(autoincrement())
+  ticketId    Int           @map("ticket_id")
+  ticket      Ticket        @relation(fields: [ticketId], references: [id])
+  fromStatus  TicketStatus? @map("from_status")
+  toStatus    TicketStatus  @map("to_status")
+  changedById Int?          @map("changed_by_id")
+  changedBy   User?         @relation(fields: [changedById], references: [id])
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@map("ticket_status_history")
+}
+
+// Ticket conversation: public replies + internal notes (agent-only). Soft
+// delete via `deletedAt` — comments are the one entity that can be removed.
+model Comment {
+  id        Int       @id @default(autoincrement())
+  ticketId  Int       @map("ticket_id")
+  ticket    Ticket    @relation(fields: [ticketId], references: [id])
+  authorId  Int       @map("author_id")
+  author    User      @relation(fields: [authorId], references: [id])
+  body      String
+  internal  Boolean   @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([ticketId])
+  @@map("comments")
+}
+
+// File attachments on a ticket. Bytes live in IFileStorage (local/S3); only
+// metadata + the storage key are in the DB.
+model Attachment {
+  id          Int      @id @default(autoincrement())
+  ticketId    Int      @map("ticket_id")
+  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  uploaderId  Int      @map("uploader_id")
+  uploader    User     @relation(fields: [uploaderId], references: [id])
+  filename    String
+  contentType String   @map("content_type")
+  sizeBytes   Int      @map("size_bytes")
+  storageKey  String   @map("storage_key")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@map("attachments")
+}
+
+// Per-user notifications, fired on ticket transitions and new comments.
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  ticketId  Int?      @map("ticket_id")
+  message   String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// Append-only audit trail — one row per mutation (create, status change, …).
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  Int?     @map("entity_id")
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}

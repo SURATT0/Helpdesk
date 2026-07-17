@@ -1,0 +1,58 @@
+# Multi-replica overlay for the base stack. Runs the API as N replicas behind an
+# nginx load balancer, with Redis pub/sub fanning real-time (SSE) events across
+# every instance. Requires Docker Compose >= 2.24 (uses !reset / !override).
+#
+#   # bring up (3 replicas by default):
+#   docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d
+#
+#   # choose a different replica count:
+#   docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale api=5
+#
+#   # back to single-node dev:
+#   docker compose down --remove-orphans && docker compose up -d
+#
+# The browser still talks to http://localhost:4000 (now nginx) → API replicas,
+# so the pre-built web image needs no change.
+services:
+  redis:
+    # Base gates redis behind the "scale" profile; clear it so it starts here.
+    profiles: !reset []
+
+  api:
+    # Drop the fixed name + host port so Compose can run many replicas; nginx is
+    # the single ingress on :4000 instead.
+    container_name: !reset null
+    ports: !override []
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 3
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: deskly-lb
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./nginx.scale.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      # busybox wget ships in alpine; hits nginx's own liveness location.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  web:
+    depends_on:
+      nginx:
+        condition: service_healthy

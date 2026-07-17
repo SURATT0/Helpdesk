@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-bg: #f6efe1;
+  --ink: #0f172a;
+  --line: #e6e8ee;
+}
+
+* {
+  border-color: var(--line);
+}
+
+/* Consistent, branded keyboard-focus ring. Only shows for keyboard/AT focus
+   (:focus-visible), never on mouse clicks. Fields that manage their own focus
+   ring (Input/Textarea/select) set focus:outline-none, which keeps their ring
+   and suppresses this one — no double outline. */
+:focus-visible {
+  outline: 2px solid #3f8f5e;
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), Geist, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+/* thin, unobtrusive scrollbars to match the polished shell */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}

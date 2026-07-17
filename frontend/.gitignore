@@ -1,0 +1,15 @@
+/node_modules
+/.next
+/out
+/build
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+.env*.local
+.vercel
+
+# Playwright
+/playwright-report
+/test-results
+/blob-report
+/playwright/.cache

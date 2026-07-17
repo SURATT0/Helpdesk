@@ -1,0 +1,47 @@
+# Logging variant — adds a local log-aggregation stack (Grafana Loki + Grafana)
+# and points the API's LOKI_URL at it, so the pino-loki shipper can be exercised
+# end-to-end. This is an OVERRIDE; layer it on the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.logging.yml up -d --build
+#
+# Then browse http://localhost:3001 (Grafana, anonymous admin) → Explore → Loki →
+# run  {app="deskly-api"}  to see the app's structured logs. The base stack
+# (docker compose up) is unchanged and logs to stdout only.
+services:
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: deskly-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - deskly-loki:/loki
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: deskly-grafana
+    restart: unless-stopped
+    environment:
+      # Local-only convenience: anonymous admin, no login form. Never do this in prod.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      - "3001:3000" # 3000 is taken by the web app; expose Grafana on 3001
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - loki
+
+  api:
+    environment:
+      LOKI_URL: http://loki:3100
+    depends_on:
+      postgres:
+        condition: service_healthy
+      loki:
+        condition: service_started
+
+volumes:
+  deskly-loki:

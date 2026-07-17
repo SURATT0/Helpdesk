@@ -1,0 +1,10 @@
+# Auto-provisions the Loki datasource so Grafana can query app logs out of the
+# box (Explore → Loki → {app="deskly-api"}). Used by docker-compose.logging.yml.
+apiVersion: 1
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    editable: false
