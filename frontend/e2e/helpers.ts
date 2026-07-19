@@ -10,6 +10,8 @@ export async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Work email").fill(DEMO.email);
   await page.getByLabel("Password", { exact: true }).fill(DEMO.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  // Exact match: the redesigned login also has a "Sign in with demo account"
+  // button, so a substring match would be ambiguous (strict-mode violation).
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 }
