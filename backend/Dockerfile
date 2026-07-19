@@ -21,6 +21,10 @@ COPY package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
+# `npm run db:seed` runs prisma/seed.ts via tsx, which imports from src/
+# (computeDueAt in src/modules/tickets/sla). Ship src so seeding works inside the
+# container (used by the e2e CI job and for initial demo data).
+COPY --from=build /app/src ./src
 EXPOSE 4000
 # Apply migrations, then start the API.
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
