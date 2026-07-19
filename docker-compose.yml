@@ -102,6 +102,31 @@ services:
     ports:
       - "3000:3000"
 
+  # Web DB admin UI. Off by default (dev tool, not needed to run the app or CI):
+  #   docker compose --profile tools up -d pgadmin   -> http://localhost:5050
+  # Login: admin@deskly.com / admin. The "Deskly Postgres" server is
+  # pre-registered (servers.json); enter DB password `deskly` on first connect.
+  # (pgAdmin rejects reserved TLDs like .local for the login email.)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: deskly-pgadmin
+    restart: unless-stopped
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@deskly.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "False"
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    ports:
+      - "5050:80"
+    volumes:
+      - deskly-pgadmin:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+
 volumes:
   deskly-pgdata:
   deskly-uploads:
+  deskly-pgadmin:
