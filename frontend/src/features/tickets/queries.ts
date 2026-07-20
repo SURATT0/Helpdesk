@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { Priority, TicketStatus } from "@/lib/domain";
+import { useAuth } from "@/features/auth/context";
 import type { Comment } from "./schemas";
 import {
   createComment,
@@ -177,13 +178,63 @@ export function useCommentStream(ticketId: number) {
   }, [ticketId, qc]);
 }
 
+/**
+ * Post a comment with an optimistic thread entry: the message shows immediately
+ * with a "sending" status, is swapped for the server's copy on success (deduped
+ * against the SSE echo of our own message), or flipped to "failed" so the caller
+ * can offer a retry. `clientId` keys the optimistic entry across those states.
+ */
 export function useCreateComment(ticketId: number) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: (input: CreateCommentInput) => createComment(ticketId, input),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: commentKeys.list(ticketId) }),
+    onMutate: async (input): Promise<{ clientId: string }> => {
+      const clientId = `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      await qc.cancelQueries({ queryKey: commentKeys.list(ticketId) });
+      if (user) {
+        const optimistic: Comment = {
+          id: -Date.now(), // temporary; never collides with server ids (positive)
+          body: input.body,
+          internal: input.internal,
+          createdAt: new Date().toISOString(),
+          author: { id: user.id, name: user.name, role: user.role },
+          clientId,
+          sendStatus: "sending",
+        };
+        qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) => [
+          ...(old ?? []),
+          optimistic,
+        ]);
+      }
+      return { clientId };
+    },
+    onSuccess: (real, _input, ctx) => {
+      // Replace the optimistic entry with the server comment. The SSE stream also
+      // echoes our own message back, so dedupe by id to avoid a double.
+      qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) => {
+        const rest = (old ?? []).filter((c) => c.clientId !== ctx?.clientId);
+        return rest.some((c) => c.id === real.id) ? rest : [...rest, real];
+      });
+    },
+    onError: (_err, _input, ctx) => {
+      // Keep the message in the thread but mark it failed → the UI shows a retry.
+      qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) =>
+        (old ?? []).map((c) =>
+          c.clientId === ctx?.clientId ? { ...c, sendStatus: "failed" } : c,
+        ),
+      );
+    },
   });
+}
+
+/** Drop a failed optimistic message from the thread (used before a retry). */
+export function useRemoveFailedComment(ticketId: number) {
+  const qc = useQueryClient();
+  return (clientId: string) =>
+    qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) =>
+      (old ?? []).filter((c) => c.clientId !== clientId),
+    );
 }
 
 export function useSendReply(ticketId: number) {

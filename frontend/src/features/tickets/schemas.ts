@@ -108,5 +108,18 @@ export type ImportRowResult = z.infer<typeof importRowResultSchema>;
 export type ImportResult = z.infer<typeof importResultSchema>;
 export type SlaState = z.infer<typeof slaStateSchema>;
 export type Category = z.infer<typeof categorySchema>;
-export type Comment = z.infer<typeof commentSchema>;
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
+
+/** Client-only send state for optimistic chat messages (never sent by the API). */
+export type CommentSendStatus = "sending" | "failed";
+
+/**
+ * A comment as held in the client cache. The base fields come from the API; the
+ * optional `clientId`/`sendStatus` exist only while a locally-sent message is in
+ * flight or has failed, so the thread can show it immediately (optimistic) with
+ * a status and a retry affordance.
+ */
+export type Comment = z.infer<typeof commentSchema> & {
+  clientId?: string;
+  sendStatus?: CommentSendStatus;
+};

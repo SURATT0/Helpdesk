@@ -121,6 +121,9 @@
 - ✅ **SSE** แทน polling — `GET /tickets/:id/comments/stream` (`text/event-stream`, scope-checked, กรอง internal
   เฉพาะ agent, heartbeat); FE consume ด้วย fetch-reader (ส่ง bearer token ได้), dedup + auto-reconnect
   (delivery ~30–50ms)
+- ✅ **optimistic send** — ข้อความขึ้น thread ทันที (สถานะ `sending`) เคลียร์ช่องพิมพ์เลย →
+  สลับเป็น comment จริงตอน server ตอบ (dedup กับ SSE echo ของตัวเอง) / พลิกเป็น `failed` + ปุ่ม retry
+  ถ้าส่งไม่ผ่าน (`useCreateComment` onMutate/onSuccess/onError); e2e `optimistic.spec.ts`
 
 **Horizontal scaling**
 - ✅ **event bus adapter** (`shared/events.ts`) — `LocalEventBus` (in-process) / `RedisEventBus` (Redis pub/sub)

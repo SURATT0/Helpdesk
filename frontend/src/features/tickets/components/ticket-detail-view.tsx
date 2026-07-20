@@ -14,9 +14,12 @@ import { useI18n } from "@/features/i18n/context";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { slaColor, toneForName } from "../data";
+import type { CommentSendStatus } from "../schemas";
 import {
   useCommentStream,
   useComments,
+  useCreateComment,
+  useRemoveFailedComment,
   useTicket,
   useUpdateTicketStatus,
 } from "../queries";
@@ -48,6 +51,8 @@ function MessageBubble({
   internal,
   fromAgent,
   grouped,
+  status,
+  onRetry,
 }: {
   author: string;
   tone?: "blue" | "green" | "pink" | "red";
@@ -59,6 +64,10 @@ function MessageBubble({
   fromAgent?: boolean;
   /** Consecutive message from the same author → hide avatar + header, tighten. */
   grouped?: boolean;
+  /** Send state for the caller's own optimistic message (sending / failed). */
+  status?: CommentSendStatus;
+  /** Resend a failed message. */
+  onRetry?: () => void;
 }) {
   const { t } = useI18n();
   // Chat-style bubbles: agent on the right (green accent), requester on the
@@ -108,6 +117,22 @@ function MessageBubble({
           </div>
         )}
         {children}
+        {status === "sending" ? (
+          <div className="mt-1 text-right text-[11px] text-faint">
+            {t("chat.sending")}
+          </div>
+        ) : status === "failed" ? (
+          <div className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-[#dc2626]">
+            <span>{t("chat.failed")}</span>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="font-semibold underline hover:no-underline"
+            >
+              {t("chat.retry")}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -119,7 +144,20 @@ export function TicketDetailView({ id }: { id: number }) {
   const { t, lang } = useI18n();
   const statusMutation = useUpdateTicketStatus();
   const commentsQuery = useComments(id);
+  const createComment = useCreateComment(id);
+  const removeFailed = useRemoveFailedComment(id);
   useCommentStream(id); // live updates over SSE (replaces polling)
+
+  // Resend a message that failed to post: drop the failed entry, then re-send
+  // (which creates a fresh optimistic entry).
+  const retryMessage = (msg: {
+    clientId?: string;
+    body: string;
+    internal: boolean;
+  }) => {
+    if (msg.clientId) removeFailed(msg.clientId);
+    createComment.mutate({ body: msg.body, internal: msg.internal });
+  };
 
   // Auto-scroll to the newest message. Depends on the comment count, so it fires
   // on load and whenever polling brings a new message in — but not on every
@@ -159,9 +197,11 @@ export function TicketDetailView({ id }: { id: number }) {
       body: ticket.description,
       internal: false,
       fromAgent: false,
+      sendStatus: undefined as CommentSendStatus | undefined,
+      clientId: undefined as string | undefined,
     },
     ...comments.map((c) => ({
-      key: `c${c.id}`,
+      key: c.clientId ?? `c${c.id}`,
       author: c.author.name,
       tone: toneForName(c.author.name),
       roleKey: c.author.role,
@@ -169,6 +209,8 @@ export function TicketDetailView({ id }: { id: number }) {
       body: c.body,
       internal: c.internal,
       fromAgent: c.author.role !== "requester",
+      sendStatus: c.sendStatus,
+      clientId: c.clientId,
     })),
   ];
 
@@ -246,6 +288,17 @@ export function TicketDetailView({ id }: { id: number }) {
                   internal={m.internal}
                   fromAgent={m.fromAgent}
                   grouped={grouped}
+                  status={m.sendStatus}
+                  onRetry={
+                    m.sendStatus === "failed"
+                      ? () =>
+                          retryMessage({
+                            clientId: m.clientId,
+                            body: m.body,
+                            internal: m.internal,
+                          })
+                      : undefined
+                  }
                 >
                   <p
                     className={cn(

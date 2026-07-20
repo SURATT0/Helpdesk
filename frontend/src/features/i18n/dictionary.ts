@@ -166,6 +166,9 @@ const en: Dict = {
   "composer.replyPlaceholder": "Write a reply to {name}…",
   "composer.notePlaceholder": "Add an internal note (only agents can see this)…",
   "composer.postError": "Couldn't post",
+  "chat.sending": "Sending…",
+  "chat.failed": "Not sent",
+  "chat.retry": "Retry",
 
   "col.id": "ID",
   "col.subject": "Subject",
@@ -496,6 +499,9 @@ const th: Dict = {
   "composer.replyPlaceholder": "เขียนตอบกลับถึง {name}…",
   "composer.notePlaceholder": "เพิ่มโน้ตภายใน (เฉพาะเจ้าหน้าที่เห็น)…",
   "composer.postError": "ส่งไม่สำเร็จ",
+  "chat.sending": "กำลังส่ง…",
+  "chat.failed": "ส่งไม่สำเร็จ",
+  "chat.retry": "ลองใหม่",
 
   "col.id": "รหัส",
   "col.subject": "เรื่อง",

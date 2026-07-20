@@ -79,25 +79,31 @@ export function Composer({
     }
   }
 
-  // Chat + Internal note both post a comment (public vs internal).
+  // Chat + Internal note both post a comment (public vs internal). The message
+  // posts optimistically — it appears in the thread instantly with a status — so
+  // we clear the input right away. A failure surfaces as a "failed · retry"
+  // bubble in the thread (see useCreateComment), not as an inline composer error.
   function postComment(internal: boolean) {
     const text = body.trim();
     if (!text) return;
     setError(null);
+    const pendingFiles = files;
     createComment.mutate(
       { body: text, internal },
       {
         onSuccess: async () => {
-          await uploadFiles();
-          setBody("");
-          setFiles([]);
+          for (const f of pendingFiles) {
+            try {
+              await upload.mutateAsync(f);
+            } catch {
+              /* best-effort — the message is already saved */
+            }
+          }
         },
-        onError: (err) =>
-          setError(
-            err instanceof ApiError ? err.message : t("composer.postError"),
-          ),
       },
     );
+    setBody("");
+    setFiles([]);
   }
 
   async function sendReplyEmail() {
