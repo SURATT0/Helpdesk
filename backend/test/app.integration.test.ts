@@ -1,4 +1,6 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { ticketService } from "../src/modules/tickets/ticket.service";
@@ -813,5 +815,113 @@ describe("attachments — delete", () => {
       .delete(`${API}/attachments/${up.body.data.id}`)
       .set(bearer(marcus))
       .expect(403);
+  });
+});
+
+describe("comments — SSE stream (real-time)", () => {
+  // SSE keeps the connection open, so supertest (which buffers until the
+  // response ends) can't read it. Run the app on a real socket and read frames
+  // off the stream directly. The event bus is an in-process singleton, so a
+  // comment created via supertest fans out to a listener opened on this server.
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    server = http.createServer(app);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const addr = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${addr.port}`;
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  /**
+   * Open an SSE connection; once the `: connected` preamble arrives, run
+   * `action` (which should create comments), then collect frames for a short
+   * window and close. Returns the non-empty frames received.
+   */
+  function collect(
+    path: string,
+    token: string,
+    action: () => Promise<void>,
+  ): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const req = http.get(
+        `${baseUrl}${path}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        (res) => {
+          let buf = "";
+          let acted = false;
+          res.setEncoding("utf8");
+          res.on("data", (chunk: string) => {
+            buf += chunk;
+            if (!acted && buf.includes(": connected")) {
+              acted = true;
+              action()
+                .catch(reject)
+                .finally(() => {
+                  setTimeout(() => {
+                    req.destroy();
+                    resolve(buf.split("\n\n").filter((f) => f.trim().length));
+                  }, 300);
+                });
+            }
+          });
+        },
+      );
+      req.on("error", reject);
+    });
+  }
+
+  it("rejects a stream on an out-of-scope ticket with 404 (before opening)", async () => {
+    const marcus = await login("marcus.chen@acme.com"); // not on ticket 1039
+    await request(app)
+      .get(`${API}/tickets/1039/comments/stream`)
+      .set(bearer(marcus))
+      .expect(404);
+  });
+
+  it("delivers a comment.created frame to a subscriber", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const frames = await collect(
+      `${API}/tickets/1042/comments/stream`,
+      dana,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments`)
+          .set(bearer(dana))
+          .send({ body: "streamed hello" })
+          .expect(201);
+      },
+    );
+    const event = frames.find((f) => f.startsWith("event: comment.created"));
+    expect(event).toBeDefined();
+    expect(event).toContain("streamed hello");
+  });
+
+  it("withholds internal notes from a requester but forwards public replies", async () => {
+    const dana = await login("dana.reyes@acme.com"); // agent (write-capable)
+    const marcus = await login("marcus.chen@acme.com"); // requester of 1042
+    const frames = await collect(
+      `${API}/tickets/1042/comments/stream`,
+      marcus, // canInternal = false
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments`)
+          .set(bearer(dana))
+          .send({ body: "secret internal", internal: true })
+          .expect(201);
+        await request(app)
+          .post(`${API}/tickets/1042/comments`)
+          .set(bearer(dana))
+          .send({ body: "public visible" })
+          .expect(201);
+      },
+    );
+    const joined = frames.join("\n");
+    expect(joined).toContain("public visible");
+    expect(joined).not.toContain("secret internal");
   });
 });

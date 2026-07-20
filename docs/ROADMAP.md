@@ -137,7 +137,11 @@
     fails + 403 requester + 400 empty), external sources (list/mock sync 201/jira 501/unknown 404/403),
     email-inbound webhook (known 201/auto-create requester/wrong+missing secret 403/no-From 400 +
     priority-tag derive), agent reply (public comment + log transport/subject derive/403/404/400 to),
-    DELETE attachment (204 + gone/orphan download 404 + delete still 204/403); +21 tests → 55 total
-  - ⬜ SSE stream (scope/internal filter) + e2e realtime chat
+    DELETE attachment (204 + gone/orphan download 404 + delete still 204/403)
+  - ✅ SSE stream (real socket) — out-of-scope 404 before open, delivers `comment.created` frame,
+    withholds internal notes from requester + forwards public replies; backend 48 unit + 58 integration
+  - ✅ e2e realtime chat (Playwright, 2 sessions) — agent chat message appears on the requester's open
+    page via SSE with no reload (waits for the subscription to open first, so the push isn't missed);
+    full e2e suite 8/8
 - Redis event bus: production hardening (reconnect/TLS/auth), ย้าย notifications poll → SSE
 - deploy จริง (multi-node behind nginx) + observability สำหรับ SSE connections
