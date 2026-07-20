@@ -486,3 +486,332 @@ describe("comments — internal notes", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("tickets — CSV import (importMany)", () => {
+  const row = (over: Partial<Record<string, string>> = {}) => ({
+    subject: "Imported subject",
+    description: "Imported description",
+    priority: "high",
+    category: "Hardware",
+    requesterEmail: "marcus.chen@acme.com",
+    ...over,
+  });
+
+  it("imports valid rows (201) and reports each as created", async () => {
+    const dana = await login("dana.reyes@acme.com"); // agent has ticket:import
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row(), row({ category: "Software", priority: "low" })] });
+    expect(res.status).toBe(201);
+    expect(res.body.data.created).toBe(2);
+    expect(res.body.data.failed).toBe(0);
+    expect(res.body.data.results.every((r: { ok: boolean }) => r.ok)).toBe(true);
+  });
+
+  it("fails a row with an unknown category, tagging the field", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row({ category: "Nonexistent" })] });
+    expect(res.status).toBe(200); // nothing created → 200, not 201
+    expect(res.body.data.created).toBe(0);
+    expect(res.body.data.results[0]).toMatchObject({
+      ok: false,
+      field: "category",
+    });
+  });
+
+  it("fails a row with an unknown requester email, tagging the field", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row({ requesterEmail: "ghost@acme.com" })] });
+    expect(res.body.data.results[0]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+    });
+  });
+
+  it("supports partial success across a mixed batch", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row(), row({ category: "Nonexistent" })] });
+    expect(res.status).toBe(201); // at least one created
+    expect(res.body.data.created).toBe(1);
+    expect(res.body.data.failed).toBe(1);
+  });
+
+  it("forbids a requester (no ticket:import) with 403", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(marcus))
+      .send({ rows: [row()] });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects an empty batch with 400", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [] });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("integrations — external sources", () => {
+  it("lists sources with their implemented/configured status", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/integrations/sources`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const byId: Record<string, { implemented: boolean; configured: boolean }> =
+      Object.fromEntries(
+        res.body.data.map((s: { id: string }) => [s.id, s]),
+      );
+    expect(byId.mock).toMatchObject({ implemented: true, configured: true });
+    expect(byId.jira.implemented).toBe(false);
+  });
+
+  it("syncs the mock source, creating its sample tickets (201)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/integrations/sources/mock/sync`)
+      .set(bearer(dana));
+    expect(res.status).toBe(201);
+    expect(res.body.data.fetched).toBe(3);
+    expect(res.body.data.import.created).toBe(3);
+  });
+
+  it("501s a source that isn't implemented yet", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/integrations/sources/jira/sync`)
+      .set(bearer(dana));
+    expect(res.status).toBe(501);
+  });
+
+  it("404s an unknown source", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/integrations/sources/nope/sync`)
+      .set(bearer(dana));
+    expect(res.status).toBe(404);
+  });
+
+  it("forbids a requester from running a sync (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    const res = await request(app)
+      .post(`${API}/integrations/sources/mock/sync`)
+      .set(bearer(marcus));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("email-to-ticket webhook", () => {
+  const ENDPOINT = `${API}/integrations/email-inbound`;
+  const SECRET = "test-webhook-secret";
+
+  it("creates a ticket from a known sender (201), sender is the requester", async () => {
+    const res = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", SECRET)
+      .send({
+        from: "Marcus Chen <marcus.chen@acme.com>",
+        subject: "[high] Cannot connect to VPN",
+        text: "It fails right after entering my OTP.",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.requesterCreated).toBe(false);
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: res.body.data.ticketId },
+      include: { requester: true },
+    });
+    expect(ticket.requester.email).toBe("marcus.chen@acme.com");
+    expect(ticket.priority).toBe("high"); // derived from the [high] subject tag
+    expect(ticket.subject).toBe("Cannot connect to VPN"); // tag stripped
+  });
+
+  it("auto-creates a requester for an unknown sender", async () => {
+    const res = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", SECRET)
+      .send({
+        from: "newcomer@partner.example",
+        subject: "Need access to the portal",
+        text: "Please set me up.",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.requesterCreated).toBe(true);
+
+    const user = await prisma.user.findFirstOrThrow({
+      where: { email: "newcomer@partner.example" },
+    });
+    expect(user.role).toBe("requester");
+    expect(user.passwordHash).toBeNull();
+  });
+
+  it("rejects a wrong secret with 403", async () => {
+    const res = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", "wrong-secret")
+      .send({ from: "x@acme.com", subject: "hi", text: "y" });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects a missing secret with 403", async () => {
+    const res = await request(app)
+      .post(ENDPOINT)
+      .send({ from: "x@acme.com", subject: "hi", text: "y" });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects a payload with no valid From address (400)", async () => {
+    const res = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", SECRET)
+      .send({ subject: "orphan", text: "no sender" });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("tickets — agent email reply", () => {
+  it("records a public comment and reports the mail transport (201)", async () => {
+    const dana = await login("dana.reyes@acme.com"); // assignee of 1042
+    const res = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({ to: "marcus.chen@acme.com", body: "We're on it — thanks." });
+    expect(res.status).toBe(201);
+    expect(res.body.data.mail.transport).toBe("log"); // no SMTP configured in tests
+    expect(res.body.data.comment.internal).toBe(false);
+
+    // The reply is visible to the requester as a public thread comment.
+    const marcus = await login("marcus.chen@acme.com");
+    const thread = await request(app)
+      .get(`${API}/tickets/1042/comments`)
+      .set(bearer(marcus));
+    const bodies = thread.body.data.map((c: { body: string }) => c.body);
+    expect(bodies).toContain("We're on it — thanks.");
+  });
+
+  it("derives the subject from the ticket when none is given", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({ to: "marcus.chen@acme.com", body: "Update inside." });
+    expect(res.body.data.mail.subject).toContain("#1042");
+  });
+
+  it("forbids a requester from sending a reply (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(marcus))
+      .send({ to: "someone@acme.com", body: "hi" });
+    expect(res.status).toBe(403);
+  });
+
+  it("404s a reply on an out-of-scope ticket", async () => {
+    const dana = await login("dana.reyes@acme.com"); // 1029 is Field Services
+    const res = await request(app)
+      .post(`${API}/tickets/1029/reply`)
+      .set(bearer(dana))
+      .send({ to: "x@acme.com", body: "hi" });
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a non-email 'to' with 400", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({ to: "not-an-email", body: "hi" });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("attachments — delete", () => {
+  it("deletes an uploaded attachment (204); afterwards it is gone", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const up = await request(app)
+      .post(`${API}/tickets/1042/attachments`)
+      .set(bearer(dana))
+      .attach("file", Buffer.from("bye"), {
+        filename: "temp.txt",
+        contentType: "text/plain",
+      });
+    expect(up.status).toBe(201);
+    const id = up.body.data.id as number;
+
+    await request(app)
+      .delete(`${API}/attachments/${id}`)
+      .set(bearer(dana))
+      .expect(204);
+
+    // The row is gone: download 404s and the list is empty.
+    await request(app).get(`${API}/attachments/${id}`).set(bearer(dana)).expect(404);
+    const list = await request(app)
+      .get(`${API}/tickets/1042/attachments`)
+      .set(bearer(dana));
+    expect(list.body.data).toHaveLength(0);
+  });
+
+  it("downloads 404 on an orphaned row (DB row present, bytes missing), and delete still succeeds", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const uploader = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    // A DB row pointing at a storage key that was never written.
+    const orphan = await prisma.attachment.create({
+      data: {
+        ticketId: 1042,
+        uploaderId: uploader.id,
+        filename: "gone.txt",
+        contentType: "text/plain",
+        sizeBytes: 3,
+        storageKey: "tickets/1042/does-not-exist.txt",
+      },
+    });
+
+    // Download → clean 404 (not a 500 crash).
+    await request(app)
+      .get(`${API}/attachments/${orphan.id}`)
+      .set(bearer(dana))
+      .expect(404);
+
+    // Delete is best-effort about the missing file → still 204 and delists.
+    await request(app)
+      .delete(`${API}/attachments/${orphan.id}`)
+      .set(bearer(dana))
+      .expect(204);
+    expect(
+      await prisma.attachment.findUnique({ where: { id: orphan.id } }),
+    ).toBeNull();
+  });
+
+  it("forbids a requester (no ticket:write) from deleting (403)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const up = await request(app)
+      .post(`${API}/tickets/1042/attachments`)
+      .set(bearer(dana))
+      .attach("file", Buffer.from("x"), {
+        filename: "keep.txt",
+        contentType: "text/plain",
+      });
+    const marcus = await login("marcus.chen@acme.com");
+    await request(app)
+      .delete(`${API}/attachments/${up.body.data.id}`)
+      .set(bearer(marcus))
+      .expect(403);
+  });
+});

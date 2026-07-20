@@ -130,6 +130,14 @@
   (verified 3 replicas: SSE ผ่าน nginx รับครบ 3/3 ผ่าน Redis ~157ms); README อัปเดตวิธีรัน
 
 ## 🔜 ถัดไป
-- ทดสอบครอบคลุมงาน Phase 8 (SSE/Redis/import/email/reply) + e2e realtime
+- ทดสอบครอบคลุมงาน Phase 8:
+  - ✅ pure unit — CSV import parser (`csv.test.ts`), email parsers (`email.parsers.test.ts`),
+    event bus (`events.test.ts`); backend 48 tests / frontend 19 tests, typecheck ผ่าน
+  - ✅ integration (supertest, `deskly_test`) — CSV import (`importMany`: partial success + field-tagged
+    fails + 403 requester + 400 empty), external sources (list/mock sync 201/jira 501/unknown 404/403),
+    email-inbound webhook (known 201/auto-create requester/wrong+missing secret 403/no-From 400 +
+    priority-tag derive), agent reply (public comment + log transport/subject derive/403/404/400 to),
+    DELETE attachment (204 + gone/orphan download 404 + delete still 204/403); +21 tests → 55 total
+  - ⬜ SSE stream (scope/internal filter) + e2e realtime chat
 - Redis event bus: production hardening (reconnect/TLS/auth), ย้าย notifications poll → SSE
 - deploy จริง (multi-node behind nginx) + observability สำหรับ SSE connections

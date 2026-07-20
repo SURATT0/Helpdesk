@@ -17,6 +17,10 @@ export default defineConfig({
       NODE_ENV: "production", // plain pino (no pretty-transport worker)
       LOG_LEVEL: "silent",
       AUTH_RATE_LIMIT: "1000", // suite logs in many times; don't trip the limiter
+      // Enable the email-to-ticket webhook (secret-gated) for its integration
+      // tests; route new email tickets to a category that exists in the seed.
+      EMAIL_WEBHOOK_SECRET: "test-webhook-secret",
+      EMAIL_DEFAULT_CATEGORY: "Email",
     },
     fileParallelism: false, // one shared DB — run files serially
     hookTimeout: 30_000,
