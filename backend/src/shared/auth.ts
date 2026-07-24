@@ -10,9 +10,11 @@ export type AuthUser = {
   name: string;
   email: string;
   role: Role;
-  /** Team + department drive repository row-level scoping. */
+  /** Team + department are retained for routing/display. */
   teamId: number | null;
   department: string | null;
+  /** Tenant boundary for row-level scoping. null = platform-wide (admin). */
+  customerId: number | null;
   permissions: string[];
 };
 
@@ -31,6 +33,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "ticket:assign",
     "report:read",
     "user:read",
+    // Manage users — but only within their own department (scoped in the
+    // user repository); admins manage everyone.
+    "user:write",
   ],
   agent: [
     "ticket:read",

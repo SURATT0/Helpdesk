@@ -40,10 +40,12 @@ const en: Dict = {
   "cap.import": "Import tickets & sync sources",
   "cap.viewUsers": "View user directory",
   "cap.manageUsers": "Manage users & roles",
+  "perm.userScopeNote":
+    "Managers view and manage users only within their own customer; admins manage everyone across all customers.",
   "scope.requester": "Only tickets you opened",
-  "scope.agent": "Your team's queue + your own",
-  "scope.manager": "All tickets in your department",
-  "scope.admin": "All tickets",
+  "scope.agent": "All tickets in your customer (every department)",
+  "scope.manager": "All tickets in your customer (every department)",
+  "scope.admin": "All tickets (every customer)",
 
   "topbar.search": "Search tickets, users, articles…",
   "topbar.newTicket": "New ticket",
@@ -401,10 +403,12 @@ const th: Dict = {
   "cap.import": "นำเข้าตั๋ว & ซิงก์แหล่งข้อมูล",
   "cap.viewUsers": "ดูรายชื่อผู้ใช้",
   "cap.manageUsers": "จัดการผู้ใช้ & บทบาท",
+  "perm.userScopeNote":
+    "ผู้จัดการดูและจัดการผู้ใช้เฉพาะในลูกค้าของตัวเอง; ผู้ดูแลระบบจัดการได้ทุกคนทุกลูกค้า",
   "scope.requester": "เฉพาะตั๋วที่คุณเปิด",
-  "scope.agent": "คิวของทีมคุณ + ของคุณเอง",
-  "scope.manager": "ตั๋วทั้งหมดในแผนกของคุณ",
-  "scope.admin": "ตั๋วทั้งหมด",
+  "scope.agent": "ตั๋วทั้งหมดในลูกค้าของคุณ (ทุกแผนก)",
+  "scope.manager": "ตั๋วทั้งหมดในลูกค้าของคุณ (ทุกแผนก)",
+  "scope.admin": "ตั๋วทั้งหมด (ทุกลูกค้า)",
 
   "topbar.search": "ค้นหาตั๋ว ผู้ใช้ บทความ…",
   "topbar.newTicket": "สร้างตั๋ว",

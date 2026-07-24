@@ -13,7 +13,7 @@ test("chat message posts optimistically and stays a single entry after the SSE e
   const box = page.getByPlaceholder(/Enter to send/);
   await box.waitFor();
 
-  const message = `optimistic probe ${Date.now()}`;
+  const message = `optimistic probe ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await box.fill(message);
   await box.press("Enter");
 

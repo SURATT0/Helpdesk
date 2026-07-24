@@ -68,10 +68,14 @@ These are load-bearing invariants — get them right in whatever layer you touch
   the priority at creation time.
 - **Auto-assignment:** a ticket's category may have a `default_team_id`; if set, new tickets route to
   that team's queue, otherwise the unassigned queue.
-- **RBAC + row scoping:** roles `admin > manager > agent > requester`. JWT carries `role` +
-  `permissions[]`; permission checks are middleware, but **row-level scope is enforced in the
-  repository (WHERE clause)** — requesters see only their own tickets, agents their team's, managers
-  their department's, admins all.
+- **Multi-tenancy + RBAC row scoping:** the **customer** (tenant) is the top-level isolation
+  boundary. `users.customer_id` / `tickets.customer_id` carry it; `AuthUser.customerId` rides the JWT
+  (null = platform admin). Roles `admin > manager > agent > requester`; permission checks are
+  middleware, but **row-level scope is enforced in the repository (WHERE clause)**:
+  requesters see only their own tickets; **agents & managers see everything within their own customer
+  (across all departments)**; admins see every customer. The user directory/management is
+  customer-scoped the same way (managers manage only their customer's users; admins all — and only an
+  admin may grant the admin role). Team/department are retained for routing & display, not visibility.
 - **Auth:** access token (15 min, kept in memory only — never localStorage) + refresh token (7 day,
   httpOnly cookie, rotated on use; reuse of a revoked token revokes the whole family).
 - **Audit:** every mutation writes an `audit_logs` row; tickets are closed, never deleted (soft

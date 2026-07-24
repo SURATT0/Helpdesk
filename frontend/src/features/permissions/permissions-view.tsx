@@ -22,7 +22,7 @@ const CAPABILITIES: { key: string; roles: Role[] }[] = [
   { key: "cap.assign", roles: ["agent", "manager", "admin"] },
   { key: "cap.import", roles: ["agent", "manager", "admin"] },
   { key: "cap.viewUsers", roles: ["agent", "manager", "admin"] },
-  { key: "cap.manageUsers", roles: ["admin"] },
+  { key: "cap.manageUsers", roles: ["manager", "admin"] },
 ];
 
 // Row-level scope enforced in the repository WHERE clause.
@@ -137,6 +137,7 @@ export function PermissionsView() {
             </tbody>
           </table>
         </div>
+        <p className="mt-3 text-[11.5px] text-faint">{t("perm.userScopeNote")}</p>
       </Card>
 
       {/* Row-level ticket visibility */}

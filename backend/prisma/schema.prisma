@@ -38,10 +38,27 @@ enum Role {
   requester
 }
 
+// A tenant organization. The top-level isolation boundary: staff see everything
+// within their own customer (across departments) but nothing of other customers;
+// platform admins (customerId = null) span all customers.
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  users     User[]
+  teams     Team[]
+  tickets   Ticket[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
 model Team {
   id         Int        @id @default(autoincrement())
   name       String     @unique
   department String
+  customerId Int?       @map("customer_id")
+  customer   Customer?  @relation(fields: [customerId], references: [id])
   members    User[]
   categories Category[] // categories that default-route to this team
   createdAt  DateTime   @default(now()) @map("created_at")
@@ -57,6 +74,8 @@ model User {
   role             Role
   teamId           Int?                  @map("team_id")
   team             Team?                 @relation(fields: [teamId], references: [id])
+  customerId       Int?                  @map("customer_id") // tenant; null = platform-wide (admin)
+  customer         Customer?             @relation(fields: [customerId], references: [id])
   passwordHash     String?               @map("password_hash") // filled by the auth milestone
   requestedTickets Ticket[]              @relation("TicketRequester")
   assignedTickets  Ticket[]              @relation("TicketAssignee")
@@ -115,6 +134,8 @@ model Ticket {
   assignee      User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
   categoryId    Int                   @map("category_id")
   category      Category              @relation(fields: [categoryId], references: [id])
+  customerId    Int?                  @map("customer_id") // tenant boundary (= requester's customer)
+  customer      Customer?             @relation(fields: [customerId], references: [id])
   dueAt         DateTime?             @map("due_at") // computed from SLA policy at creation
   resolvedAt    DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
   closedAt      DateTime?             @map("closed_at")
@@ -127,6 +148,7 @@ model Ticket {
 
   @@index([status])
   @@index([priority])
+  @@index([customerId])
   @@map("tickets")
 }
 

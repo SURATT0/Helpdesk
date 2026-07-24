@@ -16,6 +16,7 @@ type SignableUser = {
   role: Role;
   teamId: number | null;
   department: string | null;
+  customerId: number | null;
 };
 
 export function signAccessToken(user: SignableUser): string {
@@ -26,6 +27,7 @@ export function signAccessToken(user: SignableUser): string {
       role: user.role,
       teamId: user.teamId,
       department: user.department,
+      customerId: user.customerId,
       permissions: permissionsFor(user.role),
     },
     env.jwtAccessSecret,
@@ -42,6 +44,7 @@ export function verifyAccessToken(token: string): AuthUser {
     role: payload.role as Role,
     teamId: (payload.teamId as number | null) ?? null,
     department: (payload.department as string | null) ?? null,
+    customerId: (payload.customerId as number | null) ?? null,
     permissions: (payload.permissions as string[]) ?? [],
   };
 }

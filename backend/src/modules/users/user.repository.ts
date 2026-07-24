@@ -1,7 +1,20 @@
 import { Prisma } from "@prisma/client";
 import type { Role } from "../../shared/domain";
+import type { AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
+
+/**
+ * Row-level scope for the user directory (multi-tenant): admins see/manage
+ * everyone across all customers; everyone else is limited to members of their
+ * own customer (across all departments). A non-admin with no customer matches
+ * nothing (defensive).
+ */
+function scopeWhere(actor: AuthUser): Prisma.UserWhereInput {
+  if (actor.role === "admin") return {};
+  if (actor.customerId == null) return { id: -1 };
+  return { customerId: actor.customerId };
+}
 
 const userInclude = {
   team: { select: { id: true, name: true } },
@@ -30,17 +43,19 @@ function toDto(row: UserRow): UserDto {
 }
 
 export const userRepository = {
-  async findMany(): Promise<UserDto[]> {
+  async findMany(actor: AuthUser): Promise<UserDto[]> {
     const rows = await prisma.user.findMany({
+      where: scopeWhere(actor),
       include: userInclude,
       orderBy: { name: "asc" },
     });
     return rows.map(toDto);
   },
 
-  async findById(id: number): Promise<UserDto | null> {
-    const row = await prisma.user.findUnique({
-      where: { id },
+  async findById(id: number, actor: AuthUser): Promise<UserDto | null> {
+    // Out-of-scope users 404 rather than leak their existence.
+    const row = await prisma.user.findFirst({
+      where: { id, ...scopeWhere(actor) },
       include: userInclude,
     });
     return row ? toDto(row) : null;
@@ -76,10 +91,13 @@ export const userRepository = {
   async update(
     id: number,
     data: { role?: Role; teamId?: number | null },
-    actorId: number,
+    actor: AuthUser,
   ): Promise<UserDto | null> {
     return prisma.$transaction(async (tx) => {
-      const exists = await tx.user.findUnique({ where: { id } });
+      // Scope-check inside the tx: managers may only edit their department.
+      const exists = await tx.user.findFirst({
+        where: { id, ...scopeWhere(actor) },
+      });
       if (!exists) return null;
       const updated = await tx.user.update({
         where: { id },
@@ -88,7 +106,7 @@ export const userRepository = {
       });
       await auditRepository.record(
         {
-          userId: actorId,
+          userId: actor.id,
           action: "user.update",
           entity: "user",
           entityId: id,

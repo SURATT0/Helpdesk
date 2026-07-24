@@ -167,6 +167,12 @@ export const ticketRepository = {
       });
       if (!category) throw BadRequest("Unknown category");
 
+      // A ticket belongs to its requester's customer (the tenant boundary).
+      const requester = await tx.user.findUnique({
+        where: { id: input.requesterId },
+        select: { customerId: true },
+      });
+
       const now = new Date();
       const created = await tx.ticket.create({
         data: {
@@ -175,6 +181,7 @@ export const ticketRepository = {
           status: "new",
           priority: input.priority,
           requesterId: input.requesterId,
+          customerId: requester?.customerId ?? null,
           // Auto-assignment: unassigned tickets are routed to the category's
           // default team queue implicitly (via the repository scope), so we set
           // no assignee here.

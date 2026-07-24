@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 seedDatabase(prisma)
   .then(() => {
     console.log(
-      `Seeded ${SEED_COUNTS.teams} teams, ${SEED_COUNTS.users} users, ${SEED_COUNTS.categories} categories, ${SEED_COUNTS.tickets} tickets.`,
+      `Seeded ${SEED_COUNTS.customers} customers, ${SEED_COUNTS.teams} teams, ${SEED_COUNTS.users} users, ${SEED_COUNTS.categories} categories, ${SEED_COUNTS.tickets} tickets.`,
     );
   })
   .catch((err) => {

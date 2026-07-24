@@ -32,6 +32,7 @@ type UserRow = {
   email: string;
   role: Role;
   teamId: number | null;
+  customerId: number | null;
   passwordHash: string | null;
   team: { department: string } | null;
 };
@@ -58,6 +59,7 @@ async function mintSession(user: UserRow, familyId: string): Promise<Session> {
       role: user.role,
       teamId: user.teamId,
       department: user.team?.department ?? null,
+      customerId: user.customerId,
     }),
     expiresIn: env.accessTtlSec,
     refreshToken,

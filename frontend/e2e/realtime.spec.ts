@@ -37,7 +37,7 @@ test("a chat message sent by the agent appears on the requester's screen in real
     await requesterPage.waitForTimeout(3000);
 
     // The requester must NOT already see the message we're about to send.
-    const message = `realtime probe ${Date.now()}`;
+    const message = `realtime probe ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await expect(requesterPage.getByText(message)).toHaveCount(0);
 
     // Agent sends a chat message (Chat tab is the default; Enter submits).

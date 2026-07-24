@@ -13,13 +13,13 @@ function currentUser(req: Request) {
 }
 
 export const userController = {
-  async list(_req: Request, res: Response) {
-    res.json({ data: await userService.list() });
+  async list(req: Request, res: Response) {
+    res.json({ data: await userService.list(currentUser(req)) });
   },
 
   async get(req: Request, res: Response) {
     const { id } = userIdParam.parse(req.params);
-    res.json({ data: await userService.get(id) });
+    res.json({ data: await userService.get(id, currentUser(req)) });
   },
 
   async updateMe(req: Request, res: Response) {

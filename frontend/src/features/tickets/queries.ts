@@ -208,9 +208,19 @@ export function useCommentStream(ticketId: number) {
             (comment) => {
               qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) => {
                 const list = old ?? [];
-                return list.some((c) => c.id === comment.id)
-                  ? list
-                  : [...list, comment];
+                if (list.some((c) => c.id === comment.id)) return list;
+                // Our own send echoes back over SSE before the create mutation
+                // settles; drop the still-pending optimistic copy so it isn't
+                // shown twice for a moment.
+                const deduped = list.filter(
+                  (c) =>
+                    !(
+                      c.sendStatus &&
+                      c.author.id === comment.author.id &&
+                      c.body === comment.body
+                    ),
+                );
+                return [...deduped, comment];
               });
               // Their message landed → they're no longer typing.
               setTyping((cur) => {

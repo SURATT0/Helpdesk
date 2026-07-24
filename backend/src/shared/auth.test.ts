@@ -9,6 +9,7 @@ const user = (role: Role): AuthUser => ({
   role,
   teamId: null,
   department: null,
+  customerId: null,
   permissions: permissionsFor(role),
 });
 

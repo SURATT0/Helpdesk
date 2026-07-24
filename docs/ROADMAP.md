@@ -149,6 +149,15 @@
   ผ่าน `bus`, ครอบทุกจุดสร้าง — comment/status/assignee/priority); FE consume ด้วย fetch-reader →
   invalidate query (poll 30s → SSE + fallback 120s); backend 68 integration, e2e `notifications.spec.ts`
 
+**Multi-tenancy (customer isolation)**
+- ✅ **Customer (tenant) entity** + `users.customer_id` / `teams.customer_id` / `tickets.customer_id`
+  (migration); `AuthUser.customerId` บน JWT (null = platform admin)
+- ✅ **row-scoping เป็น customer-based** — `ticketScopeWhere` + user directory scope: requester=ตั๋วตัวเอง,
+  agent/manager=ทุกอย่างในลูกค้าตัวเอง (ทุกแผนก), admin=ทุกลูกค้า; user management scoped ตามลูกค้า
+  (manager จัดการเฉพาะลูกค้าตัวเอง, เฉพาะ admin ให้ role admin ได้); ticket สร้างใหม่ผูก customer จาก requester
+- ✅ seed 2 ลูกค้า (Acme/Globex) + platform admin; verified isolation จริง (Acme/Globex/admin เห็นคนละชุด),
+  fix transient duplicate ของ optimistic echo; backend 74 integration, e2e 16/16
+
 **Roles & permissions page**
 - ✅ หน้า `/permissions` (nav ใหม่ + ShieldCheck) — การ์ด "สิทธิของคุณ" (role ปัจจุบัน),
   ตาราง permission ตาม role (requester/agent/manager/admin, ✓/–, ไฮไลต์คอลัมน์ตัวเอง + "YOU")

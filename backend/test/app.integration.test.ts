@@ -71,14 +71,15 @@ describe("auth", () => {
   });
 });
 
-describe("tickets — RBAC row scoping", () => {
-  it("scopes an agent to their team's queue (not another team's ticket)", async () => {
-    const dana = await login("dana.reyes@acme.com"); // agent, IT Support
+describe("tickets — RBAC row scoping (multi-tenant)", () => {
+  it("scopes an agent to their own customer, across departments", async () => {
+    const dana = await login("dana.reyes@acme.com"); // agent, Acme Corp
     const res = await request(app).get(`${API}/tickets`).set(bearer(dana));
     expect(res.status).toBe(200);
     const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
-    expect(ids).not.toContain(1029); // assigned to Field Services
-    expect(ids).toContain(1042);
+    expect(ids).toContain(1042); // Acme, own team
+    expect(ids).toContain(1029); // Acme, another team — visible (same customer)
+    expect(ids).not.toContain(2001); // Globex — other customer, hidden
   });
 
   it("scopes a requester to only their own tickets", async () => {
@@ -89,10 +90,21 @@ describe("tickets — RBAC row scoping", () => {
     expect(ids).toEqual([1042]);
   });
 
+  it("lets a platform admin see every customer's tickets", async () => {
+    const sam = await login("sam.rivera@acme.com"); // admin, no customer
+    const res = await request(app).get(`${API}/tickets`).set(bearer(sam));
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids).toContain(1042); // Acme
+    expect(ids).toContain(2001); // Globex
+  });
+
   it("404s an out-of-scope ticket instead of leaking it", async () => {
+    // A fellow Acme user's ticket (not their own) → 404 for a requester.
     const marcus = await login("marcus.chen@acme.com");
-    const res = await request(app).get(`${API}/tickets/1039`).set(bearer(marcus));
-    expect(res.status).toBe(404);
+    await request(app).get(`${API}/tickets/1039`).set(bearer(marcus)).expect(404);
+    // Another customer's ticket → 404 for an Acme agent.
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(`${API}/tickets/2001`).set(bearer(dana)).expect(404);
   });
 });
 
@@ -130,10 +142,10 @@ describe("tickets — status transitions", () => {
     expect(res.status).toBe(403);
   });
 
-  it("404s a status change on an out-of-scope ticket", async () => {
-    const dana = await login("dana.reyes@acme.com");
+  it("404s a status change on another customer's ticket", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme
     const res = await request(app)
-      .patch(`${API}/tickets/1029/status`)
+      .patch(`${API}/tickets/2002/status`) // Globex ticket
       .set(bearer(dana))
       .send({ status: "in_progress" });
     expect(res.status).toBe(404);
@@ -236,13 +248,16 @@ describe("tickets — create", () => {
   });
 });
 
-describe("tickets — general unassigned queue (category with no default team)", () => {
-  it("shows a team-less unassigned ticket to any agent, but not to an unrelated requester", async () => {
+describe("tickets — customer isolation (unassigned ticket)", () => {
+  it("shows an unassigned ticket to any agent in its customer, but not to other customers", async () => {
     const category = await prisma.category.create({
       data: { name: "Uncategorized", defaultTeamId: null },
     });
+    const acme = await prisma.customer.findUniqueOrThrow({
+      where: { name: "Acme Corp" },
+    });
     const requester = await prisma.user.findUniqueOrThrow({
-      where: { email: "t.alvarez@acme.com" },
+      where: { email: "t.alvarez@acme.com" }, // Acme requester
     });
     const orphan = await prisma.ticket.create({
       data: {
@@ -252,6 +267,7 @@ describe("tickets — general unassigned queue (category with no default team)",
         priority: "medium",
         requesterId: requester.id,
         categoryId: category.id,
+        customerId: acme.id,
         dueAt: new Date(Date.now() + 3_600_000),
       },
     });
@@ -261,13 +277,15 @@ describe("tickets — general unassigned queue (category with no default team)",
       return (res.body.data as { id: number }[]).map((t) => t.id);
     };
 
-    const dana = await login("dana.reyes@acme.com"); // agent, IT Support
-    const kai = await login("kai.t@acme.com"); // agent, Field Services
-    const marcus = await login("marcus.chen@acme.com"); // requester (not this ticket's)
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    const kai = await login("kai.t@acme.com"); // Acme agent (another team)
+    const owen = await login("owen.park@acme.com"); // Globex agent
+    const marcus = await login("marcus.chen@acme.com"); // Acme requester (not this ticket)
 
-    expect(await idsFor(dana)).toContain(orphan.id);
-    expect(await idsFor(kai)).toContain(orphan.id);
-    expect(await idsFor(marcus)).not.toContain(orphan.id);
+    expect(await idsFor(dana)).toContain(orphan.id); // same customer
+    expect(await idsFor(kai)).toContain(orphan.id); // same customer, other team
+    expect(await idsFor(owen)).not.toContain(orphan.id); // other customer
+    expect(await idsFor(marcus)).not.toContain(orphan.id); // not the requester
   });
 });
 
@@ -345,6 +363,65 @@ describe("users — directory & role management (RBAC)", () => {
       .send({ role: "manager" });
     expect(res.status).toBe(200);
     expect(res.body.data.role).toBe("manager");
+  });
+});
+
+describe("users — customer-scoped management (manager)", () => {
+  async function userId(email: string): Promise<number> {
+    return (await prisma.user.findUniqueOrThrow({ where: { email } })).id;
+  }
+
+  it("scopes a manager's directory to their own customer", async () => {
+    const morgan = await login("morgan.lee@acme.com"); // manager, Acme
+    const res = await request(app).get(`${API}/users`).set(bearer(morgan));
+    expect(res.status).toBe(200);
+    const names: string[] = res.body.data.map((u: { name: string }) => u.name);
+    expect(names).toContain("Dana Reyes"); // Acme
+    expect(names).not.toContain("Owen Park"); // Globex — other customer
+  });
+
+  it("lets a manager edit a user in their customer", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    const kaiId = await userId("kai.t@acme.com"); // Acme
+    const res = await request(app)
+      .patch(`${API}/users/${kaiId}`)
+      .set(bearer(morgan))
+      .send({ role: "agent" });
+    expect(res.status).toBe(200);
+  });
+
+  it("404s a manager editing a user in another customer", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    const owenId = await userId("owen.park@acme.com"); // Globex
+    await request(app)
+      .patch(`${API}/users/${owenId}`)
+      .set(bearer(morgan))
+      .send({ role: "agent" })
+      .expect(404);
+  });
+
+  it("forbids a manager from granting the admin role", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    const kaiId = await userId("kai.t@acme.com");
+    await request(app)
+      .patch(`${API}/users/${kaiId}`)
+      .set(bearer(morgan))
+      .send({ role: "admin" })
+      .expect(403);
+  });
+
+  it("lets an admin see + manage users across customers", async () => {
+    const sam = await login("sam.rivera@acme.com"); // admin, no customer
+    const list = await request(app).get(`${API}/users`).set(bearer(sam));
+    const names: string[] = list.body.data.map((u: { name: string }) => u.name);
+    expect(names).toContain("Dana Reyes"); // Acme
+    expect(names).toContain("Owen Park"); // Globex — other customer
+    const owenId = await userId("owen.park@acme.com");
+    await request(app)
+      .patch(`${API}/users/${owenId}`)
+      .set(bearer(sam))
+      .send({ role: "agent" })
+      .expect(200);
   });
 });
 
@@ -723,10 +800,10 @@ describe("tickets — agent email reply", () => {
     expect(res.status).toBe(403);
   });
 
-  it("404s a reply on an out-of-scope ticket", async () => {
-    const dana = await login("dana.reyes@acme.com"); // 1029 is Field Services
+  it("404s a reply on another customer's ticket", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme; 2001 is Globex
     const res = await request(app)
-      .post(`${API}/tickets/1029/reply`)
+      .post(`${API}/tickets/2001/reply`)
       .set(bearer(dana))
       .send({ to: "x@acme.com", body: "hi" });
     expect(res.status).toBe(404);
