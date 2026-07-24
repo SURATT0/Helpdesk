@@ -143,6 +143,12 @@
   (`nginx.scale.conf`, round-robin ผ่าน Docker DNS + SSE passthrough) + Redis; healthcheck ทั้ง nginx + api
   (verified 3 replicas: SSE ผ่าน nginx รับครบ 3/3 ผ่าน Redis ~157ms); README อัปเดตวิธีรัน
 
+**Notifications realtime**
+- ✅ **bell → SSE** — `GET /notifications/stream` ต่อผู้ใช้ (ping เมื่อมี notification ใหม่ของตัวเอง);
+  `notificationRepository.createMany` emit `notification.created` ต่อผู้รับหลังเขียน (signal-to-refetch
+  ผ่าน `bus`, ครอบทุกจุดสร้าง — comment/status/assignee/priority); FE consume ด้วย fetch-reader →
+  invalidate query (poll 30s → SSE + fallback 120s); backend 68 integration, e2e `notifications.spec.ts`
+
 ## 🔜 ถัดไป
 - ทดสอบครอบคลุมงาน Phase 8:
   - ✅ pure unit — CSV import parser (`csv.test.ts`), email parsers (`email.parsers.test.ts`),
@@ -157,5 +163,5 @@
   - ✅ e2e realtime chat (Playwright, 2 sessions) — agent chat message appears on the requester's open
     page via SSE with no reload (waits for the subscription to open first, so the push isn't missed);
     full e2e suite 8/8
-- Redis event bus: production hardening (reconnect/TLS/auth), ย้าย notifications poll → SSE
+- Redis event bus: production hardening (reconnect/TLS/auth)
 - deploy จริง (multi-node behind nginx) + observability สำหรับ SSE connections

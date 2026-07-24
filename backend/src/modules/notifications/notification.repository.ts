@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../shared/db";
+import { bus } from "../../shared/events";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -40,10 +41,16 @@ function toDto(row: NotificationRow): NotificationDto {
 }
 
 export const notificationRepository = {
-  /** Bulk-create notifications; call with a tx client to commit atomically. */
-  createMany(entries: NotificationEntry[], db: Db = prisma) {
-    if (entries.length === 0) return Promise.resolve({ count: 0 });
-    return db.notification.createMany({
+  /**
+   * Bulk-create notifications; call with a tx client to commit atomically. After
+   * the write, fans out a `notification.created` signal per distinct recipient so
+   * their bell can refetch live (SSE) instead of polling. The signal only tells
+   * the client to refetch — it carries no data — so an over-eager fire (e.g. a
+   * later rollback in the same tx) just triggers a harmless no-op refetch.
+   */
+  async createMany(entries: NotificationEntry[], db: Db = prisma) {
+    if (entries.length === 0) return { count: 0 };
+    const result = await db.notification.createMany({
       data: entries.map((e) => ({
         userId: e.userId,
         type: e.type,
@@ -51,6 +58,10 @@ export const notificationRepository = {
         message: e.message,
       })),
     });
+    for (const userId of new Set(entries.map((e) => e.userId))) {
+      bus.emit("notification.created", { userId });
+    }
+    return result;
   },
 
   async listForUser(userId: number, limit = 20): Promise<NotificationDto[]> {

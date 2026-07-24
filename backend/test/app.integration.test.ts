@@ -1013,6 +1013,40 @@ describe("comments — SSE stream (real-time)", () => {
     );
     expect(frames.some((f) => f.startsWith("event: read"))).toBe(false);
   });
+
+  it("pings the recipient's notification stream when they get a notification", async () => {
+    const dana = await login("dana.reyes@acme.com"); // assignee of 1042
+    const marcus = await login("marcus.chen@acme.com"); // requester of 1042
+    const frames = await collect(
+      `${API}/notifications/stream`,
+      marcus,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments`)
+          .set(bearer(dana))
+          .send({ body: "ping the bell" })
+          .expect(201);
+      },
+    );
+    expect(frames.some((f) => f.startsWith("event: notification"))).toBe(true);
+  });
+
+  it("does not ping a non-recipient's notification stream", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const kai = await login("kai.t@acme.com"); // unrelated agent (Field Services)
+    const frames = await collect(
+      `${API}/notifications/stream`,
+      kai,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments`)
+          .set(bearer(dana))
+          .send({ body: "not for kai" })
+          .expect(201);
+      },
+    );
+    expect(frames.some((f) => f.startsWith("event: notification"))).toBe(false);
+  });
 });
 
 describe("comments — read receipts", () => {

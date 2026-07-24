@@ -18,11 +18,15 @@ export type ReadEvent = {
   lastReadId: number;
 };
 
+/** Broadcast when a notification is created for a user (a refetch signal). */
+export type NotificationCreatedEvent = { userId: number };
+
 /** The event catalogue: event name → payload shape. */
 export type Events = {
   "comment.created": CommentCreatedEvent;
   typing: TypingEvent;
   read: ReadEvent;
+  "notification.created": NotificationCreatedEvent;
 };
 
 type Listener<K extends keyof Events> = (payload: Events[K]) => void;

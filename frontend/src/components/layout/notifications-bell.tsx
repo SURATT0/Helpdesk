@@ -7,6 +7,7 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
+  useNotificationStream,
 } from "@/features/notifications/queries";
 import type { Notification } from "@/features/notifications/schemas";
 import { useI18n } from "@/features/i18n/context";
@@ -27,6 +28,7 @@ export function NotificationsBell() {
   const { t } = useI18n();
   const [open, setOpen] = React.useState(false);
   const { data } = useNotifications();
+  useNotificationStream(); // live bell updates over SSE (replaces the 30s poll)
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
 

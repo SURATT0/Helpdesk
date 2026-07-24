@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: h.push }) }));
 vi.mock("@/features/notifications/queries", () => ({
   useNotifications: () => ({ data: h.data }),
+  useNotificationStream: () => {},
   useMarkNotificationRead: () => ({ mutate: h.markRead }),
   useMarkAllNotificationsRead: () => ({ mutate: h.markAll }),
 }));
