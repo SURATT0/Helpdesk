@@ -149,6 +149,12 @@
   ผ่าน `bus`, ครอบทุกจุดสร้าง — comment/status/assignee/priority); FE consume ด้วย fetch-reader →
   invalidate query (poll 30s → SSE + fallback 120s); backend 68 integration, e2e `notifications.spec.ts`
 
+**Roles & permissions page**
+- ✅ หน้า `/permissions` (nav ใหม่ + ShieldCheck) — การ์ด "สิทธิของคุณ" (role ปัจจุบัน),
+  ตาราง permission ตาม role (requester/agent/manager/admin, ✓/–, ไฮไลต์คอลัมน์ตัวเอง + "YOU")
+  และ row-level ticket visibility ต่อ role — สะท้อนสิ่งที่ API บังคับจริง (RBAC); TH/EN,
+  e2e `permissions.spec.ts` (3 เคส)
+
 ## 🔜 ถัดไป
 - ทดสอบครอบคลุมงาน Phase 8:
   - ✅ pure unit — CSV import parser (`csv.test.ts`), email parsers (`email.parsers.test.ts`),

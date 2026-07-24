@@ -8,6 +8,7 @@ import {
   Users,
   BarChart3,
   BookOpen,
+  ShieldCheck,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -24,6 +25,7 @@ const NAV = [
   { href: "/users", key: "nav.users", icon: Users },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
+  { href: "/permissions", key: "nav.permissions", icon: ShieldCheck },
   { href: "/settings", key: "nav.settings", icon: Settings },
 ];
 
