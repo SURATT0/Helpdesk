@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { LocalEventBus, type CommentCreatedEvent } from "./events";
+import {
+  LocalEventBus,
+  buildRedisOptions,
+  type CommentCreatedEvent,
+} from "./events";
 
 // A minimal, type-correct comment.created payload.
 const event = (ticketId: number): CommentCreatedEvent => ({
@@ -67,5 +71,56 @@ describe("LocalEventBus", () => {
   it("does not throw when emitting with no listeners", () => {
     const bus = new LocalEventBus();
     expect(() => bus.emit("comment.created", event(1))).not.toThrow();
+  });
+});
+
+describe("buildRedisOptions", () => {
+  it("queues commands across reconnects and never gives up rejoining", () => {
+    const o = buildRedisOptions({ url: "redis://localhost:6379" });
+    expect(o.maxRetriesPerRequest).toBeNull();
+    // retryStrategy returns a delay (a number) for every attempt → keeps retrying.
+    const strat = o.retryStrategy as (times: number) => number;
+    expect(strat(1)).toBe(200);
+    expect(strat(999)).toBe(5000); // capped at 5s
+  });
+
+  it("reconnects on a failover READONLY reply, not on other errors", () => {
+    const o = buildRedisOptions({ url: "redis://localhost:6379" });
+    const onErr = o.reconnectOnError as (e: Error) => boolean;
+    expect(onErr(new Error("READONLY You can't write against a read only replica"))).toBe(true);
+    expect(onErr(new Error("some other error"))).toBe(false);
+  });
+
+  it("enables TLS for a rediss:// URL (verified by default)", () => {
+    const o = buildRedisOptions({ url: "rediss://redis.example.com:6379" });
+    expect(o.tls).toEqual({ rejectUnauthorized: true });
+  });
+
+  it("forces TLS for a redis:// URL when tls is set", () => {
+    const o = buildRedisOptions({ url: "redis://host:6379", tls: true });
+    expect(o.tls).toEqual({ rejectUnauthorized: true });
+  });
+
+  it("leaves TLS off for a plain redis:// URL", () => {
+    const o = buildRedisOptions({ url: "redis://host:6379" });
+    expect(o.tls).toBeUndefined();
+  });
+
+  it("can disable certificate verification explicitly", () => {
+    const o = buildRedisOptions({
+      url: "rediss://host:6379",
+      tlsRejectUnauthorized: false,
+    });
+    expect(o.tls).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("passes through username + password when provided", () => {
+    const o = buildRedisOptions({
+      url: "redis://host:6379",
+      username: "deskly",
+      password: "s3cret",
+    });
+    expect(o.username).toBe("deskly");
+    expect(o.password).toBe("s3cret");
   });
 });

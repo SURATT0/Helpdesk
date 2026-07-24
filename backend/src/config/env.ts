@@ -58,9 +58,20 @@ export const env = {
   lokiUrl: process.env.LOKI_URL || undefined,
   lokiUsername: process.env.LOKI_USERNAME || undefined,
   lokiPassword: process.env.LOKI_PASSWORD || undefined,
-  // Real-time event bus. Unset → in-process (single node). Set to a Redis URL to
-  // fan out SSE events across multiple API instances via Redis pub/sub.
-  redisUrl: process.env.REDIS_URL || undefined,
+  // Real-time event bus. `redis.url` unset → in-process (single node). Set it to
+  // fan SSE events across multiple API instances via Redis pub/sub. Production:
+  // use rediss:// (or REDIS_TLS=true) for TLS in transit, and supply credentials
+  // in the URL (redis://user:pass@host) or via REDIS_USERNAME/REDIS_PASSWORD.
+  redis: {
+    url: process.env.REDIS_URL || undefined,
+    username: process.env.REDIS_USERNAME || undefined,
+    password: process.env.REDIS_PASSWORD || undefined,
+    // Force TLS even for a redis:// URL (rediss:// turns it on automatically).
+    tls: process.env.REDIS_TLS === "true",
+    // Verify the server certificate (default on). Only turn off for a self-signed
+    // cert on a trusted network — never over the public internet.
+    tlsRejectUnauthorized: process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== "false",
+  },
   // External ticket sources (future integrations). Each provider is a pluggable
   // adapter (see src/modules/integrations); leaving these unset marks the
   // provider "not configured" without affecting anything else. The real REST
@@ -177,6 +188,13 @@ export function validateEnv(): { warnings: string[] } {
     if (!env.cookieSecure) {
       warnings.push(
         "COOKIE_SECURE is false in production — the refresh cookie is sent without the Secure flag. Only acceptable if TLS terminates elsewhere and this stack is served over plain HTTP internally.",
+      );
+    }
+    const redisTls =
+      env.redis.tls || (env.redis.url?.startsWith("rediss://") ?? false);
+    if (env.redis.url && redisTls && !env.redis.tlsRejectUnauthorized) {
+      warnings.push(
+        "REDIS_TLS_REJECT_UNAUTHORIZED is false in production — the Redis server certificate is not verified, exposing the event bus to MITM. Only acceptable for a self-signed cert on a trusted network.",
       );
     }
   }

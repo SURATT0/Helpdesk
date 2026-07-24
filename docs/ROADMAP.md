@@ -163,5 +163,9 @@
   - ✅ e2e realtime chat (Playwright, 2 sessions) — agent chat message appears on the requester's open
     page via SSE with no reload (waits for the subscription to open first, so the push isn't missed);
     full e2e suite 8/8
-- Redis event bus: production hardening (reconnect/TLS/auth)
+- ✅ Redis event bus: production hardening — capped-backoff reconnect (ไม่ยอมแพ้) + auto-resubscribe
+  ตอน `ready` (รอด failover) + `reconnectOnError` READONLY; TLS (`rediss://` หรือ `REDIS_TLS`,
+  `REDIS_TLS_REJECT_UNAUTHORIZED`) + auth (URL หรือ `REDIS_USERNAME`/`REDIS_PASSWORD`); graceful
+  shutdown (`bus.close()` ตอน SIGTERM/SIGINT); `buildRedisOptions` แยกเป็น pure + 7 unit tests
+  (verified จริง: kill/restart redis → reconnect + resubscribe `deskly:events`); backend 55 unit
 - deploy จริง (multi-node behind nginx) + observability สำหรับ SSE connections
