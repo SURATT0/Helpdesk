@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Clock } from "lucide-react";
+import { ArrowDown, Clock } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
@@ -14,7 +14,7 @@ import { useI18n } from "@/features/i18n/context";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { slaColor, toneForName } from "../data";
-import type { CommentSendStatus } from "../schemas";
+import type { Comment, CommentSendStatus } from "../schemas";
 import {
   useCommentStream,
   useComments,
@@ -174,14 +174,72 @@ export function TicketDetailView({ id }: { id: number }) {
     createComment.mutate({ body: msg.body, internal: msg.internal });
   };
 
-  // Auto-scroll to the newest message. Depends on the comment count, so it fires
-  // on load and whenever polling brings a new message in — but not on every
-  // re-render.
+  // Unread tracking + auto-scroll. We only follow the conversation to the bottom
+  // when the reader is already there (or just sent a message); otherwise incoming
+  // messages accrue as "unread" and surface via a divider + a jump-to-latest pill,
+  // so scrolling back through history isn't yanked away.
   const bottomRef = React.useRef<HTMLDivElement>(null);
-  const commentCount = commentsQuery.data?.length ?? 0;
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const commentsRef = React.useRef<Comment[]>([]);
+  const seenRef = React.useRef(0); // # of comments the reader has seen
+  const atBottomRef = React.useRef(true);
+  const initRef = React.useRef(false);
+  const [unread, setUnread] = React.useState(0);
+  const [firstUnreadKey, setFirstUnreadKey] = React.useState<string | null>(null);
+
+  const scrollToBottom = React.useCallback((behavior: ScrollBehavior) => {
+    bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
+
+  const markSeen = React.useCallback(() => {
+    seenRef.current = commentsRef.current.length;
+    setUnread(0);
+    setFirstUnreadKey(null);
+  }, []);
+
+  const jumpToLatest = React.useCallback(() => {
+    atBottomRef.current = true;
+    markSeen();
+    scrollToBottom("smooth");
+  }, [markSeen, scrollToBottom]);
+
+  const handleScroll = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    atBottomRef.current = nearBottom;
+    if (nearBottom) markSeen();
+  }, [markSeen]);
+
+  const commentsData = commentsQuery.data;
+  const commentsLoaded = commentsQuery.isSuccess;
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [commentCount]);
+    if (!commentsLoaded) return;
+    const comments = commentsData ?? [];
+    const total = comments.length;
+    // First successful load: everything on screen counts as already read.
+    if (!initRef.current) {
+      initRef.current = true;
+      seenRef.current = total;
+      scrollToBottom("auto");
+      return;
+    }
+    const last = comments[total - 1];
+    const lastIsOwn = !!last && last.author.id === user?.id;
+    if (atBottomRef.current || lastIsOwn) {
+      seenRef.current = total;
+      setUnread(0);
+      setFirstUnreadKey(null);
+      scrollToBottom("smooth");
+    } else if (total > seenRef.current) {
+      setUnread(total - seenRef.current);
+      const firstUnseen = comments[seenRef.current];
+      if (firstUnseen) {
+        const key = firstUnseen.clientId ?? `c${firstUnseen.id}`;
+        setFirstUnreadKey((cur) => cur ?? key);
+      }
+    }
+  }, [commentsData, commentsLoaded, user?.id, scrollToBottom]);
 
   if (isLoading) {
     return <LoadingRow label={t("detail.loading", { id })} />;
@@ -200,6 +258,7 @@ export function TicketDetailView({ id }: { id: number }) {
   const canResolve =
     canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("resolved");
   const comments = commentsQuery.data ?? [];
+  commentsRef.current = comments; // latest snapshot for the scroll/jump handlers
 
   // The requester's opening description + every comment, as one chat timeline.
   const messages = [
@@ -283,7 +342,12 @@ export function TicketDetailView({ id }: { id: number }) {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-4 p-5 sm:p-7 lg:overflow-y-auto">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          data-testid="chat-scroll"
+          className="relative flex flex-1 flex-col gap-4 p-5 sm:p-7 lg:overflow-y-auto"
+        >
           <div className="flex flex-col">
             {messages.map((m, i) => {
               const prev = messages[i - 1];
@@ -293,7 +357,7 @@ export function TicketDetailView({ id }: { id: number }) {
                 prev.author === m.author &&
                 prev.internal === m.internal &&
                 prev.fromAgent === m.fromAgent;
-              return (
+              const bubble = (
                 <MessageBubble
                   key={m.key}
                   author={m.author}
@@ -325,6 +389,21 @@ export function TicketDetailView({ id }: { id: number }) {
                   </p>
                 </MessageBubble>
               );
+              if (m.key === firstUnreadKey) {
+                return (
+                  <React.Fragment key={`unread-${m.key}`}>
+                    <div className="my-3 flex items-center gap-2" role="separator">
+                      <span className="h-px flex-1 bg-[#fecaca]" />
+                      <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#dc2626]">
+                        {t("chat.unreadDivider")}
+                      </span>
+                      <span className="h-px flex-1 bg-[#fecaca]" />
+                    </div>
+                    {bubble}
+                  </React.Fragment>
+                );
+              }
+              return bubble;
             })}
           </div>
 
@@ -343,6 +422,19 @@ export function TicketDetailView({ id }: { id: number }) {
                   ? t("chat.typingOne", { name: typingNames[0] })
                   : t("chat.typingMany")}
               </span>
+            </div>
+          ) : null}
+
+          {unread > 0 ? (
+            <div className="pointer-events-none sticky bottom-2 z-10 flex justify-center">
+              <button
+                type="button"
+                onClick={jumpToLatest}
+                className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_2px_12px_rgba(15,23,42,.18)] hover:bg-brand-hover"
+              >
+                <ArrowDown size={13} strokeWidth={2.5} />
+                {t("chat.jumpNew", { count: String(unread) })}
+              </button>
             </div>
           ) : null}
 

@@ -128,6 +128,9 @@
   fan-out ผ่าน SSE เดิม (ไม่ echo กลับผู้พิมพ์เอง); FE ยิงแบบ throttle ทุก 2.5s ตอนพิมพ์แท็บ chat,
   โชว์ "X กำลังพิมพ์…" (จุดเด้ง) หมดอายุ 4s หลังหยุด + เคลียร์ทันทีเมื่อข้อความมาถึง;
   backend 61 integration, e2e `typing.spec.ts`
+- ✅ **unread + jump-to-latest** (FE ล้วน) — auto-scroll เฉพาะตอนอยู่ท้าย thread/เพิ่งส่งเอง;
+  ถ้าเลื่อนอ่านย้อนหลังแล้วมีข้อความใหม่ → เส้นคั่น "New messages" + ปุ่มลอย "N new" (กดเลื่อนลงล่าง
+  แล้วเคลียร์); e2e `unread.spec.ts`
 
 **Horizontal scaling**
 - ✅ **event bus adapter** (`shared/events.ts`) — `LocalEventBus` (in-process) / `RedisEventBus` (Redis pub/sub)

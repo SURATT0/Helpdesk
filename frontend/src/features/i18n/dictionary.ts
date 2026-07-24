@@ -171,6 +171,8 @@ const en: Dict = {
   "chat.retry": "Retry",
   "chat.typingOne": "{name} is typing…",
   "chat.typingMany": "Several people are typing…",
+  "chat.unreadDivider": "New messages",
+  "chat.jumpNew": "{count} new",
 
   "col.id": "ID",
   "col.subject": "Subject",
@@ -506,6 +508,8 @@ const th: Dict = {
   "chat.retry": "ลองใหม่",
   "chat.typingOne": "{name} กำลังพิมพ์…",
   "chat.typingMany": "หลายคนกำลังพิมพ์…",
+  "chat.unreadDivider": "ข้อความใหม่",
+  "chat.jumpNew": "ใหม่ {count}",
 
   "col.id": "รหัส",
   "col.subject": "เรื่อง",
