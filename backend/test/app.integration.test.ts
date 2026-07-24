@@ -965,4 +965,141 @@ describe("comments — SSE stream (real-time)", () => {
       .set(bearer(marcus))
       .expect(404);
   });
+
+  it("delivers a read receipt to another subscriber (the message author)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const marcus = await login("marcus.chen@acme.com"); // requester of 1042
+    const posted = await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "did you see this?" })
+      .expect(201);
+    const commentId = posted.body.data.id as number;
+
+    const frames = await collect(
+      `${API}/tickets/1042/comments/stream`,
+      dana,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments/read`)
+          .set(bearer(marcus))
+          .send({ lastReadId: commentId })
+          .expect(200);
+      },
+    );
+    const read = frames.find((f) => f.startsWith("event: read"));
+    expect(read).toBeDefined();
+    expect(read).toContain(String(commentId));
+  });
+
+  it("does not echo a user's own read receipt back to them", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const posted = await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "self read" })
+      .expect(201);
+    const commentId = posted.body.data.id as number;
+    const frames = await collect(
+      `${API}/tickets/1042/comments/stream`,
+      dana,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments/read`)
+          .set(bearer(dana))
+          .send({ lastReadId: commentId })
+          .expect(200);
+      },
+    );
+    expect(frames.some((f) => f.startsWith("event: read"))).toBe(false);
+  });
+});
+
+describe("comments — read receipts", () => {
+  async function userId(email: string): Promise<number> {
+    const u = await prisma.user.findUniqueOrThrow({ where: { email } });
+    return u.id;
+  }
+
+  it("records a read pointer and reports it in reads", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const marcus = await login("marcus.chen@acme.com");
+    const marcusId = await userId("marcus.chen@acme.com");
+    const posted = await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "please read" })
+      .expect(201);
+    const commentId = posted.body.data.id as number;
+
+    const marked = await request(app)
+      .post(`${API}/tickets/1042/comments/read`)
+      .set(bearer(marcus))
+      .send({ lastReadId: commentId });
+    expect(marked.status).toBe(200);
+    expect(marked.body.data.lastReadId).toBe(commentId);
+
+    const reads = await request(app)
+      .get(`${API}/tickets/1042/comments/reads`)
+      .set(bearer(dana));
+    expect(reads.status).toBe(200);
+    const marker = reads.body.data.find(
+      (r: { userId: number }) => r.userId === marcusId,
+    );
+    expect(marker.lastReadCommentId).toBe(commentId);
+  });
+
+  it("only advances the read pointer forward", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const marcus = await login("marcus.chen@acme.com");
+    const marcusId = await userId("marcus.chen@acme.com");
+    const c1 = (
+      await request(app)
+        .post(`${API}/tickets/1042/comments`)
+        .set(bearer(dana))
+        .send({ body: "first" })
+        .expect(201)
+    ).body.data.id as number;
+    const c2 = (
+      await request(app)
+        .post(`${API}/tickets/1042/comments`)
+        .set(bearer(dana))
+        .send({ body: "second" })
+        .expect(201)
+    ).body.data.id as number;
+
+    await request(app)
+      .post(`${API}/tickets/1042/comments/read`)
+      .set(bearer(marcus))
+      .send({ lastReadId: c2 })
+      .expect(200);
+    // Marking an older comment must not move the pointer backwards.
+    const back = await request(app)
+      .post(`${API}/tickets/1042/comments/read`)
+      .set(bearer(marcus))
+      .send({ lastReadId: c1 })
+      .expect(200);
+    expect(back.body.data.lastReadId).toBe(c2);
+
+    const reads = await request(app)
+      .get(`${API}/tickets/1042/comments/reads`)
+      .set(bearer(dana));
+    const m = reads.body.data.find(
+      (r: { userId: number }) => r.userId === marcusId,
+    );
+    expect(m.lastReadCommentId).toBe(c2);
+  });
+
+  it("404s read + reads on an out-of-scope ticket", async () => {
+    const marcus = await login("marcus.chen@acme.com"); // not on 1039
+    await request(app)
+      .post(`${API}/tickets/1039/comments/read`)
+      .set(bearer(marcus))
+      .send({ lastReadId: 1 })
+      .expect(404);
+    await request(app)
+      .get(`${API}/tickets/1039/comments/reads`)
+      .set(bearer(marcus))
+      .expect(404);
+  });
 });

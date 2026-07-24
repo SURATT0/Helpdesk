@@ -131,6 +131,10 @@
 - ✅ **unread + jump-to-latest** (FE ล้วน) — auto-scroll เฉพาะตอนอยู่ท้าย thread/เพิ่งส่งเอง;
   ถ้าเลื่อนอ่านย้อนหลังแล้วมีข้อความใหม่ → เส้นคั่น "New messages" + ปุ่มลอย "N new" (กดเลื่อนลงล่าง
   แล้วเคลียร์); e2e `unread.spec.ts`
+- ✅ **read receipts** — model `TicketRead` (pointer ต่อ user/ticket, เดินหน้าอย่างเดียว) + migration;
+  `POST /comments/read` (scope-checked) → `bus.emit("read")` fan-out ผ่าน SSE (ไม่ echo ตัวเอง) +
+  `GET /comments/reads`; FE มาร์คอ่านเมื่อถึงท้าย thread, seed reads ตอนเปิด + อัปเดตสดผ่าน SSE,
+  โชว์ "✓ Sent / ✓✓ Read" ใต้ข้อความล่าสุดของตัวเอง; backend 66 integration, e2e `read-receipts.spec.ts`
 
 **Horizontal scaling**
 - ✅ **event bus adapter** (`shared/events.ts`) — `LocalEventBus` (in-process) / `RedisEventBus` (Redis pub/sub)

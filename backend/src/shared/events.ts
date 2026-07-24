@@ -10,10 +10,19 @@ export type CommentCreatedEvent = { ticketId: number; comment: CommentDto };
 /** Payload broadcast while a user is actively typing in a ticket's chat. */
 export type TypingEvent = { ticketId: number; userId: number; name: string };
 
+/** Payload broadcast when a user reads a ticket's chat up to a comment id. */
+export type ReadEvent = {
+  ticketId: number;
+  userId: number;
+  name: string;
+  lastReadId: number;
+};
+
 /** The event catalogue: event name → payload shape. */
 export type Events = {
   "comment.created": CommentCreatedEvent;
   typing: TypingEvent;
+  read: ReadEvent;
 };
 
 type Listener<K extends keyof Events> = (payload: Events[K]) => void;

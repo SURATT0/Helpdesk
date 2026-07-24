@@ -12,3 +12,7 @@ export const createCommentBody = z.object({
   body: z.string().min(1),
   internal: z.boolean().optional().default(false),
 });
+
+export const markReadBody = z.object({
+  lastReadId: z.coerce.number().int().positive(),
+});

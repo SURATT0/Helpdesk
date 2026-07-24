@@ -64,6 +64,14 @@ export const commentSchema = z.object({
 export const commentListSchema = z.object({ data: z.array(commentSchema) });
 export const commentEnvelopeSchema = z.object({ data: commentSchema });
 
+export const readMarkerSchema = z.object({
+  userId: z.number(),
+  name: z.string(),
+  lastReadCommentId: z.number(),
+});
+export const readListSchema = z.object({ data: z.array(readMarkerSchema) });
+export type ReadMarker = z.infer<typeof readMarkerSchema>;
+
 export const replyResultSchema = z.object({
   comment: commentSchema,
   mail: z.object({

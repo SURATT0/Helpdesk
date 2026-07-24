@@ -8,6 +8,7 @@ import {
   commentSchema,
   historyListSchema,
   importResultEnvelope,
+  readListSchema,
   replyResultEnvelope,
   ticketEnvelopeSchema,
   ticketListSchema,
@@ -15,6 +16,7 @@ import {
   type Comment,
   type HistoryEntry,
   type ImportResult,
+  type ReadMarker,
   type ReplyResult,
   type Ticket,
 } from "./schemas";
@@ -151,13 +153,36 @@ export async function sendTyping(ticketId: number): Promise<void> {
   }
 }
 
+/** Record how far the caller has read the chat (best-effort read receipt). */
+export async function markRead(
+  ticketId: number,
+  lastReadId: number,
+): Promise<void> {
+  try {
+    await apiRequest(`/tickets/${ticketId}/comments/read`, {
+      method: "POST",
+      body: JSON.stringify({ lastReadId }),
+    });
+  } catch {
+    /* read receipts are non-critical — ignore failures */
+  }
+}
+
+/** Every participant's read pointer for a ticket. */
+export async function fetchReads(ticketId: number): Promise<ReadMarker[]> {
+  const body = await apiRequest(`/tickets/${ticketId}/comments/reads`);
+  return readListSchema.parse(body).data;
+}
+
 export type TypingSignal = { userId: number; name: string };
+export type ReadSignal = { userId: number; name: string; lastReadId: number };
 
 export async function streamComments(
   ticketId: number,
   signal: AbortSignal,
   onComment: (comment: Comment) => void,
   onTyping?: (signal: TypingSignal) => void,
+  onRead?: (signal: ReadSignal) => void,
 ): Promise<void> {
   const token = tokenStore.get();
   const res = await fetch(
@@ -200,6 +225,15 @@ export async function streamComments(
           const t = JSON.parse(data) as TypingSignal;
           if (typeof t.userId === "number" && typeof t.name === "string") {
             onTyping(t);
+          }
+        } catch {
+          /* ignore a malformed frame */
+        }
+      } else if (event === "read" && data && onRead) {
+        try {
+          const r = JSON.parse(data) as ReadSignal;
+          if (typeof r.userId === "number" && typeof r.lastReadId === "number") {
+            onRead(r);
           }
         } catch {
           /* ignore a malformed frame */

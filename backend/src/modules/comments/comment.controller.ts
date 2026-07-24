@@ -3,12 +3,14 @@ import { Unauthorized } from "../../shared/errors";
 import {
   bus,
   type CommentCreatedEvent,
+  type ReadEvent,
   type TypingEvent,
 } from "../../shared/events";
 import { commentService } from "./comment.service";
 import {
   commentIdParam,
   createCommentBody,
+  markReadBody,
   ticketIdParam,
 } from "./comment.validators";
 
@@ -63,6 +65,16 @@ export const commentController = {
     };
     bus.on("typing", onTyping);
 
+    // Read receipts — forward another participant's read pointer so the reader's
+    // sent messages can flip to "read". Never echo the reader's own pointer.
+    const onRead = ({ ticketId: tid, userId, name, lastReadId }: ReadEvent) => {
+      if (tid !== ticketId || userId === user.id) return;
+      res.write(
+        `event: read\ndata: ${JSON.stringify({ userId, name, lastReadId })}\n\n`,
+      );
+    };
+    bus.on("read", onRead);
+
     // Heartbeat keeps the connection alive through idle-timeout proxies.
     const heartbeat = setInterval(() => res.write(": ping\n\n"), 25_000);
 
@@ -70,7 +82,27 @@ export const commentController = {
       clearInterval(heartbeat);
       bus.off("comment.created", onComment);
       bus.off("typing", onTyping);
+      bus.off("read", onRead);
     });
+  },
+
+  /** Record how far the caller has read this ticket's chat (read receipts). */
+  async markRead(req: Request, res: Response) {
+    const { ticketId } = ticketIdParam.parse(req.params);
+    const { lastReadId } = markReadBody.parse(req.body);
+    const lastRead = await commentService.markRead(
+      ticketId,
+      lastReadId,
+      currentUser(req),
+    );
+    res.json({ data: { lastReadId: lastRead } });
+  },
+
+  /** Every participant's read pointer for this ticket. */
+  async reads(req: Request, res: Response) {
+    const { ticketId } = ticketIdParam.parse(req.params);
+    const data = await commentService.reads(ticketId, currentUser(req));
+    res.json({ data });
   },
 
   /**

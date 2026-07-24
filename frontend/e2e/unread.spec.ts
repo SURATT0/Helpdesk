@@ -32,7 +32,7 @@ test("new messages while scrolled up show an unread divider + jump-to-latest pil
   await page.goto(`/tickets/${TICKET}`);
   await page.getByPlaceholder(/Enter to send/).waitFor();
   await streamRequested;
-  await page.waitForTimeout(2500); // SSE subscribed
+  await page.waitForTimeout(3500); // SSE subscribed (generous under parallel load)
   await page.getByTestId("chat-scroll").evaluate((el) => (el.scrollTop = 0));
   await page.waitForTimeout(300);
 

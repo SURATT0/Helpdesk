@@ -12,6 +12,7 @@ import {
   createTicket,
   fetchCategories,
   fetchComments,
+  fetchReads,
   fetchTicket,
   fetchTicketHistory,
   fetchTickets,
@@ -158,6 +159,25 @@ export function useCommentStream(ticketId: number) {
   const [typing, setTyping] = React.useState<
     Record<number, { name: string; at: number }>
   >({});
+  // userId → last comment id that user has read (read receipts).
+  const [reads, setReads] = React.useState<Record<number, number>>({});
+
+  // Seed read pointers on open; live updates arrive via the stream below.
+  React.useEffect(() => {
+    if (!Number.isFinite(ticketId)) return;
+    let active = true;
+    fetchReads(ticketId)
+      .then((markers) => {
+        if (!active) return;
+        setReads(
+          Object.fromEntries(markers.map((m) => [m.userId, m.lastReadCommentId])),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [ticketId]);
 
   React.useEffect(() => {
     const iv = setInterval(() => {
@@ -205,6 +225,11 @@ export function useCommentStream(ticketId: number) {
                 ...cur,
                 [t.userId]: { name: t.name, at: Date.now() },
               })),
+            (r) =>
+              setReads((cur) => ({
+                ...cur,
+                [r.userId]: Math.max(cur[r.userId] ?? 0, r.lastReadId),
+              })),
           );
         } catch {
           if (stopped) return;
@@ -223,7 +248,7 @@ export function useCommentStream(ticketId: number) {
     () => Object.values(typing).map((v) => v.name),
     [typing],
   );
-  return { typingNames };
+  return { typingNames, reads };
 }
 
 /**

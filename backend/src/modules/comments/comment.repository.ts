@@ -18,6 +18,13 @@ export type CommentDto = {
   author: { id: number; name: string; role: Role };
 };
 
+/** A participant's read pointer for a ticket's chat. */
+export type ReadMarker = {
+  userId: number;
+  name: string;
+  lastReadCommentId: number;
+};
+
 function toDto(row: CommentRow): CommentDto {
   return {
     id: row.id,
@@ -94,6 +101,40 @@ export const commentRepository = {
 
       return toDto(created);
     });
+  },
+
+  /** Advance a user's read pointer for a ticket (never moves backwards). */
+  async markRead(
+    ticketId: number,
+    userId: number,
+    commentId: number,
+  ): Promise<number> {
+    const existing = await prisma.ticketRead.findUnique({
+      where: { ticketId_userId: { ticketId, userId } },
+    });
+    const lastReadCommentId = Math.max(
+      existing?.lastReadCommentId ?? 0,
+      commentId,
+    );
+    await prisma.ticketRead.upsert({
+      where: { ticketId_userId: { ticketId, userId } },
+      create: { ticketId, userId, lastReadCommentId },
+      update: { lastReadCommentId },
+    });
+    return lastReadCommentId;
+  },
+
+  /** Every participant's read pointer for a ticket (for read receipts). */
+  async findReads(ticketId: number): Promise<ReadMarker[]> {
+    const rows = await prisma.ticketRead.findMany({
+      where: { ticketId },
+      include: { user: { select: { name: true } } },
+    });
+    return rows.map((r) => ({
+      userId: r.userId,
+      name: r.user.name,
+      lastReadCommentId: r.lastReadCommentId,
+    }));
   },
 
   async softDelete(id: number, userId: number): Promise<void> {

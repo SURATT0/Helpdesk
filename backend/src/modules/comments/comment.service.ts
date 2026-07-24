@@ -2,7 +2,11 @@ import { Forbidden, NotFound } from "../../shared/errors";
 import { hasPermission, type AuthUser } from "../../shared/auth";
 import { bus } from "../../shared/events";
 import { ticketService } from "../tickets/ticket.service";
-import { commentRepository, type CommentDto } from "./comment.repository";
+import {
+  commentRepository,
+  type CommentDto,
+  type ReadMarker,
+} from "./comment.repository";
 
 /**
  * Comment rules. Access to a ticket's comments follows the ticket's row scope
@@ -49,6 +53,32 @@ export const commentService = {
   ): Promise<{ canInternal: boolean }> {
     await ticketService.get(ticketId, user);
     return { canInternal: hasPermission(user, "ticket:write") };
+  },
+
+  /**
+   * Record that a user has read a ticket's chat up to `commentId` (pointer only
+   * advances). Scope-checked, then fanned out as a `read` event so the other
+   * participants' clients can flip their sent messages to "read".
+   */
+  async markRead(
+    ticketId: number,
+    commentId: number,
+    user: AuthUser,
+  ): Promise<number> {
+    await ticketService.get(ticketId, user); // row scope → 404 if out of scope
+    const lastReadId = await commentRepository.markRead(
+      ticketId,
+      user.id,
+      commentId,
+    );
+    bus.emit("read", { ticketId, userId: user.id, name: user.name, lastReadId });
+    return lastReadId;
+  },
+
+  /** Every participant's read pointer for a ticket (scope-checked). */
+  async reads(ticketId: number, user: AuthUser): Promise<ReadMarker[]> {
+    await ticketService.get(ticketId, user);
+    return commentRepository.findReads(ticketId);
   },
 
   async remove(id: number, user: AuthUser): Promise<void> {

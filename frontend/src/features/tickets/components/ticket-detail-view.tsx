@@ -14,6 +14,7 @@ import { useI18n } from "@/features/i18n/context";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { slaColor, toneForName } from "../data";
+import { markRead } from "../api";
 import type { Comment, CommentSendStatus } from "../schemas";
 import {
   useCommentStream,
@@ -52,6 +53,7 @@ function MessageBubble({
   fromAgent,
   grouped,
   status,
+  receipt,
   onRetry,
 }: {
   author: string;
@@ -66,6 +68,8 @@ function MessageBubble({
   grouped?: boolean;
   /** Send state for the caller's own optimistic message (sending / failed). */
   status?: CommentSendStatus;
+  /** Read receipt for the caller's own last delivered message (sent / read). */
+  receipt?: "sent" | "read" | null;
   /** Resend a failed message. */
   onRetry?: () => void;
 }) {
@@ -132,6 +136,15 @@ function MessageBubble({
               {t("chat.retry")}
             </button>
           </div>
+        ) : receipt ? (
+          <div
+            className={cn(
+              "mt-1 text-right text-[11px]",
+              receipt === "read" ? "text-[#3f8f5e]" : "text-faint",
+            )}
+          >
+            {receipt === "read" ? `✓✓ ${t("chat.read")}` : `✓ ${t("chat.sent")}`}
+          </div>
         ) : null}
       </div>
     </div>
@@ -161,7 +174,7 @@ export function TicketDetailView({ id }: { id: number }) {
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
-  const { typingNames } = useCommentStream(id); // live comments + typing over SSE
+  const { typingNames, reads } = useCommentStream(id); // live comments/typing/reads
 
   // Resend a message that failed to post: drop the failed entry, then re-send
   // (which creates a fresh optimistic entry).
@@ -184,6 +197,7 @@ export function TicketDetailView({ id }: { id: number }) {
   const seenRef = React.useRef(0); // # of comments the reader has seen
   const atBottomRef = React.useRef(true);
   const initRef = React.useRef(false);
+  const lastSentReadRef = React.useRef(0);
   const [unread, setUnread] = React.useState(0);
   const [firstUnreadKey, setFirstUnreadKey] = React.useState<string | null>(null);
 
@@ -191,11 +205,23 @@ export function TicketDetailView({ id }: { id: number }) {
     bottomRef.current?.scrollIntoView({ behavior, block: "end" });
   }, []);
 
+  // Tell the server we've read up to the newest real (server-assigned) comment,
+  // so the other participant's messages flip to "read". Only advances forward.
+  const markReadLatest = React.useCallback(() => {
+    let latestId = 0;
+    for (const c of commentsRef.current) if (c.id > latestId) latestId = c.id;
+    if (latestId > lastSentReadRef.current) {
+      lastSentReadRef.current = latestId;
+      void markRead(id, latestId);
+    }
+  }, [id]);
+
   const markSeen = React.useCallback(() => {
     seenRef.current = commentsRef.current.length;
     setUnread(0);
     setFirstUnreadKey(null);
-  }, []);
+    markReadLatest();
+  }, [markReadLatest]);
 
   const jumpToLatest = React.useCallback(() => {
     atBottomRef.current = true;
@@ -222,6 +248,7 @@ export function TicketDetailView({ id }: { id: number }) {
       initRef.current = true;
       seenRef.current = total;
       scrollToBottom("auto");
+      markReadLatest();
       return;
     }
     const last = comments[total - 1];
@@ -231,6 +258,7 @@ export function TicketDetailView({ id }: { id: number }) {
       setUnread(0);
       setFirstUnreadKey(null);
       scrollToBottom("smooth");
+      markReadLatest();
     } else if (total > seenRef.current) {
       setUnread(total - seenRef.current);
       const firstUnseen = comments[seenRef.current];
@@ -239,7 +267,7 @@ export function TicketDetailView({ id }: { id: number }) {
         setFirstUnreadKey((cur) => cur ?? key);
       }
     }
-  }, [commentsData, commentsLoaded, user?.id, scrollToBottom]);
+  }, [commentsData, commentsLoaded, user?.id, scrollToBottom, markReadLatest]);
 
   if (isLoading) {
     return <LoadingRow label={t("detail.loading", { id })} />;
@@ -264,6 +292,8 @@ export function TicketDetailView({ id }: { id: number }) {
   const messages = [
     {
       key: "desc",
+      id: 0,
+      authorId: undefined as number | undefined,
       author: ticket.requester,
       tone: "red" as const,
       roleKey: "requester",
@@ -276,6 +306,8 @@ export function TicketDetailView({ id }: { id: number }) {
     },
     ...comments.map((c) => ({
       key: c.clientId ?? `c${c.id}`,
+      id: c.id,
+      authorId: c.author.id as number | undefined,
       author: c.author.name,
       tone: toneForName(c.author.name),
       roleKey: c.author.role,
@@ -287,6 +319,29 @@ export function TicketDetailView({ id }: { id: number }) {
       clientId: c.clientId,
     })),
   ];
+
+  // Read receipt: the newest of my own delivered (server-acked) messages that
+  // another participant has read shows "read"; otherwise my newest own shows
+  // "sent". Only one indicator, on my last own message (chat-app convention).
+  const readBy = Math.max(
+    0,
+    ...Object.entries(reads)
+      .filter(([uid]) => Number(uid) !== user?.id)
+      .map(([, v]) => v),
+  );
+  let lastOwnKey: string | null = null;
+  let lastOwnId = 0;
+  for (const m of messages) {
+    if (m.authorId === user?.id && m.id > 0 && !m.sendStatus) {
+      lastOwnKey = m.key;
+      lastOwnId = m.id;
+    }
+  }
+  const lastOwnReceipt: "sent" | "read" | null = lastOwnKey
+    ? readBy >= lastOwnId
+      ? "read"
+      : "sent"
+    : null;
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[1fr_312px] lg:overflow-hidden">
@@ -368,6 +423,7 @@ export function TicketDetailView({ id }: { id: number }) {
                   fromAgent={m.fromAgent}
                   grouped={grouped}
                   status={m.sendStatus}
+                  receipt={m.key === lastOwnKey ? lastOwnReceipt : null}
                   onRetry={
                     m.sendStatus === "failed"
                       ? () =>

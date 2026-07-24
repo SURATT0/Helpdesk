@@ -173,6 +173,8 @@ const en: Dict = {
   "chat.typingMany": "Several people are typing…",
   "chat.unreadDivider": "New messages",
   "chat.jumpNew": "{count} new",
+  "chat.sent": "Sent",
+  "chat.read": "Read",
 
   "col.id": "ID",
   "col.subject": "Subject",
@@ -510,6 +512,8 @@ const th: Dict = {
   "chat.typingMany": "หลายคนกำลังพิมพ์…",
   "chat.unreadDivider": "ข้อความใหม่",
   "chat.jumpNew": "ใหม่ {count}",
+  "chat.sent": "ส่งแล้ว",
+  "chat.read": "อ่านแล้ว",
 
   "col.id": "รหัส",
   "col.subject": "เรื่อง",

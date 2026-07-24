@@ -66,6 +66,7 @@ model User {
   comments         Comment[]
   notifications    Notification[]
   attachments      Attachment[]
+  ticketReads      TicketRead[]
   createdAt        DateTime              @default(now()) @map("created_at")
   updatedAt        DateTime              @updatedAt @map("updated_at")
 
@@ -120,12 +121,28 @@ model Ticket {
   statusHistory TicketStatusHistory[]
   comments      Comment[]
   attachments   Attachment[]
+  reads         TicketRead[]
   createdAt     DateTime              @default(now()) @map("created_at")
   updatedAt     DateTime              @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([priority])
   @@map("tickets")
+}
+
+// Per-user read pointer for a ticket's chat: the id of the last comment the user
+// has seen. Drives read receipts — a message is "read" once another participant's
+// pointer reaches it. One row per (ticket, user); the pointer only moves forward.
+model TicketRead {
+  ticketId          Int      @map("ticket_id")
+  ticket            Ticket   @relation(fields: [ticketId], references: [id])
+  userId            Int      @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  lastReadCommentId Int      @map("last_read_comment_id")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@id([ticketId, userId])
+  @@map("ticket_reads")
 }
 
 // SLA source of truth: one row per status change (append-only).
