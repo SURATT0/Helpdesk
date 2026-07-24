@@ -19,6 +19,8 @@ const TEAMS = [
 ];
 
 const USERS: { name: string; role: Role; team?: string }[] = [
+  { name: "Sam Rivera", role: "admin" }, // no team → sees all tickets
+  { name: "Morgan Lee", role: "manager", team: "IT Support" }, // department scope (IT)
   { name: "Dana Reyes", role: "agent", team: "IT Support" },
   { name: "Kai T.", role: "agent", team: "Field Services" },
   { name: "Ana M.", role: "agent", team: "IT Support" },
