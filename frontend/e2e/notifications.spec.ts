@@ -2,7 +2,10 @@ import { test, expect } from "@playwright/test";
 import { loginAs } from "./helpers";
 
 const API = "http://localhost:4000/api/v1";
-const REQUESTER_EMAIL = "marcus.chen@acme.com"; // requester of ticket 1042
+// Ticket 1044's requester (T. Alvarez), a ticket no other spec posts to — so the
+// unread count is driven solely by this test even when the suite runs in parallel.
+const TICKET = 1044;
+const REQUESTER_EMAIL = "t.alvarez@acme.com";
 
 async function tokenFor(
   request: import("@playwright/test").APIRequestContext,
@@ -32,7 +35,7 @@ test("the notification bell updates live over SSE (no poll wait)", async ({
 
   // An agent comments on the requester's ticket → a notification for them.
   const agentToken = await tokenFor(request, "dana.reyes@acme.com");
-  await request.post(`${API}/tickets/1042/comments`, {
+  await request.post(`${API}/tickets/${TICKET}/comments`, {
     headers: { Authorization: `Bearer ${agentToken}` },
     data: { body: `bell probe ${Date.now()}` },
   });

@@ -42,6 +42,10 @@ services:
       JWT_REFRESH_SECRET: local-compose-refresh-2b9e4f71c05a83d6e7104b2f9a8c3d5e
       ACCESS_TTL_SEC: "900"
       REFRESH_TTL_SEC: "604800"
+      # Brute-force login guard (attempts/IP/15min). Raised for this demo/e2e
+      # stack because the Playwright suite logs in many times from one IP; lower
+      # it (or drop the override → default 20) for a real deployment.
+      AUTH_RATE_LIMIT: "1000"
       # Email-to-ticket webhook. Setting the secret enables
       # POST /api/v1/integrations/email-inbound (providers present it via the
       # x-webhook-secret header). Change it for any real deployment.
