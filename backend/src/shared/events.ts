@@ -7,9 +7,13 @@ import type { CommentDto } from "../modules/comments/comment.repository";
 /** Payload broadcast when a comment (chat / reply / note) is created. */
 export type CommentCreatedEvent = { ticketId: number; comment: CommentDto };
 
+/** Payload broadcast while a user is actively typing in a ticket's chat. */
+export type TypingEvent = { ticketId: number; userId: number; name: string };
+
 /** The event catalogue: event name → payload shape. */
 export type Events = {
   "comment.created": CommentCreatedEvent;
+  typing: TypingEvent;
 };
 
 type Listener<K extends keyof Events> = (payload: Events[K]) => void;

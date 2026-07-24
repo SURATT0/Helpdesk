@@ -169,6 +169,8 @@ const en: Dict = {
   "chat.sending": "Sending…",
   "chat.failed": "Not sent",
   "chat.retry": "Retry",
+  "chat.typingOne": "{name} is typing…",
+  "chat.typingMany": "Several people are typing…",
 
   "col.id": "ID",
   "col.subject": "Subject",
@@ -502,6 +504,8 @@ const th: Dict = {
   "chat.sending": "กำลังส่ง…",
   "chat.failed": "ส่งไม่สำเร็จ",
   "chat.retry": "ลองใหม่",
+  "chat.typingOne": "{name} กำลังพิมพ์…",
+  "chat.typingMany": "หลายคนกำลังพิมพ์…",
 
   "col.id": "รหัส",
   "col.subject": "เรื่อง",

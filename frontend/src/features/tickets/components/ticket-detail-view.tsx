@@ -138,6 +138,21 @@ function MessageBubble({
   );
 }
 
+/** Three softly bouncing dots for the "is typing…" indicator. */
+function TypingDots() {
+  return (
+    <span className="inline-flex items-end gap-0.5" aria-hidden>
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-faint"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function TicketDetailView({ id }: { id: number }) {
   const { data: ticket, isLoading, isError, error, refetch } = useTicket(id);
   const { user } = useAuth();
@@ -146,7 +161,7 @@ export function TicketDetailView({ id }: { id: number }) {
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
-  useCommentStream(id); // live updates over SSE (replaces polling)
+  const { typingNames } = useCommentStream(id); // live comments + typing over SSE
 
   // Resend a message that failed to post: drop the failed entry, then re-send
   // (which creates a fresh optimistic entry).
@@ -315,6 +330,20 @@ export function TicketDetailView({ id }: { id: number }) {
 
           {commentsQuery.isLoading ? (
             <LoadingRow label={t("detail.loadingConversation")} />
+          ) : null}
+
+          {typingNames.length > 0 ? (
+            <div
+              className="flex items-center gap-2 px-1 text-[12.5px] text-muted"
+              aria-live="polite"
+            >
+              <TypingDots />
+              <span>
+                {typingNames.length === 1
+                  ? t("chat.typingOne", { name: typingNames[0] })
+                  : t("chat.typingMany")}
+              </span>
+            </div>
           ) : null}
 
           <Composer

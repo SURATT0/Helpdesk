@@ -924,4 +924,45 @@ describe("comments — SSE stream (real-time)", () => {
     expect(joined).toContain("public visible");
     expect(joined).not.toContain("secret internal");
   });
+
+  it("delivers a typing signal to another subscriber (named)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const marcus = await login("marcus.chen@acme.com"); // requester of 1042
+    const frames = await collect(
+      `${API}/tickets/1042/comments/stream`,
+      marcus,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments/typing`)
+          .set(bearer(dana))
+          .expect(204);
+      },
+    );
+    const typing = frames.find((f) => f.startsWith("event: typing"));
+    expect(typing).toBeDefined();
+    expect(typing).toContain("Dana Reyes");
+  });
+
+  it("does not echo a user's own typing back to them", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const frames = await collect(
+      `${API}/tickets/1042/comments/stream`,
+      dana,
+      async () => {
+        await request(app)
+          .post(`${API}/tickets/1042/comments/typing`)
+          .set(bearer(dana))
+          .expect(204);
+      },
+    );
+    expect(frames.some((f) => f.startsWith("event: typing"))).toBe(false);
+  });
+
+  it("404s a typing signal on an out-of-scope ticket", async () => {
+    const marcus = await login("marcus.chen@acme.com"); // not on 1039
+    await request(app)
+      .post(`${API}/tickets/1039/comments/typing`)
+      .set(bearer(marcus))
+      .expect(404);
+  });
 });

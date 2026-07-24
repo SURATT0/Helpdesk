@@ -147,8 +147,34 @@ export function useComments(ticketId: number) {
  * the comments cache (deduped by id, so the sender's own echo is a no-op). Auto-
  * reconnects with a short backoff if the connection drops.
  */
+/** How long a "typing" signal stays live on the client before it auto-clears. */
+const TYPING_TTL_MS = 4000;
+
 export function useCommentStream(ticketId: number) {
   const qc = useQueryClient();
+  // userId → { name, at }: other participants currently typing. Each signal is
+  // refreshed by the sender's throttled pings and expires TYPING_TTL after the
+  // last one, so the indicator clears shortly after they stop.
+  const [typing, setTyping] = React.useState<
+    Record<number, { name: string; at: number }>
+  >({});
+
+  React.useEffect(() => {
+    const iv = setInterval(() => {
+      setTyping((cur) => {
+        const now = Date.now();
+        const next: typeof cur = {};
+        let changed = false;
+        for (const [id, v] of Object.entries(cur)) {
+          if (now - v.at < TYPING_TTL_MS) next[Number(id)] = v;
+          else changed = true;
+        }
+        return changed ? next : cur;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   React.useEffect(() => {
     if (!Number.isFinite(ticketId)) return;
     let stopped = false;
@@ -156,14 +182,30 @@ export function useCommentStream(ticketId: number) {
     (async () => {
       while (!stopped) {
         try {
-          await streamComments(ticketId, controller.signal, (comment) => {
-            qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) => {
-              const list = old ?? [];
-              return list.some((c) => c.id === comment.id)
-                ? list
-                : [...list, comment];
-            });
-          });
+          await streamComments(
+            ticketId,
+            controller.signal,
+            (comment) => {
+              qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) => {
+                const list = old ?? [];
+                return list.some((c) => c.id === comment.id)
+                  ? list
+                  : [...list, comment];
+              });
+              // Their message landed → they're no longer typing.
+              setTyping((cur) => {
+                if (!(comment.author.id in cur)) return cur;
+                const next = { ...cur };
+                delete next[comment.author.id];
+                return next;
+              });
+            },
+            (t) =>
+              setTyping((cur) => ({
+                ...cur,
+                [t.userId]: { name: t.name, at: Date.now() },
+              })),
+          );
         } catch {
           if (stopped) return;
         }
@@ -176,6 +218,12 @@ export function useCommentStream(ticketId: number) {
       controller.abort();
     };
   }, [ticketId, qc]);
+
+  const typingNames = React.useMemo(
+    () => Object.values(typing).map((v) => v.name),
+    [typing],
+  );
+  return { typingNames };
 }
 
 /**

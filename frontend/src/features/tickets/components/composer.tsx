@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUploadAttachment } from "@/features/attachments/queries";
+import { sendTyping } from "../api";
 import { useCreateComment, useSendReply } from "../queries";
 
 const ACCEPT =
@@ -48,7 +49,21 @@ export function Composer({
   const sendReply = useSendReply(ticketId);
   const upload = useUploadAttachment(ticketId);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const lastTypingRef = React.useRef(0);
   const firstName = requester.split(" ")[0];
+
+  // Emit a throttled "typing" ping while the user writes a chat message, so the
+  // other participant sees a live indicator. Chat tab only; at most every 2.5s.
+  function onBodyChange(value: string) {
+    setBody(value);
+    if (isChat && value.trim()) {
+      const now = Date.now();
+      if (now - lastTypingRef.current > 2500) {
+        lastTypingRef.current = now;
+        void sendTyping(ticketId);
+      }
+    }
+  }
 
   const isReply = tab === "reply";
   const isNote = tab === "note";
@@ -233,7 +248,7 @@ export function Composer({
       <textarea
         rows={isReply ? 3 : 2}
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={(e) => onBodyChange(e.target.value)}
         onKeyDown={(e) => {
           // Chat: Enter sends, Shift+Enter for a newline (Reply/Note stay multiline).
           if (isChat && e.key === "Enter" && !e.shiftKey) {

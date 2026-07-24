@@ -124,6 +124,10 @@
 - ✅ **optimistic send** — ข้อความขึ้น thread ทันที (สถานะ `sending`) เคลียร์ช่องพิมพ์เลย →
   สลับเป็น comment จริงตอน server ตอบ (dedup กับ SSE echo ของตัวเอง) / พลิกเป็น `failed` + ปุ่ม retry
   ถ้าส่งไม่ผ่าน (`useCreateComment` onMutate/onSuccess/onError); e2e `optimistic.spec.ts`
+- ✅ **typing indicator** — `POST /tickets/:id/comments/typing` (scope-checked) → `bus.emit("typing")`
+  fan-out ผ่าน SSE เดิม (ไม่ echo กลับผู้พิมพ์เอง); FE ยิงแบบ throttle ทุก 2.5s ตอนพิมพ์แท็บ chat,
+  โชว์ "X กำลังพิมพ์…" (จุดเด้ง) หมดอายุ 4s หลังหยุด + เคลียร์ทันทีเมื่อข้อความมาถึง;
+  backend 61 integration, e2e `typing.spec.ts`
 
 **Horizontal scaling**
 - ✅ **event bus adapter** (`shared/events.ts`) — `LocalEventBus` (in-process) / `RedisEventBus` (Redis pub/sub)

@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import { Unauthorized } from "../../shared/errors";
-import { bus, type CommentCreatedEvent } from "../../shared/events";
+import {
+  bus,
+  type CommentCreatedEvent,
+  type TypingEvent,
+} from "../../shared/events";
 import { commentService } from "./comment.service";
 import {
   commentIdParam,
@@ -51,13 +55,36 @@ export const commentController = {
     };
     bus.on("comment.created", onComment);
 
+    // "X is typing" signals — forward to other subscribers on this ticket, never
+    // back to the typist themselves.
+    const onTyping = ({ ticketId: tid, userId, name }: TypingEvent) => {
+      if (tid !== ticketId || userId === user.id) return;
+      res.write(`event: typing\ndata: ${JSON.stringify({ userId, name })}\n\n`);
+    };
+    bus.on("typing", onTyping);
+
     // Heartbeat keeps the connection alive through idle-timeout proxies.
     const heartbeat = setInterval(() => res.write(": ping\n\n"), 25_000);
 
     req.on("close", () => {
       clearInterval(heartbeat);
       bus.off("comment.created", onComment);
+      bus.off("typing", onTyping);
     });
+  },
+
+  /**
+   * Signal that the caller is typing in this ticket's chat. Fire-and-forget from
+   * the client (throttled); scope-checked like the stream, then fanned out to the
+   * ticket's other subscribers as a `typing` event. Holds no state server-side —
+   * the indicator expires on the client after a short idle window.
+   */
+  async typing(req: Request, res: Response) {
+    const { ticketId } = ticketIdParam.parse(req.params);
+    const user = currentUser(req);
+    await commentService.authorizeStream(ticketId, user); // row scope → 404 if out
+    bus.emit("typing", { ticketId, userId: user.id, name: user.name });
+    res.status(204).end();
   },
 
   async remove(req: Request, res: Response) {

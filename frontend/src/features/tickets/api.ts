@@ -142,10 +142,22 @@ export async function fetchComments(ticketId: number): Promise<Comment[]> {
  * stream ends (server close / abort); throws on a failed connection so the
  * caller can reconnect. `onComment` fires for each new comment pushed.
  */
+/** Best-effort "I'm typing" ping for the chat (throttled by the caller). */
+export async function sendTyping(ticketId: number): Promise<void> {
+  try {
+    await apiRequest(`/tickets/${ticketId}/comments/typing`, { method: "POST" });
+  } catch {
+    /* typing signals are non-critical — ignore failures */
+  }
+}
+
+export type TypingSignal = { userId: number; name: string };
+
 export async function streamComments(
   ticketId: number,
   signal: AbortSignal,
   onComment: (comment: Comment) => void,
+  onTyping?: (signal: TypingSignal) => void,
 ): Promise<void> {
   const token = tokenStore.get();
   const res = await fetch(
@@ -180,6 +192,15 @@ export async function streamComments(
       if (event === "comment.created" && data) {
         try {
           onComment(commentSchema.parse(JSON.parse(data)));
+        } catch {
+          /* ignore a malformed frame */
+        }
+      } else if (event === "typing" && data && onTyping) {
+        try {
+          const t = JSON.parse(data) as TypingSignal;
+          if (typeof t.userId === "number" && typeof t.name === "string") {
+            onTyping(t);
+          }
         } catch {
           /* ignore a malformed frame */
         }
