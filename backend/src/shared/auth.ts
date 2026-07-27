@@ -36,6 +36,8 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     // Manage users — but only within their own department (scoped in the
     // user repository); admins manage everyone.
     "user:write",
+    "asset:write",
+    "problem:write",
   ],
   agent: [
     "ticket:read",
@@ -43,6 +45,10 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "ticket:create",
     "ticket:import",
     "user:read",
+    // Agents maintain the asset registry and raise/link problems — both are
+    // day-to-day desk work, not administration.
+    "asset:write",
+    "problem:write",
   ],
   requester: ["ticket:read", "ticket:create"],
 };

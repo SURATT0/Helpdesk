@@ -38,17 +38,55 @@ enum Role {
   requester
 }
 
+// Configuration-item kinds for the asset registry. Deliberately coarse — this is
+// a help-desk asset list, not a full CMDB.
+enum AssetKind {
+  laptop
+  desktop
+  phone
+  tablet
+  printer
+  server
+  network
+  software
+  other
+}
+
+enum AssetStatus {
+  active
+  in_repair
+  retired
+}
+
+// Problem-management lifecycle (ITIL-flavoured, deliberately short).
+enum ProblemStatus {
+  investigating
+  known_error
+  resolved
+  closed
+}
+
+// Where a thread message came from. `web` = posted in the app, `email` = arrived
+// by mail and was threaded onto the ticket. Drives the channel badge in the UI;
+// the thread itself is a single ordered list regardless of channel.
+enum CommentChannel {
+  web
+  email
+}
+
 // A tenant organization. The top-level isolation boundary: staff see everything
 // within their own customer (across departments) but nothing of other customers;
 // platform admins (customerId = null) span all customers.
 model Customer {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
   users     User[]
   teams     Team[]
   tickets   Ticket[]
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  assets    Asset[]
+  problems  Problem[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@map("customers")
 }
@@ -86,6 +124,10 @@ model User {
   notifications    Notification[]
   attachments      Attachment[]
   ticketReads      TicketRead[]
+  // Tickets where this user is an *affected* party rather than the requester.
+  affectedTickets  TicketAffectedUser[]
+  ownedAssets      Asset[]               @relation("AssetOwner")
+  createdProblems  Problem[]             @relation("ProblemCreatedBy")
   createdAt        DateTime              @default(now()) @map("created_at")
   updatedAt        DateTime              @updatedAt @map("updated_at")
 
@@ -123,32 +165,41 @@ model Category {
 }
 
 model Ticket {
-  id            Int                   @id @default(autoincrement())
-  subject       String
-  description   String
-  status        TicketStatus          @default(new)
-  priority      Priority              @default(medium)
-  requesterId   Int                   @map("requester_id")
-  requester     User                  @relation("TicketRequester", fields: [requesterId], references: [id])
-  assigneeId    Int?                  @map("assignee_id")
-  assignee      User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  categoryId    Int                   @map("category_id")
-  category      Category              @relation(fields: [categoryId], references: [id])
-  customerId    Int?                  @map("customer_id") // tenant boundary (= requester's customer)
-  customer      Customer?             @relation(fields: [customerId], references: [id])
-  dueAt         DateTime?             @map("due_at") // computed from SLA policy at creation
-  resolvedAt    DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
-  closedAt      DateTime?             @map("closed_at")
-  statusHistory TicketStatusHistory[]
-  comments      Comment[]
-  attachments   Attachment[]
-  reads         TicketRead[]
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
+  id             Int                   @id @default(autoincrement())
+  subject        String
+  description    String
+  status         TicketStatus          @default(new)
+  priority       Priority              @default(medium)
+  requesterId    Int                   @map("requester_id")
+  requester      User                  @relation("TicketRequester", fields: [requesterId], references: [id])
+  assigneeId     Int?                  @map("assignee_id")
+  assignee       User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  categoryId     Int                   @map("category_id")
+  category       Category              @relation(fields: [categoryId], references: [id])
+  customerId     Int?                  @map("customer_id") // tenant boundary (= requester's customer)
+  customer       Customer?             @relation(fields: [customerId], references: [id])
+  dueAt          DateTime?             @map("due_at") // computed from SLA policy at creation
+  resolvedAt     DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
+  closedAt       DateTime?             @map("closed_at")
+  // Problem this incident is linked to (many tickets → one problem). Optional.
+  problemId      Int?                  @map("problem_id")
+  problem        Problem?              @relation(fields: [problemId], references: [id])
+  statusHistory  TicketStatusHistory[]
+  comments       Comment[]
+  attachments    Attachment[]
+  reads          TicketRead[]
+  // Who/what is affected. Deliberately separate from `requester` — the person
+  // who reports a ticket is often not the person or machine impacted by it.
+  // Both are optional and manually chosen; nothing is inferred from the session.
+  affectedUsers  TicketAffectedUser[]
+  affectedAssets TicketAffectedAsset[]
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([priority])
   @@index([customerId])
+  @@index([problemId])
   @@map("tickets")
 }
 
@@ -185,16 +236,23 @@ model TicketStatusHistory {
 // Ticket conversation: public replies + internal notes (agent-only). Soft
 // delete via `deletedAt` — comments are the one entity that can be removed.
 model Comment {
-  id        Int       @id @default(autoincrement())
-  ticketId  Int       @map("ticket_id")
-  ticket    Ticket    @relation(fields: [ticketId], references: [id])
-  authorId  Int       @map("author_id")
-  author    User      @relation(fields: [authorId], references: [id])
+  id        Int            @id @default(autoincrement())
+  ticketId  Int            @map("ticket_id")
+  ticket    Ticket         @relation(fields: [ticketId], references: [id])
+  authorId  Int            @map("author_id")
+  author    User           @relation(fields: [authorId], references: [id])
   body      String
-  internal  Boolean   @default(false)
-  deletedAt DateTime? @map("deleted_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  internal  Boolean        @default(false)
+  // Channel this message arrived on. Web and email messages share one thread —
+  // `channel` is presentation metadata, never a filter on the conversation.
+  channel   CommentChannel @default(web)
+  // RFC 5322 Message-ID, stored for both directions: set on outbound replies we
+  // send, and on inbound mail we thread. Lets a future upgrade match replies by
+  // In-Reply-To/References header without another migration.
+  messageId String?        @unique @map("message_id")
+  deletedAt DateTime?      @map("deleted_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
 
   @@index([ticketId])
   @@map("comments")
@@ -246,4 +304,79 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@map("audit_logs")
+}
+
+// Asset registry — the things tickets are about (laptops, printers, servers…).
+// Customer-scoped like every other tenant-owned row: `assetTag` is unique per
+// customer, not globally, so two tenants may both run an "IT-0001".
+model Asset {
+  id         Int                   @id @default(autoincrement())
+  assetTag   String                @map("asset_tag")
+  name       String
+  kind       AssetKind             @default(other)
+  status     AssetStatus           @default(active)
+  serial     String?
+  location   String?
+  // Person the asset is signed out to. Distinct from a ticket's affected users:
+  // ownership is a property of the asset, not of any one ticket.
+  ownerId    Int?                  @map("owner_id")
+  owner      User?                 @relation("AssetOwner", fields: [ownerId], references: [id])
+  customerId Int?                  @map("customer_id") // tenant; null = platform-wide
+  customer   Customer?             @relation(fields: [customerId], references: [id])
+  tickets    TicketAffectedAsset[]
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt @map("updated_at")
+
+  @@unique([customerId, assetTag])
+  @@index([customerId])
+  @@map("assets")
+}
+
+// Join: users affected by a ticket (many per ticket, all optional).
+model TicketAffectedUser {
+  ticketId  Int      @map("ticket_id")
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([ticketId, userId])
+  @@index([userId])
+  @@map("ticket_affected_users")
+}
+
+// Join: assets affected by a ticket (many per ticket, all optional).
+model TicketAffectedAsset {
+  ticketId  Int      @map("ticket_id")
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  assetId   Int      @map("asset_id")
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([ticketId, assetId])
+  @@index([assetId])
+  @@map("ticket_affected_assets")
+}
+
+// An underlying cause behind one or more incident tickets. Created either by
+// linking an existing problem to a ticket, or by converting a ticket into a new
+// problem (which links the source ticket as the first affected incident).
+model Problem {
+  id          Int           @id @default(autoincrement())
+  title       String
+  description String?
+  status      ProblemStatus @default(investigating)
+  rootCause   String?       @map("root_cause")
+  workaround  String?
+  customerId  Int?          @map("customer_id") // tenant; inherited from the source ticket
+  customer    Customer?     @relation(fields: [customerId], references: [id])
+  createdById Int?          @map("created_by_id")
+  createdBy   User?         @relation("ProblemCreatedBy", fields: [createdById], references: [id])
+  tickets     Ticket[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([customerId])
+  @@index([status])
+  @@map("problems")
 }

@@ -41,5 +41,17 @@ router.patch(
   requirePermission("ticket:write"),
   asyncHandler(ticketController.updatePriority),
 );
+// Affected parties are replace-the-whole-set (PUT), which is what a multi-select
+// picker produces. Sending an empty array clears the field — both are optional.
+router.put(
+  "/:id/affected-users",
+  requirePermission("ticket:write"),
+  asyncHandler(ticketController.setAffectedUsers),
+);
+router.put(
+  "/:id/affected-assets",
+  requirePermission("ticket:write"),
+  asyncHandler(ticketController.setAffectedAssets),
+);
 
 export const ticketRoutes = router;
