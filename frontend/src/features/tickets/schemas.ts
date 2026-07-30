@@ -43,6 +43,30 @@ export const ticketListSchema = z.object({
 
 export const ticketEnvelopeSchema = z.object({ data: ticketSchema });
 
+/**
+ * Result of handing one person's queue to another. `remaining` is non-zero when
+ * the queue was larger than one call's cap — the server reports the leftover
+ * rather than truncating silently, so the UI can say "N still to move".
+ */
+export const reassignResultSchema = z.object({
+  fromUserId: z.number(),
+  toUserId: z.number().nullable(),
+  statuses: z.array(ticketStatusSchema),
+  movedTicketIds: z.array(z.number()),
+  remaining: z.number(),
+});
+
+export const reassignEnvelopeSchema = z.object({ data: reassignResultSchema });
+
+export type ReassignResult = z.infer<typeof reassignResultSchema>;
+
+export type ReassignInput = {
+  fromUserId: number;
+  toUserId: number | null;
+  /** Defaults server-side to the in-flight statuses; pass to override. */
+  statuses?: z.infer<typeof ticketStatusSchema>[];
+};
+
 export const categorySchema = z.object({
   id: z.number(),
   name: z.string(),

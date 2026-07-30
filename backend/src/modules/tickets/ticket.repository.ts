@@ -6,7 +6,7 @@ import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
 import { computeDueAt, deriveSla, type SlaState } from "./sla";
-import { ticketScopeWhere } from "./ticket.scope";
+import { ticketScopeWhere, type AssignmentCandidate } from "./ticket.scope";
 
 /** Recipients for a ticket event: requester + assignee, minus the actor. */
 function recipientsFor(
@@ -50,6 +50,8 @@ export type Ticket = {
 export type TicketFilter = {
   status?: TicketStatus;
   priority?: Priority;
+  /** A user id, or `"none"` for the unassigned queue. Absent = no filter. */
+  assigneeId?: number | "none";
 };
 
 export type HistoryEntry = {
@@ -116,6 +118,13 @@ export const ticketRepository = {
           {
             ...(filter.status ? { status: filter.status } : {}),
             ...(filter.priority ? { priority: filter.priority } : {}),
+            // `"none"` is the unassigned queue; a number is one agent's load.
+            ...(filter.assigneeId != null
+              ? {
+                  assigneeId:
+                    filter.assigneeId === "none" ? null : filter.assigneeId,
+                }
+              : {}),
           },
         ],
       },
@@ -123,6 +132,50 @@ export const ticketRepository = {
       orderBy: { dueAt: "asc" },
     });
     return rows.map(toTicketDto);
+  },
+
+  /**
+   * A prospective assignee's role and tenant — the facts `mayReceiveAssignment`
+   * needs. Intentionally NOT scoped: staff directories are readable within a
+   * tenant, and the decision function is what rejects an out-of-tenant target.
+   */
+  async findAssignmentCandidate(
+    userId: number,
+  ): Promise<AssignmentCandidate | null> {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, customerId: true },
+    });
+  },
+
+  /**
+   * Ids of the tickets one person is holding, within the caller's own row scope
+   * — so a manager reassigning a departing agent can never reach another
+   * customer's tickets, even by passing their user id.
+   *
+   * Capped, and the caller is told how many were left over rather than being
+   * quietly handed a truncated set.
+   */
+  async findIdsByAssignee(
+    assigneeId: number,
+    statuses: TicketStatus[],
+    user: AuthUser,
+    limit: number,
+  ): Promise<{ ids: number[]; remaining: number }> {
+    const where: Prisma.TicketWhereInput = {
+      AND: [ticketScopeWhere(user), { assigneeId, status: { in: statuses } }],
+    };
+    const [rows, total] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        select: { id: true },
+        orderBy: { id: "asc" },
+        take: limit,
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+    const ids = rows.map((r) => r.id);
+    return { ids, remaining: Math.max(0, total - ids.length) };
   },
 
   async findHistory(ticketId: number): Promise<HistoryEntry[]> {
