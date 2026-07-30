@@ -8,6 +8,7 @@ import {
   setAffectedAssetsBody,
   setAffectedUsersBody,
   ticketIdParam,
+  reassignBody,
   updateAssigneeBody,
   updatePriorityBody,
   updateStatusBody,
@@ -68,6 +69,15 @@ export const ticketController = {
       currentUser(req),
     );
     res.json({ data: ticket });
+  },
+
+  async reassign(req: Request, res: Response) {
+    const input = reassignBody.parse(req.body);
+    const result = await ticketService.reassignAll(input, currentUser(req));
+    res.json({
+      data: result,
+      meta: { moved: result.movedTicketIds.length, remaining: result.remaining },
+    });
   },
 
   async updatePriority(req: Request, res: Response) {

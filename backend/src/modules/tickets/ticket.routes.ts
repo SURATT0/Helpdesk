@@ -19,6 +19,15 @@ router.post(
   requirePermission("ticket:import"),
   asyncHandler(ticketController.importTickets),
 );
+// Hand one person's queue to another (agent on leave / departed). Declared ahead
+// of the `/:id` routes so the literal path is never read as an id, and gated on
+// ticket:assign — managers and admins only, unlike single-ticket assignment,
+// which any agent may do with ticket:write.
+router.post(
+  "/reassign",
+  requirePermission("ticket:assign"),
+  asyncHandler(ticketController.reassign),
+);
 router.get("/:id", asyncHandler(ticketController.get));
 router.get("/:id/history", asyncHandler(ticketController.history));
 router.post(
