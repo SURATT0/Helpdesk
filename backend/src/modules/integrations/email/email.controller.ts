@@ -29,6 +29,8 @@ export const emailController = {
 
     const mail = normalizeInbound(req.body);
     const result = await emailService.ingest(mail);
-    res.status(201).json({ data: result });
+    // A retried webhook created nothing — answer 200 so the provider stops
+    // retrying without implying a second ticket/comment was made.
+    res.status(result.kind === "duplicate" ? 200 : 201).json({ data: result });
   },
 };
