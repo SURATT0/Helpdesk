@@ -13,10 +13,16 @@ export const projectKeys = {
   detail: (id: number) => ["projects", "detail", id] as const,
 };
 
-export function useProjects() {
+/**
+ * `enabled` lets a caller skip the fetch when the list would go unused — the
+ * Users screen only needs projects for the editable picker, and a read-only
+ * viewer would otherwise pay for a request it never reads.
+ */
+export function useProjects({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: projectKeys.list(),
     queryFn: fetchProjects,
+    enabled,
   });
 }
 
