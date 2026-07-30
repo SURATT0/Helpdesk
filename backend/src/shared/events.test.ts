@@ -12,6 +12,7 @@ const event = (ticketId: number): CommentCreatedEvent => ({
     id: 1,
     body: "hello",
     internal: false,
+    channel: "web",
     createdAt: "2026-01-01T00:00:00.000Z",
     author: { id: 2, name: "Dana Reyes", role: "agent" },
   },

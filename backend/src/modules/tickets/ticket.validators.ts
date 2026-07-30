@@ -88,3 +88,15 @@ export const importTicketRow = z.object({
 export const importTicketsBody = z.object({
   rows: z.array(importTicketRow).min(1).max(500),
 });
+
+/**
+ * Affected-party bodies. Both are replace-the-set: an empty array is valid and
+ * means "nobody/nothing affected" — the fields are optional by design.
+ */
+export const setAffectedUsersBody = z.object({
+  userIds: z.array(z.number().int().positive()).max(50),
+});
+
+export const setAffectedAssetsBody = z.object({
+  assetIds: z.array(z.number().int().positive()).max(50),
+});

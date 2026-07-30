@@ -1,5 +1,10 @@
 import bcrypt from "bcryptjs";
-import type { PrismaClient, Role } from "@prisma/client";
+import type {
+  AssetKind,
+  AssetStatus,
+  PrismaClient,
+  Role,
+} from "@prisma/client";
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
 
@@ -44,6 +49,35 @@ const USERS: { name: string; role: Role; team?: string; customer?: string }[] = 
   { name: "Nadia Kofi", role: "manager", team: "Globex Support", customer: "Globex Inc" },
   { name: "Owen Park", role: "agent", team: "Globex Support", customer: "Globex Inc" },
   { name: "Priya Shah", role: "requester", customer: "Globex Inc" },
+];
+
+// Asset registry demo rows. `owner` is a seeded user name; `customer` is the
+// tenant that owns the asset — asset tags are unique per customer, so both
+// tenants can run their own "IT-0001".
+const ASSETS: {
+  assetTag: string;
+  name: string;
+  kind: AssetKind;
+  status?: AssetStatus;
+  serial?: string;
+  location?: string;
+  owner?: string;
+  customer: string;
+}[] = [
+  // --- Acme Corp ---
+  { assetTag: "IT-0001", name: "MacBook Pro 14\"", kind: "laptop", serial: "C02X1234ABCD", location: "HQ / 3rd floor", owner: "Marcus Chen", customer: "Acme Corp" },
+  { assetTag: "IT-0002", name: "ThinkPad X1 Carbon", kind: "laptop", serial: "PF0ABCDE", location: "HQ / 2nd floor", owner: "T. Alvarez", customer: "Acme Corp" },
+  { assetTag: "IT-0003", name: "iPhone 15", kind: "phone", serial: "F2LX90ABCD", owner: "S. Okafor", customer: "Acme Corp" },
+  { assetTag: "IT-0004", name: "Dell OptiPlex 7010", kind: "desktop", location: "Reception", owner: "HR Ops", customer: "Acme Corp" },
+  { assetTag: "PR-0001", name: "HP LaserJet M507 (3F)", kind: "printer", status: "in_repair", location: "HQ / 3rd floor", customer: "Acme Corp" },
+  { assetTag: "SRV-0001", name: "mail-01 (Exchange)", kind: "server", location: "DC / rack B2", customer: "Acme Corp" },
+  { assetTag: "NET-0001", name: "Core switch — HQ", kind: "network", location: "DC / rack A1", customer: "Acme Corp" },
+  { assetTag: "NET-0002", name: "WiFi AP — 3rd floor east", kind: "network", location: "HQ / 3rd floor", customer: "Acme Corp" },
+  { assetTag: "SW-0001", name: "Adobe Creative Cloud (seat)", kind: "software", owner: "L. Osei", customer: "Acme Corp" },
+  { assetTag: "IT-0099", name: "MacBook Air 2015 (decommissioned)", kind: "laptop", status: "retired", customer: "Acme Corp" },
+  // --- Globex Inc ---
+  { assetTag: "IT-0001", name: "Surface Laptop 5", kind: "laptop", serial: "GLX-77120", owner: "Priya Shah", customer: "Globex Inc" },
+  { assetTag: "NET-0001", name: "Branch router — Lagos", kind: "network", location: "Lagos office", customer: "Globex Inc" },
 ];
 
 const CATEGORIES: { name: string; team: string }[] = [
@@ -121,6 +155,36 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     userIds.set(u.name, row.id);
   }
 
+  // Assets are keyed by (customer, assetTag) — the same tag in another tenant is
+  // a different asset, which is exactly what the compound unique enforces.
+  const assetIds = new Map<string, number>();
+  for (const a of ASSETS) {
+    const customerId = customerIds.get(a.customer) ?? null;
+    const ownerId = a.owner ? (userIds.get(a.owner) ?? null) : null;
+    const row = await prisma.asset.upsert({
+      where: { customerId_assetTag: { customerId: customerId!, assetTag: a.assetTag } },
+      update: {
+        name: a.name,
+        kind: a.kind,
+        status: a.status ?? "active",
+        serial: a.serial ?? null,
+        location: a.location ?? null,
+        ownerId,
+      },
+      create: {
+        assetTag: a.assetTag,
+        name: a.name,
+        kind: a.kind,
+        status: a.status ?? "active",
+        serial: a.serial ?? null,
+        location: a.location ?? null,
+        ownerId,
+        customerId,
+      },
+    });
+    assetIds.set(`${a.customer}:${a.assetTag}`, row.id);
+  }
+
   const categoryIds = new Map<string, number>();
   for (const c of CATEGORIES) {
     const defaultTeamId = teamIds.get(c.team);
@@ -172,6 +236,47 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('tickets', 'id'), (SELECT MAX(id) FROM tickets))`,
   );
+
+  // Affected parties on a few demo tickets, chosen to show the cases the fields
+  // exist for: a requester reporting on someone else's behalf (1027 — HR Ops
+  // raises accounts for two new hires), shared infrastructure with no single
+  // affected person (1044 — the mail server), and a straightforward
+  // one-person-one-device incident (1039).
+  const affectedUsers: { ticketId: number; users: string[] }[] = [
+    { ticketId: 1027, users: ["J. Petrov", "A. Lindqvist"] },
+    { ticketId: 1042, users: ["Marcus Chen"] },
+    { ticketId: 1039, users: ["S. Okafor"] },
+  ];
+  for (const link of affectedUsers) {
+    for (const name of link.users) {
+      const userId = userIds.get(name);
+      if (userId == null) continue;
+      await prisma.ticketAffectedUser.upsert({
+        where: { ticketId_userId: { ticketId: link.ticketId, userId } },
+        update: {},
+        create: { ticketId: link.ticketId, userId },
+      });
+    }
+  }
+
+  const affectedAssets: { ticketId: number; assets: string[] }[] = [
+    { ticketId: 1042, assets: ["Acme Corp:IT-0001", "Acme Corp:NET-0001"] },
+    { ticketId: 1044, assets: ["Acme Corp:SRV-0001"] },
+    { ticketId: 1039, assets: ["Acme Corp:IT-0003"] },
+    { ticketId: 1029, assets: ["Acme Corp:PR-0001"] },
+    { ticketId: 2002, assets: ["Globex Inc:IT-0001"] },
+  ];
+  for (const link of affectedAssets) {
+    for (const key of link.assets) {
+      const assetId = assetIds.get(key);
+      if (assetId == null) continue;
+      await prisma.ticketAffectedAsset.upsert({
+        where: { ticketId_assetId: { ticketId: link.ticketId, assetId } },
+        update: {},
+        create: { ticketId: link.ticketId, assetId },
+      });
+    }
+  }
 }
 
 export const SEED_COUNTS = {
@@ -180,4 +285,5 @@ export const SEED_COUNTS = {
   users: USERS.length,
   categories: CATEGORIES.length,
   tickets: TICKETS.length,
+  assets: ASSETS.length,
 };

@@ -5,6 +5,8 @@ import {
   createTicketBody,
   importTicketsBody,
   listTicketsQuery,
+  setAffectedAssetsBody,
+  setAffectedUsersBody,
   ticketIdParam,
   reassignBody,
   updateAssigneeBody,
@@ -84,6 +86,28 @@ export const ticketController = {
     const ticket = await ticketService.changePriority(
       id,
       priority,
+      currentUser(req),
+    );
+    res.json({ data: ticket });
+  },
+
+  async setAffectedUsers(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    const { userIds } = setAffectedUsersBody.parse(req.body);
+    const ticket = await ticketService.setAffectedUsers(
+      id,
+      userIds,
+      currentUser(req),
+    );
+    res.json({ data: ticket });
+  },
+
+  async setAffectedAssets(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    const { assetIds } = setAffectedAssetsBody.parse(req.body);
+    const ticket = await ticketService.setAffectedAssets(
+      id,
+      assetIds,
       currentUser(req),
     );
     res.json({ data: ticket });

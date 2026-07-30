@@ -14,6 +14,12 @@ export type CommentDto = {
   id: number;
   body: string;
   internal: boolean;
+  /**
+   * Which channel the message arrived on. Web and email replies live in ONE
+   * ordered thread — this is a badge for the UI, never a filter: `findByTicket`
+   * returns both without distinction.
+   */
+  channel: "web" | "email";
   createdAt: string;
   author: { id: number; name: string; role: Role };
 };
@@ -30,6 +36,7 @@ function toDto(row: CommentRow): CommentDto {
     id: row.id,
     body: row.body,
     internal: row.internal,
+    channel: row.channel,
     createdAt: row.createdAt.toISOString(),
     author: row.author,
   };
