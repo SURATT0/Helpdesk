@@ -1,7 +1,12 @@
 import type { AuthUser } from "../../shared/auth";
+import { env } from "../../config/env";
+import { logger } from "../../shared/logger";
 import { auditRepository } from "../audit/audit.repository";
 import { commentService } from "../comments/comment.service";
-import type { CommentDto } from "../comments/comment.repository";
+import {
+  commentRepository,
+  type CommentDto,
+} from "../comments/comment.repository";
 import { mailSender } from "../integrations/email/mail-sender";
 import { ticketService } from "./ticket.service";
 
@@ -45,13 +50,32 @@ export const replyService = {
       input.attachments && input.attachments.length > 0
         ? `\n\n---\nAttachments: ${input.attachments.join(", ")}`
         : "";
+    // Reply-To is the help desk address, never the agent's own mailbox. The
+    // requester hitting "Reply" must come back through the inbound webhook so the
+    // message lands on this ticket (the `[#id]` tag in the subject is what routes
+    // it); pointing Reply-To at the agent would deliver the reply into their
+    // personal inbox instead, taking the rest of the conversation — and the SLA
+    // clock with it — outside the ticket entirely.
+    if (env.smtp.host && !env.smtp.from) {
+      logger.warn(
+        { ticketId },
+        "SMTP_FROM is unset: outbound replies fall back to the agent's own address, so requester replies will bypass the ticket",
+      );
+    }
     const sent = await mailSender.send({
-      from: user.email,
+      from: env.smtp.from || user.email,
       to: input.to,
       subject,
       text: input.body + footer,
-      replyTo: user.email,
+      replyTo: env.smtp.from,
     });
+
+    // Remember which mail this comment was sent as. Recorded after dispatch
+    // because the transport mints the id; it lets a header-based (In-Reply-To)
+    // threading upgrade match a reply back to this exact message later.
+    if (sent.messageId) {
+      await commentRepository.setMessageId(comment.id, sent.messageId);
+    }
 
     await auditRepository.record({
       userId: user.id,

@@ -3,6 +3,7 @@ import {
   parseEmailAddress,
   derivePriority,
   normalizeInbound,
+  parseTicketRef,
 } from "./email.parsers";
 
 describe("parseEmailAddress", () => {
@@ -114,5 +115,63 @@ describe("normalizeInbound", () => {
 
   it("throws when the From value is not a valid email", () => {
     expect(() => normalizeInbound({ from: "not-an-email", text: "y" })).toThrow();
+  });
+
+  it("picks up Message-ID and In-Reply-To from top-level or headers", () => {
+    expect(
+      normalizeInbound({
+        from: "a@b.com",
+        subject: "s",
+        text: "t",
+        "message-id": "<abc@mail>",
+      }).messageId,
+    ).toBe("<abc@mail>");
+    expect(
+      normalizeInbound({
+        from: "a@b.com",
+        subject: "s",
+        text: "t",
+        headers: { "in-reply-to": "<prev@mail>" },
+      }).inReplyTo,
+    ).toBe("<prev@mail>");
+  });
+});
+
+describe("parseTicketRef", () => {
+  it("finds the tag our own outbound replies emit", () => {
+    // reply.service sends `Re: [#123] <subject>` — this is the round-trip case.
+    expect(parseTicketRef("Re: [#1042] VPN drops")).toEqual({
+      ticketId: 1042,
+      subject: "Re: VPN drops",
+    });
+  });
+
+  it("survives the prefixes mail clients pile on", () => {
+    for (const s of [
+      "RE: RE: [#7] thing",
+      "Antwort: [#7] thing",
+      "RE[2]: [#7] thing",
+      "Fwd: Re: [#7] thing",
+    ]) {
+      expect(parseTicketRef(s).ticketId).toBe(7);
+    }
+  });
+
+  it("returns null when there is no tag", () => {
+    expect(parseTicketRef("Printer is broken")).toEqual({
+      ticketId: null,
+      subject: "Printer is broken",
+    });
+  });
+
+  it("ignores things that merely look like a tag", () => {
+    for (const s of ["[#] x", "[#abc] x", "[1042] x", "#1042 x", "[##1042] x"]) {
+      expect(parseTicketRef(s).ticketId).toBeNull();
+    }
+  });
+
+  it("rejects an id too long to be a real ticket", () => {
+    // Guards against a subject crafted to overflow into an unsafe integer.
+    expect(parseTicketRef("[#99999999999999999999] x").ticketId).toBeNull();
   });
 });

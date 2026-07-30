@@ -35,6 +35,32 @@ export function derivePriority(subject: string): {
   return { priority, subject: subject.slice(m[0].length).trim() };
 }
 
+/**
+ * Pull a ticket reference out of a subject line. Outbound replies are sent as
+ * `Re: [#123] <subject>` (see reply.service), so a genuine reply round-trips the
+ * tag through the recipient's mail client — that is what makes a mailed reply
+ * land in the existing thread instead of opening a duplicate ticket.
+ *
+ * The tag is matched anywhere in the subject, because clients prepend their own
+ * localised "Re:"/"Fwd:"/"RE[2]:" prefixes ahead of it. Returns the ticket id
+ * and the subject with that tag removed.
+ */
+export function parseTicketRef(subject: string): {
+  ticketId: number | null;
+  subject: string;
+} {
+  const m = subject.match(/\[#(\d{1,10})\]/);
+  if (!m) return { ticketId: null, subject: subject.trim() };
+  const ticketId = Number(m[1]);
+  if (!Number.isSafeInteger(ticketId) || ticketId <= 0) {
+    return { ticketId: null, subject: subject.trim() };
+  }
+  return {
+    ticketId,
+    subject: subject.replace(m[0], "").replace(/\s{2,}/g, " ").trim(),
+  };
+}
+
 const asString = (v: unknown): string =>
   typeof v === "string" ? v : v == null ? "" : String(v);
 
@@ -45,6 +71,8 @@ const asString = (v: unknown): string =>
  *   from  ← from | sender | envelope.from
  *   text  ← text | body-plain | stripped-text | body
  *   subject ← subject
+ *   messageId ← message-id | Message-Id | headers["message-id"]
+ *   inReplyTo ← in-reply-to | In-Reply-To | headers["in-reply-to"]
  */
 export function normalizeInbound(body: unknown): InboundEmail {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -71,7 +99,26 @@ export function normalizeInbound(body: unknown): InboundEmail {
     asString(b.body) ||
     "";
 
-  return { from: email, fromName: name, subject, text };
+  const headers =
+    typeof b.headers === "string"
+      ? safeJson(b.headers)
+      : (b.headers as Record<string, unknown> | undefined);
+  const pick = (...keys: string[]): string | undefined => {
+    for (const k of keys) {
+      const v = asString(b[k]) || asString(headers?.[k]);
+      if (v.trim()) return v.trim();
+    }
+    return undefined;
+  };
+
+  return {
+    from: email,
+    fromName: name,
+    subject,
+    text,
+    messageId: pick("message-id", "Message-Id", "Message-ID", "messageId"),
+    inReplyTo: pick("in-reply-to", "In-Reply-To", "inReplyTo"),
+  };
 }
 
 function safeJson(s: string): Record<string, unknown> | undefined {

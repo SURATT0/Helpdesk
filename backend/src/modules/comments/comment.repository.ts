@@ -63,21 +63,64 @@ export const commentRepository = {
     return prisma.comment.findUnique({ where: { id } });
   },
 
+  /**
+   * Look a comment up by the mail it came from. Inbound webhooks are retried by
+   * every provider, so ingest uses this to stay idempotent.
+   */
+  findByMessageId(messageId: string) {
+    return prisma.comment.findUnique({
+      where: { messageId },
+      select: { id: true, ticketId: true },
+    });
+  },
+
+  /**
+   * Attach the Message-ID of a mail we just sent to its comment. Recorded after
+   * dispatch because the id is minted by the transport.
+   */
+  async setMessageId(id: number, messageId: string): Promise<void> {
+    // A colliding id would mean the transport reused one — keep the first.
+    const clash = await prisma.comment.findUnique({
+      where: { messageId },
+      select: { id: true },
+    });
+    if (clash && clash.id !== id) return;
+    await prisma.comment.update({ where: { id }, data: { messageId } });
+  },
+
   async create(data: {
     ticketId: number;
     authorId: number;
     body: string;
     internal: boolean;
+    /** Defaults to `web`; the email ingest path passes `email`. */
+    channel?: "web" | "email";
+    /** RFC 5322 Message-ID, when this comment corresponds to a real mail. */
+    messageId?: string | null;
   }): Promise<CommentDto> {
     return prisma.$transaction(async (tx) => {
-      const created = await tx.comment.create({ data, include: commentInclude });
+      const created = await tx.comment.create({
+        data: {
+          ticketId: data.ticketId,
+          authorId: data.authorId,
+          body: data.body,
+          internal: data.internal,
+          channel: data.channel ?? "web",
+          messageId: data.messageId ?? null,
+        },
+        include: commentInclude,
+      });
       await auditRepository.record(
         {
           userId: data.authorId,
           action: "comment.create",
           entity: "comment",
           entityId: created.id,
-          meta: { ticketId: data.ticketId, internal: data.internal },
+          meta: {
+            ticketId: data.ticketId,
+            internal: data.internal,
+            channel: data.channel ?? "web",
+          },
         },
         tx,
       );
