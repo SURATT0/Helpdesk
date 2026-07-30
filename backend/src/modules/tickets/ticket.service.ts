@@ -128,6 +128,32 @@ export const ticketService = {
     return ticketRepository.findHistory(id);
   },
 
+  /**
+   * Replace the ticket's affected users. Deliberately NOT derived from the
+   * session: the affected party is whoever the agent selects, which is often
+   * not the logged-in user and not the requester either.
+   */
+  async setAffectedUsers(
+    id: number,
+    userIds: number[],
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const updated = await ticketRepository.setAffectedUsers(id, userIds, user);
+    if (!updated) throw NotFound(`Ticket #${id} not found`);
+    return updated;
+  },
+
+  /** Replace the ticket's affected assets. Same stance as affected users. */
+  async setAffectedAssets(
+    id: number,
+    assetIds: number[],
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const updated = await ticketRepository.setAffectedAssets(id, assetIds, user);
+    if (!updated) throw NotFound(`Ticket #${id} not found`);
+    return updated;
+  },
+
   async changeStatus(
     id: number,
     next: TicketStatus,

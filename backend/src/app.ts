@@ -17,6 +17,11 @@ import {
   attachmentRoutes,
 } from "./modules/attachments/attachment.routes";
 import { categoryRoutes } from "./modules/categories/category.routes";
+import { assetRoutes } from "./modules/assets/asset.routes";
+import {
+  problemRoutes,
+  ticketProblemRoutes,
+} from "./modules/problems/problem.routes";
 import { userRoutes } from "./modules/users/user.routes";
 import { notificationRoutes } from "./modules/notifications/notification.routes";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.routes";
@@ -74,10 +79,19 @@ export function createApp() {
     requireAuth,
     ticketAttachmentRoutes,
   );
+  // Link/convert a ticket to a problem. Mounted before the ticket router so the
+  // literal "problem" segment isn't swallowed by a ticket sub-route.
+  app.use(
+    `${API_PREFIX}/tickets/:id/problem`,
+    requireAuth,
+    ticketProblemRoutes,
+  );
   app.use(`${API_PREFIX}/tickets`, requireAuth, ticketRoutes);
   app.use(`${API_PREFIX}/comments`, requireAuth, commentRoutes);
   app.use(`${API_PREFIX}/attachments`, requireAuth, attachmentRoutes);
   app.use(`${API_PREFIX}/categories`, requireAuth, categoryRoutes);
+  app.use(`${API_PREFIX}/assets`, requireAuth, assetRoutes);
+  app.use(`${API_PREFIX}/problems`, requireAuth, problemRoutes);
   app.use(`${API_PREFIX}/users`, requireAuth, userRoutes);
   app.use(`${API_PREFIX}/notifications`, requireAuth, notificationRoutes);
   app.use(`${API_PREFIX}/dashboard`, requireAuth, dashboardRoutes);

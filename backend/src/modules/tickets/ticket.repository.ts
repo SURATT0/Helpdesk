@@ -42,7 +42,27 @@ export type Ticket = {
   category: string;
   slaDue: string;
   slaState: SlaState;
+  /**
+   * The SLA target itself, so the client can tick a live countdown instead of
+   * re-fetching for a fresh `slaDue` string. `slaDue`/`slaState` remain the
+   * server's authoritative snapshot at response time.
+   */
+  dueAt: string | null;
+  resolvedAt: string | null;
   attachments: number;
+  /**
+   * Who and what this ticket is about, as opposed to who reported it. Both are
+   * optional and manually maintained — nothing is inferred from the session.
+   */
+  affectedUsers: { id: number; name: string; email: string }[];
+  affectedAssets: {
+    id: number;
+    assetTag: string;
+    name: string;
+    kind: string;
+    status: string;
+  }[];
+  problem: { id: number; title: string; status: string } | null;
   createdAt: string;
   closedAt: string | null;
 };
@@ -77,6 +97,25 @@ const ticketInclude = {
   requester: true,
   assignee: true,
   category: true,
+  problem: { select: { id: true, title: true, status: true } },
+  affectedUsers: {
+    select: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: "asc" },
+  },
+  affectedAssets: {
+    select: {
+      asset: {
+        select: {
+          id: true,
+          assetTag: true,
+          name: true,
+          kind: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  },
   _count: { select: { attachments: true } },
 } satisfies Prisma.TicketInclude;
 
@@ -101,7 +140,12 @@ function toTicketDto(row: TicketRow): Ticket {
     category: row.category.name,
     slaDue,
     slaState,
+    dueAt: row.dueAt?.toISOString() ?? null,
+    resolvedAt: row.resolvedAt?.toISOString() ?? null,
     attachments: row._count.attachments,
+    affectedUsers: row.affectedUsers.map((a) => a.user),
+    affectedAssets: row.affectedAssets.map((a) => a.asset),
+    problem: row.problem,
     createdAt: row.createdAt.toISOString(),
     closedAt: row.closedAt?.toISOString() ?? null,
   };
@@ -369,6 +413,112 @@ export const ticketRepository = {
         );
       }
 
+      return toTicketDto(updated);
+    });
+  },
+
+  /**
+   * Replace the set of affected users on a ticket. Scoped: the ticket must be
+   * visible to the actor, and every user id must belong to the ticket's own
+   * customer — otherwise this endpoint would leak (and attach) users from
+   * another tenant. Returns null when the ticket is out of scope.
+   */
+  async setAffectedUsers(
+    id: number,
+    userIds: number[],
+    actor: AuthUser,
+  ): Promise<Ticket | null> {
+    const ids = [...new Set(userIds)];
+    return prisma.$transaction(async (tx) => {
+      const ticket = await tx.ticket.findFirst({
+        where: { AND: [{ id }, ticketScopeWhere(actor)] },
+        select: { id: true, customerId: true },
+      });
+      if (!ticket) return null;
+
+      if (ids.length > 0) {
+        // Same-tenant check. A platform-wide ticket (customerId null) accepts
+        // only platform-wide users, by the same rule.
+        const valid = await tx.user.count({
+          where: { id: { in: ids }, customerId: ticket.customerId },
+        });
+        if (valid !== ids.length) {
+          throw BadRequest("Affected users must belong to the ticket's customer");
+        }
+      }
+
+      await tx.ticketAffectedUser.deleteMany({ where: { ticketId: id } });
+      if (ids.length > 0) {
+        await tx.ticketAffectedUser.createMany({
+          data: ids.map((userId) => ({ ticketId: id, userId })),
+        });
+      }
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "ticket.set_affected_users",
+          entity: "ticket",
+          entityId: id,
+          meta: { userIds: ids },
+        },
+        tx,
+      );
+
+      const updated = await tx.ticket.findUniqueOrThrow({
+        where: { id },
+        include: ticketInclude,
+      });
+      return toTicketDto(updated);
+    });
+  },
+
+  /**
+   * Replace the set of affected assets on a ticket. Same tenant rule as
+   * `setAffectedUsers`. Returns null when the ticket is out of scope.
+   */
+  async setAffectedAssets(
+    id: number,
+    assetIds: number[],
+    actor: AuthUser,
+  ): Promise<Ticket | null> {
+    const ids = [...new Set(assetIds)];
+    return prisma.$transaction(async (tx) => {
+      const ticket = await tx.ticket.findFirst({
+        where: { AND: [{ id }, ticketScopeWhere(actor)] },
+        select: { id: true, customerId: true },
+      });
+      if (!ticket) return null;
+
+      if (ids.length > 0) {
+        const valid = await tx.asset.count({
+          where: { id: { in: ids }, customerId: ticket.customerId },
+        });
+        if (valid !== ids.length) {
+          throw BadRequest("Affected assets must belong to the ticket's customer");
+        }
+      }
+
+      await tx.ticketAffectedAsset.deleteMany({ where: { ticketId: id } });
+      if (ids.length > 0) {
+        await tx.ticketAffectedAsset.createMany({
+          data: ids.map((assetId) => ({ ticketId: id, assetId })),
+        });
+      }
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "ticket.set_affected_assets",
+          entity: "ticket",
+          entityId: id,
+          meta: { assetIds: ids },
+        },
+        tx,
+      );
+
+      const updated = await tx.ticket.findUniqueOrThrow({
+        where: { id },
+        include: ticketInclude,
+      });
       return toTicketDto(updated);
     });
   },
