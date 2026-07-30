@@ -57,7 +57,7 @@ export function SettingsView() {
   const [saved, setSaved] = React.useState(false);
 
   const save = useMutation({
-    mutationFn: (n: string) => updateMyProfile(n),
+    mutationFn: (n: string) => updateMyProfile({ name: n }),
     onSuccess: (u) => {
       patchUser({ name: u.name });
       qc.invalidateQueries({ queryKey: userKeys.all });

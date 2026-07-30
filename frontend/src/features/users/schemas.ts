@@ -13,6 +13,16 @@ export const userSchema = z.object({
   email: z.string(),
   role: userRoleSchema,
   team: z.object({ id: z.number(), name: z.string() }).nullable(),
+  /**
+   * Routing group this user's new tickets flow through — never a visibility
+   * scope. Null means nothing is routed and their tickets land in the queue.
+   */
+  project: z.object({ id: z.number(), name: z.string() }).nullable(),
+  /**
+   * False = away, so project routing skips this person in favour of the backup
+   * owner. It does not limit what they can see or do.
+   */
+  availableForAssignment: z.boolean(),
   createdAt: z.string(),
 });
 
