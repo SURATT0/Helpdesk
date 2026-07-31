@@ -1214,3 +1214,185 @@ describe("comments — read receipts", () => {
       .expect(404);
   });
 });
+
+// audit_logs starts empty after resetDb (the seed writes no audit rows), so each
+// test controls exactly what ends up in the trail.
+describe("audit trail read", () => {
+  const ENDPOINT = `${API}/audit`;
+
+  const entityIds = (res: { body: { data: Array<{ entityId: number }> } }) =>
+    res.body.data.map((e) => e.entityId);
+
+  /** Produce one Acme audit row and one Globex audit row. */
+  async function makeCrossCustomerActivity() {
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+
+    const owen = await login("owen.park@acme.com"); // Globex agent
+    await request(app)
+      .patch(`${API}/tickets/2001/priority`)
+      .set(bearer(owen))
+      .send({ priority: "low" })
+      .expect(200);
+  }
+
+  it("lets an admin read every customer's entries", async () => {
+    await makeCrossCustomerActivity();
+    const admin = await login("sam.rivera@acme.com"); // platform admin, no customer
+    const res = await request(app).get(ENDPOINT).set(bearer(admin));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).toContain(2001);
+  });
+
+  // The tenant boundary: audit_logs has no customer_id of its own, so scope is
+  // derived from the actor. A manager must not see another customer's activity.
+  it("confines a manager to their own customer's entries", async () => {
+    await makeCrossCustomerActivity();
+    const morgan = await login("morgan.lee@acme.com"); // Acme manager
+    const res = await request(app).get(ENDPOINT).set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).not.toContain(2001);
+  });
+
+  it("shows the other side of the boundary to the other customer's manager", async () => {
+    await makeCrossCustomerActivity();
+    const nadia = await login("nadia.kofi@acme.com"); // Globex manager
+    const res = await request(app).get(ENDPOINT).set(bearer(nadia));
+    expect(entityIds(res)).toContain(2001);
+    expect(entityIds(res)).not.toContain(1042);
+  });
+
+  it("forbids an agent (403) — the trail is management work", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(ENDPOINT).set(bearer(dana)).expect(403);
+  });
+
+  it("forbids a requester (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    await request(app).get(ENDPOINT).set(bearer(marcus)).expect(403);
+  });
+
+  it("requires authentication (401)", async () => {
+    await request(app).get(ENDPOINT).expect(401);
+  });
+
+  it("filters by action prefix so a whole family matches", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+    await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "note" })
+      .expect(201);
+
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .get(`${ENDPOINT}?action=ticket`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    const actions: string[] = res.body.data.map(
+      (e: { action: string }) => e.action,
+    );
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.every((a) => a.startsWith("ticket."))).toBe(true);
+  });
+
+  // Filters are AND-ed with the scope clause, so no filter can widen visibility.
+  it("cannot widen scope through a filter", async () => {
+    await makeCrossCustomerActivity();
+    const morgan = await login("morgan.lee@acme.com"); // Acme
+    const res = await request(app)
+      .get(`${ENDPOINT}?entity=ticket&entityId=2001`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it("paginates with a scoped total in meta", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const priority of ["low", "medium", "high"]) {
+      await request(app)
+        .patch(`${API}/tickets/1042/priority`)
+        .set(bearer(dana))
+        .send({ priority })
+        .expect(200);
+    }
+
+    const morgan = await login("morgan.lee@acme.com");
+    const page = await request(app)
+      .get(`${ENDPOINT}?limit=2&offset=0`)
+      .set(bearer(morgan));
+    expect(page.status).toBe(200);
+    expect(page.body.data).toHaveLength(2);
+    expect(page.body.meta.total).toBeGreaterThanOrEqual(3);
+    expect(page.body.meta.limit).toBe(2);
+
+    const next = await request(app)
+      .get(`${ENDPOINT}?limit=2&offset=2`)
+      .set(bearer(morgan));
+    const firstIds: number[] = page.body.data.map((e: { id: number }) => e.id);
+    const nextIds: number[] = next.body.data.map((e: { id: number }) => e.id);
+    expect(nextIds.some((id) => firstIds.includes(id))).toBe(false);
+  });
+
+  it("returns newest first", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const priority of ["low", "high"]) {
+      await request(app)
+        .patch(`${API}/tickets/1042/priority`)
+        .set(bearer(dana))
+        .send({ priority })
+        .expect(200);
+    }
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app).get(ENDPOINT).set(bearer(morgan));
+    const ids: number[] = res.body.data.map((e: { id: number }) => e.id);
+    expect(ids).toEqual([...ids].sort((a, b) => b - a));
+  });
+
+  it("rejects an out-of-range limit (400)", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    await request(app)
+      .get(`${ENDPOINT}?limit=500`)
+      .set(bearer(morgan))
+      .expect(400);
+  });
+
+  it("lists the distinct action names in scope", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .get(`${ENDPOINT}/actions`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toContain("ticket.priority_change");
+  });
+
+  // The trail is append-only by construction: no write route is registered.
+  it("has no write surface — POST and DELETE are not routed", async () => {
+    const admin = await login("sam.rivera@acme.com"); // platform admin, no customer
+    const post = await request(app)
+      .post(ENDPOINT)
+      .set(bearer(admin))
+      .send({ action: "forged.entry", entity: "ticket" });
+    expect(post.status).toBe(404);
+    const del = await request(app).delete(`${ENDPOINT}/1`).set(bearer(admin));
+    expect(del.status).toBe(404);
+  });
+});

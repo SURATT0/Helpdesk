@@ -33,6 +33,10 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "ticket:assign",
     "report:read",
     "user:read",
+    // Read the audit trail. Management/compliance work, not desk work — agents
+    // are deliberately excluded. Which rows a manager sees is scoped to their
+    // own customer in the audit repository.
+    "audit:read",
     // Manage users — but only within their own department (scoped in the
     // user repository); admins manage everyone.
     "user:write",

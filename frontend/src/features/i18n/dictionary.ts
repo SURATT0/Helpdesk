@@ -11,6 +11,7 @@ const en: Dict = {
   "nav.projects": "Projects",
   "nav.settings": "Settings",
   "nav.permissions": "Permissions",
+  "nav.audit": "Activity log",
   "nav.menu": "Open menu",
 
   "sidebar.savedViews": "Saved views",
@@ -147,6 +148,26 @@ const en: Dict = {
   "integrations.email.disabled": "Disabled",
   "integrations.email.enableHint":
     "Set EMAIL_WEBHOOK_SECRET in the server .env, then point your provider's inbound-parse route at this endpoint.",
+
+  "audit.explainer":
+    "Every change made through Deskly is recorded here — who did it, what changed, and when. The trail is append-only: entries are never edited or deleted. Managers see their own organisation's activity; admins see every customer.",
+  "audit.col.when": "When",
+  "audit.col.action": "Action",
+  "audit.col.actor": "Who",
+  "audit.col.entity": "Record",
+  "audit.col.detail": "Detail",
+  "audit.system": "System",
+  "audit.filterAction": "Action",
+  "audit.allActions": "All actions",
+  "audit.loading": "Loading activity…",
+  "audit.loadError": "Couldn't load the activity log",
+  "audit.empty": "No activity recorded yet",
+  "audit.range": "{from}–{to} of {total}",
+  "audit.prev": "Previous",
+  "audit.next": "Next",
+  "audit.forbidden": "You don't have access to the activity log",
+  "audit.forbiddenNote":
+    "The activity log is available to managers and admins. Ask an administrator if you need access.",
 
   "kb.search": "Search articles…",
   "kb.all": "All",
@@ -408,6 +429,7 @@ const th: Dict = {
   "nav.projects": "โปรเจกต์",
   "nav.settings": "ตั้งค่า",
   "nav.permissions": "สิทธิการใช้งาน",
+  "nav.audit": "ประวัติการใช้งาน",
   "nav.menu": "เปิดเมนู",
 
   "sidebar.savedViews": "มุมมองที่บันทึก",
@@ -544,6 +566,26 @@ const th: Dict = {
   "integrations.email.disabled": "ปิดอยู่",
   "integrations.email.enableHint":
     "ตั้งค่า EMAIL_WEBHOOK_SECRET ใน .env ของเซิร์ฟเวอร์ แล้วชี้ inbound-parse ของผู้ให้บริการมาที่ endpoint นี้",
+
+  "audit.explainer":
+    "ทุกการเปลี่ยนแปลงที่ทำผ่าน Deskly ถูกบันทึกไว้ที่นี่ — ใครทำ เปลี่ยนอะไร และเมื่อไหร่ ประวัตินี้เขียนเพิ่มได้เท่านั้น ไม่มีการแก้ไขหรือลบ ผู้จัดการเห็นกิจกรรมขององค์กรตัวเอง ผู้ดูแลระบบเห็นทุกลูกค้า",
+  "audit.col.when": "เวลา",
+  "audit.col.action": "การกระทำ",
+  "audit.col.actor": "ผู้ทำ",
+  "audit.col.entity": "รายการ",
+  "audit.col.detail": "รายละเอียด",
+  "audit.system": "ระบบ",
+  "audit.filterAction": "การกระทำ",
+  "audit.allActions": "ทั้งหมด",
+  "audit.loading": "กำลังโหลดประวัติ…",
+  "audit.loadError": "โหลดประวัติการใช้งานไม่สำเร็จ",
+  "audit.empty": "ยังไม่มีประวัติการใช้งาน",
+  "audit.range": "{from}–{to} จาก {total}",
+  "audit.prev": "ก่อนหน้า",
+  "audit.next": "ถัดไป",
+  "audit.forbidden": "คุณไม่มีสิทธิ์เข้าถึงประวัติการใช้งาน",
+  "audit.forbiddenNote":
+    "ประวัติการใช้งานเปิดให้ผู้จัดการและผู้ดูแลระบบ หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
 
   "kb.search": "ค้นหาบทความ…",
   "kb.all": "ทั้งหมด",
