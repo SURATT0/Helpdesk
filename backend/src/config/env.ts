@@ -55,6 +55,10 @@ export const env = {
   // due time. Set SLA_ALERTS=false to disable (the SLA badge on reads is
   // unaffected — this only controls the push).
   slaAlerts: process.env.SLA_ALERTS !== "false",
+  // Background sweep that emails notifications. Set NOTIFICATION_EMAILS=false to
+  // keep notifications in-app only. With no SMTP_HOST configured the mail
+  // adapter is the "log" transport, so nothing leaves the box either way.
+  notificationEmails: process.env.NOTIFICATION_EMAILS !== "false",
   // Log aggregation. Structured JSON always goes to stdout (the baseline any
   // infra log shipper scrapes); when LOKI_URL is set the logger ALSO ships to a
   // Grafana Loki endpoint (`/loki/api/v1/push`). Basic-auth creds are optional

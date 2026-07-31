@@ -329,9 +329,17 @@ model Notification {
   ticketId  Int?      @map("ticket_id")
   message   String
   readAt    DateTime? @map("read_at")
+  // Email-delivery marker, which makes this table a transactional outbox: rows
+  // are written inside the mutation's transaction, and a background sweep mails
+  // the ones still null. Nothing is ever emailed for a rolled-back write, and a
+  // failed send simply leaves the row pending for the next pass. Set without
+  // sending when delivery is skipped (see notification.mailer), so a skipped row
+  // is never retried forever.
+  emailedAt DateTime? @map("emailed_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([userId, readAt])
+  @@index([emailedAt])
   @@map("notifications")
 }
 

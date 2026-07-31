@@ -5,6 +5,7 @@ import request from "supertest";
 import { createApp } from "../src/app";
 import { env } from "../src/config/env";
 import { ticketService } from "../src/modules/tickets/ticket.service";
+import { notificationService } from "../src/modules/notifications/notification.service";
 import { prisma, resetDb } from "./db";
 
 const app = createApp();
@@ -1858,7 +1859,6 @@ describe("comments — read receipts", () => {
       .expect(404);
   });
 });
-
 // audit_logs starts empty after resetDb (the seed writes no audit rows), so each
 // test controls exactly what ends up in the trail.
 describe("audit trail read", () => {
@@ -2558,5 +2558,132 @@ describe("problems — linking and converting", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0].meta).toMatchObject({ problemId: problem.id });
+  });
+});
+
+// The notifications table doubles as an email outbox: rows are written inside the
+// mutation's transaction, and this sweep mails the ones still unstamped. SMTP is
+// unset in tests, so the mail adapter is the "log" transport — these assert the
+// outbox bookkeeping, which is where the real risk lives.
+describe("notifications — email delivery sweep", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  const pendingCount = () =>
+    prisma.notification.count({ where: { emailedAt: null } });
+
+  /** Produce one real notification: a public reply notifies the requester. */
+  async function makeNotification() {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "Looking into it now." })
+      .expect(201);
+  }
+
+  it("mails a pending notification and stamps it", async () => {
+    await makeNotification();
+    expect(await pendingCount()).toBeGreaterThan(0);
+
+    const res = await notificationService.sweepEmail();
+    expect(res.sent).toBeGreaterThan(0);
+    expect(res.failed).toBe(0);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  // The property that matters for a recurring sweep.
+  it("does not re-send on the next pass", async () => {
+    await makeNotification();
+    const first = await notificationService.sweepEmail();
+    expect(first.sent).toBeGreaterThan(0);
+
+    const second = await notificationService.sweepEmail();
+    expect(second.sent).toBe(0);
+    expect(second.skipped).toBe(0);
+    expect(second.failed).toBe(0);
+  });
+
+  it("does nothing when there is nothing pending", async () => {
+    await notificationService.sweepEmail(); // drain the seed-driven rows, if any
+    expect(await notificationService.sweepEmail()).toEqual({
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+    });
+  });
+
+  // A long disable-then-enable gap must not mail a whole backlog.
+  it("retires notifications older than the max age without sending", async () => {
+    await makeNotification();
+    const rows = await prisma.notification.findMany({
+      where: { emailedAt: null },
+      select: { id: true },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    await prisma.notification.updateMany({
+      where: { id: { in: rows.map((r) => r.id) } },
+      data: { createdAt: new Date(Date.now() - 48 * HOUR) },
+    });
+
+    const res = await notificationService.sweepEmail();
+    expect(res.sent).toBe(0);
+    // Stamped anyway, so they stop being scanned forever.
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it("skips internal notes but still stamps them", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    // Drain anything already pending so the counts below are unambiguous.
+    await notificationService.sweepEmail();
+
+    await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "Internal: escalating to network ops.", internal: true })
+      .expect(201);
+
+    // An internal note notifies the assignee side only, never the requester.
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    const toRequester = await prisma.notification.count({
+      where: { userId: marcus.id, emailedAt: null },
+    });
+    expect(toRequester).toBe(0);
+
+    await notificationService.sweepEmail();
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it("stamps every row it handles, so the outbox drains", async () => {
+    // Several notifications across different tickets in one pass.
+    const dana = await login("dana.reyes@acme.com");
+    for (const ticketId of [1042, 1035, 1025]) {
+      await request(app)
+        .post(`${API}/tickets/${ticketId}/comments`)
+        .set(bearer(dana))
+        .send({ body: `update on ${ticketId}` })
+        .expect(201);
+    }
+    const before = await pendingCount();
+    expect(before).toBeGreaterThanOrEqual(3);
+
+    const res = await notificationService.sweepEmail();
+    expect(res.sent + res.skipped).toBe(before);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it("leaves the in-app feed unaffected by email delivery", async () => {
+    await makeNotification();
+    await notificationService.sweepEmail();
+
+    // Emailing must not mark anything read — those are independent states.
+    const marcus = await login("marcus.chen@acme.com");
+    const feed = await request(app)
+      .get(`${API}/notifications`)
+      .set(bearer(marcus));
+    expect(feed.status).toBe(200);
+    expect(feed.body.data.length).toBeGreaterThan(0);
+    expect(feed.body.meta.unread).toBeGreaterThan(0);
   });
 });
