@@ -25,6 +25,36 @@ export async function fetchProblems(
   return problemListSchema.parse(body).data;
 }
 
+/** One problem by id, scoped server-side (404 when out of scope). */
+export async function fetchProblem(id: number): Promise<Problem> {
+  const body = await apiRequest(`/problems/${id}`);
+  return problemEnvelopeSchema.parse(body).data;
+}
+
+/**
+ * Edit the investigation. Every field is optional; `null` clears a nullable one.
+ * The server refuses `status: "known_error"` unless a workaround exists — that's
+ * a 400 with a message worth surfacing verbatim.
+ */
+export type UpdateProblemInput = {
+  title?: string;
+  description?: string | null;
+  rootCause?: string | null;
+  workaround?: string | null;
+  status?: ProblemStatus;
+};
+
+export async function updateProblem(
+  id: number,
+  input: UpdateProblemInput,
+): Promise<Problem> {
+  const body = await apiRequest(`/problems/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return problemEnvelopeSchema.parse(body).data;
+}
+
 /**
  * Link this ticket to an existing problem, or convert it into a new one. One
  * endpoint, and the server rejects passing both — see `LinkOrConvertInput`.

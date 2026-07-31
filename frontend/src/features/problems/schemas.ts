@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 /** Mirrors the backend ProblemStatus enum exactly. */
-export const problemStatusSchema = z.enum([
+export const PROBLEM_STATUSES = [
   "investigating",
   "known_error",
   "resolved",
   "closed",
-]);
+] as const;
+
+export const problemStatusSchema = z.enum(PROBLEM_STATUSES);
 
 export const problemSchema = z.object({
   id: z.number(),

@@ -334,6 +334,24 @@ const en: Dict = {
   "problem.workaround": "Workaround",
   "problem.rootCause": "Root cause",
   "problem.error": "Couldn't update the problem link",
+  "problem.edit": "Edit problem",
+  "problem.addWorkaround": "Add a workaround",
+  "problem.editTitle": "Edit problem",
+  "problem.editNote":
+    "This problem covers {n} linked incidents. A documented workaround reaches everyone working them.",
+  "problem.statusLabel": "Status",
+  "problem.workaroundLabel": "Workaround",
+  "problem.workaroundPlaceholder":
+    "What should an agent do right now to get the user working again?",
+  "problem.workaroundHelp":
+    "Required to mark the problem a known error — that status promises an interim fix exists.",
+  "problem.rootCauseLabel": "Root cause",
+  "problem.rootCausePlaceholder": "What is actually causing this?",
+  "problem.knownErrorNeedsWorkaround":
+    "Write a workaround before marking this a known error.",
+  "problem.save": "Save",
+  "problem.saving": "Saving…",
+  "problem.editError": "Couldn't save the problem",
 
   "att.empty": "No attachments yet.",
   "att.loadError": "Couldn't load attachments",
@@ -758,6 +776,24 @@ const th: Dict = {
   "problem.workaround": "วิธีแก้เฉพาะหน้า",
   "problem.rootCause": "สาเหตุที่แท้จริง",
   "problem.error": "อัปเดตการผูกปัญหาไม่สำเร็จ",
+  "problem.edit": "แก้ไขปัญหา",
+  "problem.addWorkaround": "เพิ่มวิธีแก้เฉพาะหน้า",
+  "problem.editTitle": "แก้ไขปัญหาต้นเหตุ",
+  "problem.editNote":
+    "ปัญหานี้ครอบคลุม {n} เคสที่ผูกอยู่ การบันทึกวิธีแก้เฉพาะหน้าจะแจ้งไปถึงทุกคนที่ดูแลเคสเหล่านั้น",
+  "problem.statusLabel": "สถานะ",
+  "problem.workaroundLabel": "วิธีแก้เฉพาะหน้า",
+  "problem.workaroundPlaceholder":
+    "ตอนนี้เจ้าหน้าที่ควรทำอะไรเพื่อให้ผู้ใช้กลับมาทำงานได้?",
+  "problem.workaroundHelp":
+    "ต้องกรอกก่อนจะตั้งสถานะเป็น “ทราบสาเหตุแล้ว” เพราะสถานะนั้นหมายความว่ามีวิธีแก้เฉพาะหน้าอยู่แล้ว",
+  "problem.rootCauseLabel": "สาเหตุที่แท้จริง",
+  "problem.rootCausePlaceholder": "อะไรเป็นต้นเหตุจริง ๆ ของเรื่องนี้?",
+  "problem.knownErrorNeedsWorkaround":
+    "กรุณากรอกวิธีแก้เฉพาะหน้าก่อนตั้งสถานะเป็น “ทราบสาเหตุแล้ว”",
+  "problem.save": "บันทึก",
+  "problem.saving": "กำลังบันทึก…",
+  "problem.editError": "บันทึกปัญหาไม่สำเร็จ",
 
   "att.empty": "ยังไม่มีไฟล์แนบ",
   "att.loadError": "โหลดไฟล์แนบไม่สำเร็จ",

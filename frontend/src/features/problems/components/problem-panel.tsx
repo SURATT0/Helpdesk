@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Link2, Link2Off, Loader2 } from "lucide-react";
+import { Link2, Link2Off, Loader2, Pencil } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import type { Ticket } from "@/features/tickets/schemas";
-import { useProblems, useUnlinkProblem } from "../queries";
+import { useProblem, useUnlinkProblem } from "../queries";
+import { EditProblemModal } from "./edit-problem-modal";
 import { LinkProblemModal } from "./link-problem-modal";
 import { ProblemStatusBadge } from "./problem-status-badge";
 import type { ProblemStatus } from "../schemas";
@@ -16,13 +17,15 @@ import type { ProblemStatus } from "../schemas";
  *
  * When linked it shows the problem plus how many other incidents share it — the
  * "is this widespread?" signal — and its documented workaround, which is the
- * thing an agent actually needs mid-call. The workaround is fetched separately
- * because the ticket DTO carries only id/title/status of the problem.
+ * thing an agent actually needs mid-call. Root cause and workaround aren't on the
+ * ticket payload (which carries only id/title/status), so the panel fetches the
+ * problem directly.
  */
 export function ProblemPanel({ ticket }: { ticket: Ticket }) {
   const { t } = useI18n();
   const { user } = useAuth();
   const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const unlink = useUnlinkProblem();
 
@@ -32,15 +35,9 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
     user != null &&
     (user.role === "agent" || user.role === "manager" || user.role === "admin");
 
-  // Only to enrich the linked problem with root cause / workaround, which the
-  // ticket payload doesn't include.
-  const { data: problems = [] } = useProblems(
-    {},
-    { enabled: canWrite && ticket.problem != null },
-  );
-  const full = ticket.problem
-    ? problems.find((p) => p.id === ticket.problem?.id)
-    : undefined;
+  const { data: full } = useProblem(ticket.problem?.id, {
+    enabled: ticket.problem != null,
+  });
 
   function doUnlink() {
     setError(null);
@@ -120,19 +117,36 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
       ) : null}
 
       {canWrite ? (
-        <button
-          type="button"
-          onClick={doUnlink}
-          disabled={unlink.isPending}
-          className="mt-2.5 inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
-        >
-          {unlink.isPending ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Link2Off size={12} strokeWidth={2} />
-          )}
-          {t("problem.unlink")}
-        </button>
+        <div className="mt-2.5 flex flex-wrap items-center gap-3">
+          {/* Editing needs the full record (root cause, workaround), so it waits
+              for the fetch rather than opening a form with blank fields. */}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            disabled={full == null}
+            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+          >
+            <Pencil size={12} strokeWidth={2} />
+            {full?.workaround ? t("problem.edit") : t("problem.addWorkaround")}
+          </button>
+          <button
+            type="button"
+            onClick={doUnlink}
+            disabled={unlink.isPending}
+            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+          >
+            {unlink.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Link2Off size={12} strokeWidth={2} />
+            )}
+            {t("problem.unlink")}
+          </button>
+        </div>
+      ) : null}
+
+      {editing && full ? (
+        <EditProblemModal problem={full} onClose={() => setEditing(false)} />
       ) : null}
     </div>
   );

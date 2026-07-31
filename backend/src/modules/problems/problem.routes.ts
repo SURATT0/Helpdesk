@@ -7,6 +7,13 @@ import { problemController } from "./problem.controller";
 const router = Router();
 router.get("/", asyncHandler(problemController.list));
 router.get("/:id", asyncHandler(problemController.get));
+// Editing the investigation is desk work (problem:write — agent and up), the
+// same grant as linking. Row scope is enforced in the service via the repository.
+router.patch(
+  "/:id",
+  requirePermission("problem:write"),
+  asyncHandler(problemController.update),
+);
 export const problemRoutes = router;
 
 /**

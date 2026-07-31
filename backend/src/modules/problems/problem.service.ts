@@ -1,8 +1,16 @@
 import type { AuthUser } from "../../shared/auth";
-import { NotFound } from "../../shared/errors";
+import { BadRequest, NotFound } from "../../shared/errors";
 import { problemRepository, type ProblemDto } from "./problem.repository";
+import {
+  announcesWorkaround,
+  nextProblemState,
+  validateProblemState,
+} from "./problem.rules";
 import type { ProblemStatus } from "./problem.types";
-import type { LinkOrConvertInput } from "./problem.validators";
+import type {
+  LinkOrConvertInput,
+  UpdateProblemInput,
+} from "./problem.validators";
 
 export const problemService = {
   list(
@@ -16,6 +24,38 @@ export const problemService = {
     const problem = await problemRepository.findById(id, actor);
     if (!problem) throw NotFound(`Problem ${id} not found`);
     return problem;
+  },
+
+  /**
+   * Edit the investigation: title, description, root cause, workaround, status.
+   *
+   * Until this existed the columns were write-once at creation — `rootCause`,
+   * `workaround` and `status` had no API that could set them, so a "known error"
+   * could never actually acquire the workaround the status implies.
+   *
+   * The rules judge the RESULTING state, not the patch, so setting
+   * `status: known_error` on a problem that already stored a workaround is
+   * allowed while setting it on an empty one is a 400.
+   */
+  async update(
+    id: number,
+    input: UpdateProblemInput,
+    actor: AuthUser,
+  ): Promise<ProblemDto> {
+    const current = await problemRepository.findStateForUpdate(id, actor);
+    // Out of scope reads as "not found" rather than leaking existence.
+    if (!current) throw NotFound(`Problem ${id} not found`);
+
+    const next = nextProblemState(current, input);
+    const problem = validateProblemState(next);
+    if (problem) throw BadRequest(problem);
+
+    return problemRepository.update(
+      id,
+      input,
+      actor,
+      announcesWorkaround(current, next),
+    );
   },
 
   /**

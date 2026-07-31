@@ -1389,6 +1389,226 @@ describe("problems — linking and converting", () => {
     expect(onTicket.map((a) => a.action)).toContain("problem.unlink_ticket");
   });
 
+  // Before PATCH existed, rootCause/workaround/status were write-once at
+  // creation — so a "known error" could never acquire the workaround the status
+  // promises. These pin the rule that makes the status mean something.
+  describe("editing the investigation", () => {
+    it("updates root cause, workaround and status", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "VPN 4.2 regression");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({
+          rootCause: "Gateway rejects OTP after the 4.2 upgrade",
+          workaround: "Use the legacy 4.1 client until the patch lands",
+          status: "known_error",
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("known_error");
+      expect(res.body.data.workaround).toContain("legacy 4.1");
+      expect(res.body.data.rootCause).toContain("OTP");
+    });
+
+    it("refuses known_error without a workaround (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "No workaround yet");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error" });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/workaround/i);
+
+      // And it really didn't move.
+      const after = await prisma.problem.findUniqueOrThrow({
+        where: { id: problem.id },
+      });
+      expect(after.status).toBe("investigating");
+    });
+
+    it("allows known_error when the workaround arrives in the same request", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Same-request workaround");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "Restart the print spooler" })
+        .expect(200);
+    });
+
+    // The rules judge the resulting state, not the patch.
+    it("allows known_error later, using the stored workaround", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Stored workaround");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ workaround: "Use the web client" })
+        .expect(200);
+      // Second call sends only the status.
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error" })
+        .expect(200);
+    });
+
+    it("refuses to clear the workaround out from under known_error (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Clear guard");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "Use the web client" })
+        .expect(200);
+
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ workaround: null })
+        .expect(400);
+    });
+
+    it("rejects an empty patch and an unknown field (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Validator checks");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({})
+        .expect(400);
+      // .strict() — a typo'd key must not silently no-op.
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ rootCauze: "typo" })
+        .expect(400);
+    });
+
+    it("forbids a requester (403)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Requester guard");
+      const marcus = await login("marcus.chen@acme.com");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(marcus))
+        .send({ rootCause: "nope" })
+        .expect(403);
+    });
+
+    it("404s another customer's problem instead of leaking it", async () => {
+      const owen = await login("owen.park@acme.com"); // Globex
+      const globex = await convert(owen, 2001, "Globex internal");
+      const dana = await login("dana.reyes@acme.com"); // Acme
+      await request(app)
+        .patch(`${API}/problems/${globex.id}`)
+        .set(bearer(dana))
+        .send({ rootCause: "cross-tenant write" })
+        .expect(404);
+
+      const untouched = await prisma.problem.findUniqueOrThrow({
+        where: { id: globex.id },
+      });
+      expect(untouched.rootCause).toBeNull();
+    });
+
+    it("notifies the assignees of linked incidents when a workaround lands", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Announce me");
+      // 1027 is Acme, assigned to Ana M. — a different agent.
+      await request(app)
+        .post(`${API}/tickets/1027/problem`)
+        .set(bearer(dana))
+        .send({ problemId: problem.id })
+        .expect(200);
+
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "Use the web client" })
+        .expect(200);
+
+      const ana = await prisma.user.findUniqueOrThrow({
+        where: { email: "ana.m@acme.com" },
+      });
+      const notes = await prisma.notification.findMany({
+        where: { userId: ana.id, type: "problem.workaround_available" },
+      });
+      expect(notes).toHaveLength(1);
+      expect(notes[0].ticketId).toBe(1027);
+    });
+
+    it("does not re-notify when an existing known error is edited again", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "No repeat");
+      await request(app)
+        .post(`${API}/tickets/1027/problem`)
+        .set(bearer(dana))
+        .send({ problemId: problem.id })
+        .expect(200);
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "first text" })
+        .expect(200);
+
+      const countAfterFirst = await prisma.notification.count({
+        where: { type: "problem.workaround_available" },
+      });
+
+      // Correcting a typo must not interrupt everyone a second time.
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ workaround: "clearer text" })
+        .expect(200);
+
+      expect(
+        await prisma.notification.count({
+          where: { type: "problem.workaround_available" },
+        }),
+      ).toBe(countAfterFirst);
+    });
+
+    it("audits the edit with field names but not free-text contents", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Audit me");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ rootCause: "a very secret internal detail", status: "resolved" })
+        .expect(200);
+
+      const row = await prisma.auditLog.findFirstOrThrow({
+        where: {
+          entity: "problem",
+          entityId: problem.id,
+          action: "problem.update",
+        },
+      });
+      const meta = row.meta as { fields: string[]; status?: string };
+      expect(meta.fields).toContain("rootCause");
+      expect(meta.status).toBe("resolved");
+      // Free text can run to 5k chars; the trail records that it changed only.
+      expect(JSON.stringify(meta)).not.toContain("secret internal detail");
+    });
+
+    it("permits any status transition (no whitelist, unlike tickets)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Transitions");
+      for (const status of ["resolved", "closed", "investigating"] as const) {
+        await request(app)
+          .patch(`${API}/problems/${problem.id}`)
+          .set(bearer(dana))
+          .send({ status })
+          .expect(200);
+      }
+    });
+  });
+
   it("audits a link to an existing problem", async () => {
     const dana = await login("dana.reyes@acme.com");
     const problem = await convert(dana, 1042, "Link audit");
