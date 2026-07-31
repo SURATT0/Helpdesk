@@ -1668,3 +1668,195 @@ describe("audit trail read", () => {
     expect(del.status).toBe(404);
   });
 });
+
+describe("problems — linking and converting", () => {
+  const problemOn = (ticketId: number) => `${API}/tickets/${ticketId}/problem`;
+
+  /** Convert a ticket into a new problem and return the created problem. */
+  async function convert(token: string, ticketId: number, title: string) {
+    const res = await request(app)
+      .post(problemOn(ticketId))
+      .set(bearer(token))
+      .send({ title });
+    expect(res.status).toBe(201);
+    return res.body.data as { id: number; title: string; ticketCount: number };
+  }
+
+  it("converts a ticket into a new problem (201) and links it", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "VPN gateway 4.2 regression");
+    expect(problem.title).toBe("VPN gateway 4.2 regression");
+
+    // The ticket now carries the link, which is what the rail renders.
+    const ticket = await request(app)
+      .get(`${API}/tickets/1042`)
+      .set(bearer(dana));
+    expect(ticket.body.data.problem).toMatchObject({
+      id: problem.id,
+      title: "VPN gateway 4.2 regression",
+      status: "investigating",
+    });
+  });
+
+  // The whole point of problems: many incidents, one root cause.
+  it("links several incidents to one problem and counts them", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Shared drive outage");
+
+    for (const ticketId of [1035, 1029]) {
+      const res = await request(app)
+        .post(problemOn(ticketId))
+        .set(bearer(dana))
+        .send({ problemId: problem.id });
+      // Linking is a 200 — nothing new was created.
+      expect(res.status).toBe(200);
+    }
+
+    const list = await request(app)
+      .get(`${API}/problems?search=Shared drive`)
+      .set(bearer(dana));
+    expect(list.status).toBe(200);
+    const found = (list.body.data as Array<{ id: number; ticketCount: number }>)
+      .find((p) => p.id === problem.id);
+    expect(found?.ticketCount).toBe(3);
+  });
+
+  it("unlinks a ticket without deleting the problem (204)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Printer firmware fault");
+
+    await request(app)
+      .delete(problemOn(1042))
+      .set(bearer(dana))
+      .expect(204);
+
+    const ticket = await request(app)
+      .get(`${API}/tickets/1042`)
+      .set(bearer(dana));
+    expect(ticket.body.data.problem).toBeNull();
+
+    // The problem survives — unlinking one incident must not destroy the record.
+    const still = await request(app)
+      .get(`${API}/problems/${problem.id}`)
+      .set(bearer(dana));
+    expect(still.status).toBe(200);
+  });
+
+  it("rejects passing both problemId and title (400)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1035, "Ambiguity check");
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(dana))
+      .send({ problemId: problem.id, title: "also this" })
+      .expect(400);
+  });
+
+  it("rejects passing neither (400)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(dana))
+      .send({})
+      .expect(400);
+  });
+
+  it("forbids a requester from linking (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com"); // requester of 1042
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(marcus))
+      .send({ title: "should not work" })
+      .expect(403);
+  });
+
+  it("404s converting a ticket outside the actor's scope", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    await request(app)
+      .post(problemOn(2001)) // Globex
+      .set(bearer(dana))
+      .send({ title: "cross-tenant attempt" })
+      .expect(404);
+  });
+
+  // Linking is a write that names a problem id, so it must not become a way to
+  // discover or attach to another tenant's problem.
+  it("404s linking to another customer's problem", async () => {
+    const owen = await login("owen.park@acme.com"); // Globex agent
+    const globexProblem = await convert(owen, 2001, "Globex badge reader");
+
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(dana))
+      .send({ problemId: globexProblem.id })
+      .expect(404);
+  });
+
+  it("scopes the problem list to the caller's customer", async () => {
+    const owen = await login("owen.park@acme.com");
+    await convert(owen, 2001, "Globex only problem");
+    const dana = await login("dana.reyes@acme.com");
+    await convert(dana, 1042, "Acme only problem");
+
+    const asDana = await request(app).get(`${API}/problems`).set(bearer(dana));
+    const titles: string[] = asDana.body.data.map(
+      (p: { title: string }) => p.title,
+    );
+    expect(titles).toContain("Acme only problem");
+    expect(titles).not.toContain("Globex only problem");
+  });
+
+  it("lets a platform admin see every customer's problems", async () => {
+    const owen = await login("owen.park@acme.com");
+    await convert(owen, 2001, "Globex side");
+    const dana = await login("dana.reyes@acme.com");
+    await convert(dana, 1042, "Acme side");
+
+    const sam = await login("sam.rivera@acme.com");
+    const res = await request(app).get(`${API}/problems`).set(bearer(sam));
+    const titles: string[] = res.body.data.map((p: { title: string }) => p.title);
+    expect(titles).toContain("Acme side");
+    expect(titles).toContain("Globex side");
+  });
+
+  // The two writes are audited against different entities on purpose: creating a
+  // problem is a fact about the problem, linking is a fact about the ticket.
+  it("audits the conversion against the problem and the unlink against the ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Audited problem");
+    await request(app).delete(problemOn(1042)).set(bearer(dana)).expect(204);
+
+    const onProblem = await prisma.auditLog.findMany({
+      where: { entity: "problem", entityId: problem.id },
+      select: { action: true, meta: true },
+    });
+    expect(onProblem.map((a) => a.action)).toContain(
+      "problem.create_from_ticket",
+    );
+    expect(onProblem[0].meta).toMatchObject({ ticketId: 1042 });
+
+    const onTicket = await prisma.auditLog.findMany({
+      where: { entity: "ticket", entityId: 1042 },
+      select: { action: true },
+    });
+    expect(onTicket.map((a) => a.action)).toContain("problem.unlink_ticket");
+  });
+
+  it("audits a link to an existing problem", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Link audit");
+    await request(app)
+      .post(problemOn(1035))
+      .set(bearer(dana))
+      .send({ problemId: problem.id })
+      .expect(200);
+
+    const rows = await prisma.auditLog.findMany({
+      where: { entity: "ticket", entityId: 1035, action: "problem.link_ticket" },
+      select: { meta: true },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].meta).toMatchObject({ problemId: problem.id });
+  });
+});

@@ -3,6 +3,7 @@
 import { PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { AttachmentsPanel } from "@/features/attachments/attachments-panel";
+import { ProblemPanel } from "@/features/problems/components/problem-panel";
 import { useI18n } from "@/features/i18n/context";
 import { slaColor } from "../data";
 import { HistoryPanel } from "./history-panel";
@@ -80,6 +81,12 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
             {ticket.slaDue}
           </span>
         </div>
+      </Section>
+
+      {/* Above attachments: whether this incident is part of a known problem
+          changes how the agent handles it, so it belongs near the top. */}
+      <Section title={t("rail.problem")}>
+        <ProblemPanel ticket={ticket} />
       </Section>
 
       <Section title={t("rail.attachments", { n: ticket.attachments })}>
