@@ -9,10 +9,12 @@ import {
   FolderKanban,
   BarChart3,
   BookOpen,
+  ScrollText,
   ShieldCheck,
   Settings,
   LogOut,
 } from "lucide-react";
+import type { Role } from "@/features/auth/schemas";
 import { Logo } from "./logo";
 import { Avatar } from "@/components/ui/avatar";
 import { useMobileNav } from "./mobile-nav-context";
@@ -20,13 +22,25 @@ import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+/**
+ * `roles` restricts who sees the entry. Omitted = everyone. This only hides
+ * links that would be refused anyway — the API permission check is the real
+ * gate, and the page itself also handles the forbidden case for a direct visit.
+ */
+const NAV: Array<{
+  href: string;
+  key: string;
+  icon: typeof LayoutDashboard;
+  roles?: readonly Role[];
+}> = [
   { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   { href: "/tickets", key: "nav.tickets", icon: Ticket },
   { href: "/users", key: "nav.users", icon: Users },
   { href: "/projects", key: "nav.projects", icon: FolderKanban },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
+  // Mirrors the server's audit:read grant (manager + admin).
+  { href: "/audit", key: "nav.audit", icon: ScrollText, roles: ["admin", "manager"] },
   { href: "/permissions", key: "nav.permissions", icon: ShieldCheck },
   { href: "/settings", key: "nav.settings", icon: Settings },
 ];
@@ -58,7 +72,9 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-0.5">
-        {NAV.map(({ href, key, icon: Icon }) => {
+        {NAV.filter(
+          ({ roles }) => !roles || (user != null && roles.includes(user.role)),
+        ).map(({ href, key, icon: Icon }) => {
           const active =
             pathname === href || pathname.startsWith(href + "/");
           return (
