@@ -30,12 +30,21 @@ const TEAMS: { name: string; department: string; customer: string }[] = [
 
 // `customer` is the tenant a user belongs to. A platform admin has none (sees
 // all customers). Staff see everything within their customer, across departments.
-const USERS: { name: string; role: Role; team?: string; customer?: string }[] = [
+// `available: false` = not accepting routed work (the "away" switch). It does not
+// restrict what they can see or do; it only makes project routing skip them.
+const USERS: {
+  name: string;
+  role: Role;
+  team?: string;
+  customer?: string;
+  available?: boolean;
+}[] = [
   { name: "Sam Rivera", role: "admin" }, // platform admin → all customers
   // --- Acme Corp ---
   { name: "Morgan Lee", role: "manager", team: "IT Support", customer: "Acme Corp" },
   { name: "Dana Reyes", role: "agent", team: "IT Support", customer: "Acme Corp" },
-  { name: "Kai T.", role: "agent", team: "Field Services", customer: "Acme Corp" },
+  // Away — demonstrates project routing falling through to the backup owner.
+  { name: "Kai T.", role: "agent", team: "Field Services", customer: "Acme Corp", available: false },
   { name: "Ana M.", role: "agent", team: "IT Support", customer: "Acme Corp" },
   { name: "Marcus Chen", role: "requester", customer: "Acme Corp" },
   { name: "T. Alvarez", role: "requester", customer: "Acme Corp" },
@@ -78,6 +87,43 @@ const ASSETS: {
   // --- Globex Inc ---
   { assetTag: "IT-0001", name: "Surface Laptop 5", kind: "laptop", serial: "GLX-77120", owner: "Priya Shah", customer: "Globex Inc" },
   { assetTag: "NET-0001", name: "Branch router — Lagos", kind: "network", location: "Lagos office", customer: "Globex Inc" },
+];
+
+/**
+ * Projects are a ROUTING dimension below the customer, never a visibility one:
+ * members' new tickets land on the project's owner (or the backup when the owner
+ * is unavailable), but every agent of that customer still sees them.
+ *
+ * "Acme Migration" seeds the interesting case — its owner Kai T. is marked
+ * unavailable in USERS, so new tickets from its members route to the backup,
+ * Ana M., rather than to nobody.
+ */
+const PROJECTS: {
+  name: string;
+  customer: string;
+  owner?: string;
+  backupOwner?: string;
+  members: string[];
+}[] = [
+  {
+    name: "Acme Migration",
+    customer: "Acme Corp",
+    owner: "Kai T.",
+    backupOwner: "Ana M.",
+    members: ["Marcus Chen", "T. Alvarez"],
+  },
+  {
+    name: "Acme Facilities",
+    customer: "Acme Corp",
+    owner: "Dana Reyes",
+    members: ["S. Okafor", "HR Ops"],
+  },
+  {
+    name: "Globex Rollout",
+    customer: "Globex Inc",
+    owner: "Owen Park",
+    members: ["Priya Shah"],
+  },
 ];
 
 const CATEGORIES: { name: string; team: string }[] = [
@@ -147,10 +193,26 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     const email = emailFor(u.name);
     const teamId = u.team ? teamIds.get(u.team) : null;
     const customerId = u.customer ? (customerIds.get(u.customer) ?? null) : null;
+    const availableForAssignment = u.available ?? true;
     const row = await prisma.user.upsert({
       where: { email },
-      update: { name: u.name, role: u.role, teamId, customerId, passwordHash },
-      create: { name: u.name, email, role: u.role, teamId, customerId, passwordHash },
+      update: {
+        name: u.name,
+        role: u.role,
+        teamId,
+        customerId,
+        passwordHash,
+        availableForAssignment,
+      },
+      create: {
+        name: u.name,
+        email,
+        role: u.role,
+        teamId,
+        customerId,
+        passwordHash,
+        availableForAssignment,
+      },
     });
     userIds.set(u.name, row.id);
   }
@@ -183,6 +245,30 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
       },
     });
     assetIds.set(`${a.customer}:${a.assetTag}`, row.id);
+  }
+
+  // Projects, after users so owners resolve. Membership is written back onto the
+  // user (users.project_id) — a routing pointer, not a scope.
+  for (const p of PROJECTS) {
+    const customerId = customerIds.get(p.customer);
+    if (customerId == null) continue;
+    const ownerId = p.owner ? (userIds.get(p.owner) ?? null) : null;
+    const backupOwnerId = p.backupOwner
+      ? (userIds.get(p.backupOwner) ?? null)
+      : null;
+    const row = await prisma.project.upsert({
+      where: { customerId_name: { customerId, name: p.name } },
+      update: { ownerId, backupOwnerId },
+      create: { name: p.name, customerId, ownerId, backupOwnerId },
+    });
+    for (const member of p.members) {
+      const memberId = userIds.get(member);
+      if (memberId == null) continue;
+      await prisma.user.update({
+        where: { id: memberId },
+        data: { projectId: row.id },
+      });
+    }
   }
 
   const categoryIds = new Map<string, number>();

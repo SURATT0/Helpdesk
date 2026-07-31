@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { Role } from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
+import { BadRequest } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
 
 /**
@@ -18,6 +19,7 @@ function scopeWhere(actor: AuthUser): Prisma.UserWhereInput {
 
 const userInclude = {
   team: { select: { id: true, name: true } },
+  project: { select: { id: true, name: true } },
 } satisfies Prisma.UserInclude;
 
 type UserRow = Prisma.UserGetPayload<{ include: typeof userInclude }>;
@@ -28,6 +30,10 @@ export type UserDto = {
   email: string;
   role: Role;
   team: { id: number; name: string } | null;
+  /** Routing group this user's tickets flow through. Never a visibility scope. */
+  project: { id: number; name: string } | null;
+  /** False = project routing skips this person (they are away). */
+  availableForAssignment: boolean;
   createdAt: string;
 };
 
@@ -38,6 +44,8 @@ function toDto(row: UserRow): UserDto {
     email: row.email,
     role: row.role,
     team: row.team,
+    project: row.project,
+    availableForAssignment: row.availableForAssignment,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -63,7 +71,7 @@ export const userRepository = {
 
   async updateProfile(
     id: number,
-    data: { name: string },
+    data: { name?: string; availableForAssignment?: boolean },
     actorId: number,
   ): Promise<UserDto | null> {
     return prisma.$transaction(async (tx) => {
@@ -71,7 +79,7 @@ export const userRepository = {
       if (!exists) return null;
       const updated = await tx.user.update({
         where: { id },
-        data: { name: data.name },
+        data,
         include: userInclude,
       });
       await auditRepository.record(
@@ -80,7 +88,10 @@ export const userRepository = {
           action: "user.profile_update",
           entity: "user",
           entityId: id,
-          meta: { name: data.name },
+          meta: {
+            name: data.name,
+            availableForAssignment: data.availableForAssignment,
+          },
         },
         tx,
       );
@@ -90,7 +101,12 @@ export const userRepository = {
 
   async update(
     id: number,
-    data: { role?: Role; teamId?: number | null },
+    data: {
+      role?: Role;
+      teamId?: number | null;
+      projectId?: number | null;
+      availableForAssignment?: boolean;
+    },
     actor: AuthUser,
   ): Promise<UserDto | null> {
     return prisma.$transaction(async (tx) => {
@@ -99,6 +115,26 @@ export const userRepository = {
         where: { id, ...scopeWhere(actor) },
       });
       if (!exists) return null;
+
+      // A project is a routing target, so attaching a user to one must respect
+      // the same tenant boundary as everything else: without this, a manager
+      // could point their own user at another customer's project and have that
+      // customer's caseworker start receiving the tickets.
+      if (data.projectId != null) {
+        const project = await tx.project.findFirst({
+          where: {
+            AND: [
+              { id: data.projectId },
+              actor.role === "admin"
+                ? {}
+                : { customerId: actor.customerId ?? -1 },
+            ],
+          },
+          select: { id: true },
+        });
+        if (!project) throw BadRequest(`Unknown project #${data.projectId}`);
+      }
+
       const updated = await tx.user.update({
         where: { id },
         data,
@@ -110,7 +146,12 @@ export const userRepository = {
           action: "user.update",
           entity: "user",
           entityId: id,
-          meta: { role: data.role, teamId: data.teamId },
+          meta: {
+            role: data.role,
+            teamId: data.teamId,
+            projectId: data.projectId,
+            availableForAssignment: data.availableForAssignment,
+          },
         },
         tx,
       );

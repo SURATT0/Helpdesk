@@ -8,6 +8,12 @@ export const authUserSchema = z.object({
   email: z.string(),
   role: roleSchema,
   teamId: z.number().nullable(),
+  /**
+   * Whether routed work currently comes to me. In the session payload because
+   * anyone may toggle their own away state — including requesters, who cannot
+   * read the user directory to find themselves there.
+   */
+  availableForAssignment: z.boolean(),
 });
 
 export const sessionSchema = z.object({

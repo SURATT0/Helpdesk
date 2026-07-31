@@ -22,6 +22,7 @@ import {
   problemRoutes,
   ticketProblemRoutes,
 } from "./modules/problems/problem.routes";
+import { projectRoutes } from "./modules/projects/project.routes";
 import { userRoutes } from "./modules/users/user.routes";
 import { notificationRoutes } from "./modules/notifications/notification.routes";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.routes";
@@ -92,6 +93,7 @@ export function createApp() {
   app.use(`${API_PREFIX}/categories`, requireAuth, categoryRoutes);
   app.use(`${API_PREFIX}/assets`, requireAuth, assetRoutes);
   app.use(`${API_PREFIX}/problems`, requireAuth, problemRoutes);
+  app.use(`${API_PREFIX}/projects`, requireAuth, projectRoutes);
   app.use(`${API_PREFIX}/users`, requireAuth, userRoutes);
   app.use(`${API_PREFIX}/notifications`, requireAuth, notificationRoutes);
   app.use(`${API_PREFIX}/dashboard`, requireAuth, dashboardRoutes);

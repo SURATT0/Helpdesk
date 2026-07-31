@@ -5,6 +5,8 @@ import { BadRequest } from "../../shared/errors";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
+import { projectRepository } from "../projects/project.repository";
+import { resolveRoutedAssignee } from "../projects/project.routing";
 import { computeDueAt, deriveSla, type SlaState } from "./sla";
 import { ticketScopeWhere, type AssignmentCandidate } from "./ticket.scope";
 
@@ -270,6 +272,19 @@ export const ticketRepository = {
         select: { customerId: true },
       });
 
+      // Auto-assignment. If the requester belongs to a project, the ticket goes
+      // to that project's caseworker — its owner, or the backup when the owner is
+      // unavailable. Read inside this transaction so the routing decision sees
+      // the same snapshot as the insert.
+      //
+      // Falling through to null is the pre-existing behaviour and a fine outcome:
+      // an unassigned ticket sits in the queue where the category's default team
+      // picks it up (implicitly, via the repository scope), which is better than
+      // parking it on someone who is away.
+      const assigneeId = resolveRoutedAssignee(
+        await projectRepository.findRoutingForRequester(input.requesterId, tx),
+      );
+
       const now = new Date();
       const created = await tx.ticket.create({
         data: {
@@ -279,9 +294,7 @@ export const ticketRepository = {
           priority: input.priority,
           requesterId: input.requesterId,
           customerId: requester?.customerId ?? null,
-          // Auto-assignment: unassigned tickets are routed to the category's
-          // default team queue implicitly (via the repository scope), so we set
-          // no assignee here.
+          assigneeId,
           categoryId: input.categoryId,
           dueAt: computeDueAt(input.priority, now),
           createdAt: now,

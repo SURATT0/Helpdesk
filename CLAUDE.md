@@ -8,8 +8,7 @@ This directory is the implementation home for **Deskly** — an *Enterprise Help
 Management System*. It is being built from a **Claude Design** handoff, not from a pre-existing
 codebase.
 
-**Current state:** split into `frontend/` (the SPA) and `backend/` (the API). Phases 0–4 of
-`docs/ROADMAP.md` are done; remaining work is testing, Docker/CI, and deploy. Do not assume source
+**Current state:** split into `frontend/` (the SPA) and `backend/` (the API). Do not assume source
 files that are not present — verify with a directory listing first.
 
 ## Design source of truth
@@ -44,8 +43,11 @@ These are load-bearing invariants — get them right in whatever layer you touch
   `ticket_status_history` row (the SLA source of truth) and fires a notification.
 - **Priority enum:** `low | medium | high | critical`. `due_at` is computed from the SLA policy for
   the priority at creation time.
-- **Auto-assignment:** a ticket's category may have a `default_team_id`; if set, new tickets route to
-  that team's queue, otherwise the unassigned queue.
+- **Auto-assignment:** two mechanisms, composed. If the requester belongs to a project, the ticket is
+  assigned to that project's owner — or its backup owner when the owner is unavailable
+  (`availableForAssignment`). Anything left unassigned falls to the category's `default_team_id`
+  queue, otherwise the unassigned queue. A project is a routing dimension only, never a visibility
+  one — see the RBAC rule below.
 - **Multi-tenancy + RBAC row scoping:** the **customer** (tenant) is the top-level isolation
   boundary. `users.customer_id` / `tickets.customer_id` carry it; `AuthUser.customerId` rides the JWT
   (null = platform admin). Roles `admin > manager > agent > requester`; permission checks are

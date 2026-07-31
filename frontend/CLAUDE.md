@@ -22,6 +22,6 @@ do not build it.
 
 ## Shell
 
-Fixed 224px left sidebar (Dashboard, Tickets, Users, Reports, Knowledge Base, Settings) + 56px
-topbar (⌘K search, notification bell, New ticket, avatar). Demo persona is agent "Dana Reyes";
-brand name is "Deskly".
+Fixed 224px left sidebar + 56px topbar — read the current nav and topbar items from
+`components/layout/sidebar.tsx` and `topbar.tsx` rather than from a list here. Demo persona is agent
+"Dana Reyes".

@@ -16,7 +16,12 @@ export const userService = {
 
   async update(
     id: number,
-    data: { role?: Role; teamId?: number | null },
+    data: {
+      role?: Role;
+      teamId?: number | null;
+      projectId?: number | null;
+      availableForAssignment?: boolean;
+    },
     actor: AuthUser,
   ): Promise<UserDto> {
     // Only an admin may grant the admin role (no privilege escalation by a
@@ -31,9 +36,13 @@ export const userService = {
     return user;
   },
 
-  /** Self-service: the acting user edits their own profile (display name). */
+  /**
+   * Self-service: the acting user edits their own profile — display name, and
+   * whether they are currently accepting routed work ("I'm out"). Deliberately
+   * cannot touch role, team, or project: those are management decisions.
+   */
   async updateProfile(
-    data: { name: string },
+    data: { name?: string; availableForAssignment?: boolean },
     actor: AuthUser,
   ): Promise<UserDto> {
     const user = await userRepository.updateProfile(actor.id, data, actor.id);

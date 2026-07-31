@@ -57,11 +57,22 @@ export function SettingsView() {
   const [saved, setSaved] = React.useState(false);
 
   const save = useMutation({
-    mutationFn: (n: string) => updateMyProfile(n),
+    mutationFn: (n: string) => updateMyProfile({ name: n }),
     onSuccess: (u) => {
       patchUser({ name: u.name });
       qc.invalidateQueries({ queryKey: userKeys.all });
       setSaved(true);
+    },
+  });
+
+  const availability = useMutation({
+    mutationFn: (next: boolean) =>
+      updateMyProfile({ availableForAssignment: next }),
+    onSuccess: (u) => {
+      // Patch the session user so the toggle reflects the server's answer, not
+      // an optimistic guess — this flag decides where real tickets go.
+      patchUser({ availableForAssignment: u.availableForAssignment });
+      qc.invalidateQueries({ queryKey: userKeys.all });
     },
   });
 
@@ -132,6 +143,38 @@ export function SettingsView() {
             </span>
           ) : null}
         </div>
+      </Section>
+
+      {/* Availability — self-service, so it needs no manager and works for every
+          role (a requester holds no user:write and cannot use the admin path). */}
+      <Section
+        title={t("settings.availability")}
+        note={t("settings.availabilityNote")}
+      >
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            checked={user.availableForAssignment}
+            disabled={availability.isPending}
+            onChange={(e) => availability.mutate(e.target.checked)}
+            className="h-4 w-4 cursor-pointer accent-accent"
+          />
+          <span className="font-medium text-ink">
+            {t("settings.acceptingWork")}
+          </span>
+        </label>
+        {!user.availableForAssignment ? (
+          <p className="mt-2 text-[12.5px] text-status-pending-fg">
+            {t("settings.awayHint")}
+          </p>
+        ) : null}
+        {availability.isError ? (
+          <p className="mt-2 text-[12.5px] font-medium text-[#dc2626]">
+            {availability.error instanceof ApiError
+              ? availability.error.message
+              : t("settings.saveError")}
+          </p>
+        ) : null}
       </Section>
 
       {/* Preferences */}
