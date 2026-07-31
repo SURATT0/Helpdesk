@@ -41,6 +41,12 @@ export type Ticket = {
   requester: string;
   requesterEmail: string;
   assignee: string | null;
+  /**
+   * The assignee's id alongside their display name. The client filters and
+   * groups by assignee, and names are not unique — two "J. Petrov"s would
+   * collapse into one bucket if the id weren't exposed.
+   */
+  assigneeId: number | null;
   category: string;
   slaDue: string;
   slaState: SlaState;
@@ -141,6 +147,7 @@ function toTicketDto(row: TicketRow): Ticket {
     requester: row.requester.name,
     requesterEmail: row.requester.email,
     assignee: row.assignee?.name ?? null,
+    assigneeId: row.assigneeId,
     category: row.category.name,
     slaDue,
     slaState,

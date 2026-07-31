@@ -8,17 +8,12 @@ import { useTickets } from "../queries";
 export function TicketListFooter() {
   const { t } = useI18n();
   const { data } = useTickets();
-  const { query, statuses, priorities, assigneeMe, activeCount } = useSearch();
-  const { user } = useAuth();
+  const { query, statuses, priorities, assignees, activeCount } = useSearch();
 
   const all = data?.tickets ?? [];
   const total = data?.total ?? all.length;
   const filtered = all.filter((x) =>
-    matchesFilters(
-      x,
-      { query, statuses, priorities, assigneeMe },
-      user?.name ?? null,
-    ),
+    matchesFilters(x, { query, statuses, priorities, assignees }),
   ).length;
 
   const isFiltered = activeCount > 0 || query.trim().length > 0;
