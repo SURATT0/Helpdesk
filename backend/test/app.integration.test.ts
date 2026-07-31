@@ -1405,6 +1405,31 @@ describe("email-to-ticket threading", () => {
     expect(res.status).toBe(201);
     expect(res.body.data.kind).toBe("ticket");
   });
+
+  // A custom subject used to go out without the tag, which made its reply
+  // unthreadable. ensureTicketRef stamps it either way.
+  it("keeps a custom reply subject threadable end to end", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const sent = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({
+        to: "marcus.chen@acme.com",
+        subject: "About your VPN problem",
+        body: "Can you retry?",
+      });
+    expect(sent.status).toBe(201);
+    expect(sent.body.data.mail.subject).toBe("[#1042] About your VPN problem");
+
+    // The requester replies to exactly what they received.
+    const back = await post({
+      from: "marcus.chen@acme.com",
+      subject: `Re: ${sent.body.data.mail.subject}`,
+      text: "Retried, no luck.",
+    });
+    expect(back.body.data.kind).toBe("comment");
+    expect(back.body.data.ticketId).toBe(1042);
+  });
 });
 
 describe("tickets — agent email reply", () => {

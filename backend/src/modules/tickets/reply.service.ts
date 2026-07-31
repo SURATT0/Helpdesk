@@ -7,6 +7,7 @@ import {
   commentRepository,
   type CommentDto,
 } from "../comments/comment.repository";
+import { ensureTicketRef } from "../integrations/email/email.parsers";
 import { mailSender } from "../integrations/email/mail-sender";
 import { ticketService } from "./ticket.service";
 
@@ -44,8 +45,13 @@ export const replyService = {
       user,
     );
 
-    const subject =
-      input.subject?.trim() || `Re: [#${ticketId}] ${ticket.subject}`;
+    // The `[#id]` tag is what routes the reply back onto this ticket, so it is
+    // stamped unconditionally — including onto a caller-supplied subject, which
+    // would otherwise go out without one and make its reply unthreadable.
+    const subject = ensureTicketRef(
+      input.subject?.trim() || `Re: ${ticket.subject}`,
+      ticketId,
+    );
     const footer =
       input.attachments && input.attachments.length > 0
         ? `\n\n---\nAttachments: ${input.attachments.join(", ")}`

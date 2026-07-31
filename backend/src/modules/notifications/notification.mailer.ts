@@ -60,12 +60,17 @@ function bodyFor(n: PendingNotification): string {
 export type DeliveryOutcome = "sent" | "skipped";
 
 /**
- * Where replies to a notification email should go: the shared helpdesk inbox
- * that feeds inbound email. Same rule as an agent reply — never an individual's
- * address, and omitted rather than falling back to one.
+ * Where replies to a notification email should go: the shared helpdesk address,
+ * which is the same inbox that feeds the inbound webhook. Reuses `SMTP_FROM`
+ * rather than introducing a second variable, matching what `reply.service` does
+ * for an agent's reply — one help desk identity, one place to configure it.
+ *
+ * Returns undefined when unset rather than falling back to an individual's
+ * address: no Reply-To is a visibly broken loop, a personal one is an invisibly
+ * broken one.
  */
 function systemReplyAddress(): string | undefined {
-  return env.smtp.replyTo || env.smtp.from || undefined;
+  return env.smtp.from || undefined;
 }
 
 export const notificationMailer = {
