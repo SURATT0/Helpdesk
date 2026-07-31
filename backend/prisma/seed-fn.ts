@@ -159,6 +159,99 @@ const TICKETS: {
   { id: 2002, subject: "Mailbox over quota — cannot receive mail", status: "open", priority: "medium", requester: "Priya Shah", assignee: null, category: "Email", customer: "Globex Inc" },
 ];
 
+const HOUR_MS = 3_600_000;
+
+/**
+ * When a historical ticket was closed. Either a fixed number of hours back (for
+ * the very recent ones, which must land in the *current* week whatever day the
+ * seed runs) or a calendar position — `monthsAgo: 1, day: 14` means the 14th of
+ * last month, local time, because that is how the history log slices periods.
+ */
+type Closure = { hoursAgo: number } | { monthsAgo: number; day: number };
+
+/**
+ * Closed tickets stretching back over a year, so the history log has something
+ * to show in every period a viewer can pick — including last year.
+ *
+ * Ids sit in 1001–1020, BELOW the live demo tickets, so `MAX(id)` is unchanged
+ * and a freshly created ticket still gets the next id after 2002.
+ *
+ * Two casting constraints, both load-bearing for the integration suite: Marcus
+ * Chen never appears as a requester (a test asserts his ticket list is exactly
+ * `[1042]`), and no *Acme* ticket is assigned to Owen Park (a test asserts an
+ * Acme agent sees nothing when filtering on him). Globex tickets may use him
+ * freely — row scope hides them from Acme regardless.
+ */
+const CLOSED_HISTORY: {
+  id: number;
+  subject: string;
+  priority: Priority;
+  requester: string;
+  assignee: string;
+  category: string;
+  customer: string;
+  closure: Closure;
+  /** How long it stayed open, in hours — drives the "Open for" column. */
+  openHours: number;
+}[] = [
+  // --- This week (hour offsets, so they never drift out of the current week) ---
+  { id: 1001, subject: "Password reset — locked out after phone swap", priority: "medium", requester: "L. Osei", assignee: "Dana Reyes", category: "Accounts", customer: "Acme Corp", closure: { hoursAgo: 2 }, openHours: 0.4 },
+  { id: 1002, subject: "Zoom audio cutting out in Ops standup", priority: "low", requester: "J. Petrov", assignee: "Ana M.", category: "Software", customer: "Acme Corp", closure: { hoursAgo: 6 }, openHours: 3 },
+  { id: 1003, subject: "Guest wifi voucher for auditors", priority: "low", requester: "HR Ops", assignee: "Dana Reyes", category: "Network", customer: "Acme Corp", closure: { hoursAgo: 10 }, openHours: 1.5 },
+  { id: 1004, subject: "Second monitor not detected on new dock", priority: "medium", requester: "R. Danforth", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", closure: { hoursAgo: 30 }, openHours: 26 },
+  { id: 1005, subject: "Shared mailbox permissions for Finance", priority: "medium", requester: "T. Alvarez", assignee: "Ana M.", category: "Email", customer: "Acme Corp", closure: { hoursAgo: 54 }, openHours: 8 },
+
+  // --- Earlier this month ---
+  { id: 1006, subject: "VPN certificate expired on field laptops", priority: "high", requester: "S. Okafor", assignee: "Dana Reyes", category: "Network", customer: "Acme Corp", closure: { monthsAgo: 0, day: 3 }, openHours: 5 },
+  { id: 1007, subject: "Badge reader offline — loading dock", priority: "high", requester: "A. Lindqvist", assignee: "Kai T.", category: "Access", customer: "Acme Corp", closure: { monthsAgo: 0, day: 11 }, openHours: 30 },
+  { id: 1008, subject: "Adobe licence reassignment after two leavers", priority: "low", requester: "HR Ops", assignee: "Ana M.", category: "Software", customer: "Acme Corp", closure: { monthsAgo: 0, day: 18 }, openHours: 74 },
+
+  // --- Last month ---
+  { id: 1009, subject: "Outlook rebuilding index every login", priority: "medium", requester: "L. Osei", assignee: "Dana Reyes", category: "Email", customer: "Acme Corp", closure: { monthsAgo: 1, day: 6 }, openHours: 12 },
+  { id: 1010, subject: "Switch port flapping in comms room B", priority: "critical", requester: "R. Danforth", assignee: "Dana Reyes", category: "Network", customer: "Acme Corp", closure: { monthsAgo: 1, day: 14 }, openHours: 2 },
+  { id: 1011, subject: "Docking station firmware recall — 9 units", priority: "medium", requester: "S. Okafor", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", closure: { monthsAgo: 1, day: 22 }, openHours: 120 },
+  { id: 1012, subject: "New starter accounts — Design, 3 people", priority: "high", requester: "HR Ops", assignee: "Ana M.", category: "Accounts", customer: "Acme Corp", closure: { monthsAgo: 1, day: 27 }, openHours: 20 },
+
+  // --- Two to five months back ---
+  { id: 1013, subject: "Mail relay blacklisted after newsletter blast", priority: "critical", requester: "T. Alvarez", assignee: "Dana Reyes", category: "Email", customer: "Acme Corp", closure: { monthsAgo: 2, day: 9 }, openHours: 6 },
+  { id: 1014, subject: "Meeting room display stuck on setup screen", priority: "low", requester: "J. Petrov", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", closure: { monthsAgo: 2, day: 20 }, openHours: 48 },
+  { id: 1015, subject: "SSO loop on the expenses portal", priority: "high", requester: "A. Lindqvist", assignee: "Ana M.", category: "Access", customer: "Acme Corp", closure: { monthsAgo: 3, day: 12 }, openHours: 4 },
+  { id: 1016, subject: "Laptop refresh cycle — Finance batch", priority: "medium", requester: "L. Osei", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", closure: { monthsAgo: 3, day: 25 }, openHours: 200 },
+  { id: 1017, subject: "Contractor access revoked late — audit finding", priority: "high", requester: "HR Ops", assignee: "Dana Reyes", category: "Access", customer: "Acme Corp", closure: { monthsAgo: 4, day: 16 }, openHours: 16 },
+  { id: 1018, subject: "Printer driver rollout broke Finance queue", priority: "medium", requester: "R. Danforth", assignee: "Ana M.", category: "Hardware", customer: "Acme Corp", closure: { monthsAgo: 5, day: 8 }, openHours: 52 },
+
+  // --- Last year (13+ months back always crosses the year boundary) ---
+  { id: 1019, subject: "Annual access review — dormant accounts", priority: "medium", requester: "HR Ops", assignee: "Dana Reyes", category: "Accounts", customer: "Acme Corp", closure: { monthsAgo: 13, day: 15 }, openHours: 96 },
+  { id: 1020, subject: "Mailbox migration wave 2 — Globex HQ", priority: "high", requester: "Priya Shah", assignee: "Owen Park", category: "Email", customer: "Globex Inc", closure: { monthsAgo: 14, day: 21 }, openHours: 36 },
+];
+
+/**
+ * Resolve a `Closure` to a local instant.
+ *
+ * `day` is clamped to the month's length, so `day: 31` is the 28th in February
+ * rather than rolling into March. A calendar position that has not happened yet
+ * (the 18th of this month, seeded on the 5th) is pulled back to a couple of
+ * hours ago — a demo must never show a ticket closed in the future, which would
+ * also land it outside the "current period" the log opens on.
+ */
+function closureAt(now: Date, closure: Closure): Date {
+  if ("hoursAgo" in closure) {
+    return new Date(now.getTime() - closure.hoursAgo * HOUR_MS);
+  }
+  const month = now.getMonth() - closure.monthsAgo;
+  const lastDay = new Date(now.getFullYear(), month + 1, 0).getDate();
+  const at = new Date(
+    now.getFullYear(),
+    month,
+    Math.min(closure.day, lastDay),
+    // Spread across the working day so the "Closed" column isn't a column of
+    // identical times.
+    9 + (closure.day % 8),
+    (closure.day * 7) % 60,
+  );
+  return at > now ? new Date(now.getTime() - 2 * HOUR_MS) : at;
+}
+
 /**
  * Populate customers/teams/users/categories/tickets from the demo data.
  * Idempotent (upsert); used by the CLI seed and by integration tests.
@@ -319,6 +412,50 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     });
   }
 
+  // Closed tickets going back over a year, so the history log is not empty in
+  // whichever period the viewer lands on. These carry real createdAt/closedAt
+  // pairs — the log's "Open for" column is the gap between them, and the period
+  // filter reads closedAt, so both have to be genuine rather than `now`.
+  for (const t of CLOSED_HISTORY) {
+    const requesterId = userIds.get(t.requester)!;
+    const assigneeId = userIds.get(t.assignee)!;
+    const categoryId = categoryIds.get(t.category)!;
+    const customerId = customerIds.get(t.customer) ?? null;
+    const closedAt = closureAt(now, t.closure);
+    const createdAt = new Date(closedAt.getTime() - t.openHours * HOUR_MS);
+    const data = {
+      subject: t.subject,
+      description: `${t.subject} (seeded demo ticket, closed).`,
+      status: "closed" as TicketStatus,
+      priority: t.priority,
+      requesterId,
+      assigneeId,
+      categoryId,
+      customerId,
+      dueAt: computeDueAt(t.priority, createdAt),
+      createdAt,
+      // Closed straight off the back of resolution, which is the ordinary path
+      // (requester confirms, or the 72h auto-close fires).
+      resolvedAt: closedAt,
+      closedAt,
+    };
+    await prisma.ticket.upsert({
+      where: { id: t.id },
+      update: data,
+      create: { id: t.id, ...data },
+    });
+
+    // A two-step trail rather than one row, so the ticket's history panel reads
+    // as a real lifecycle and the timestamps line up with the log.
+    await prisma.ticketStatusHistory.deleteMany({ where: { ticketId: t.id } });
+    await prisma.ticketStatusHistory.createMany({
+      data: [
+        { ticketId: t.id, fromStatus: null, toStatus: "new", changedById: requesterId, createdAt },
+        { ticketId: t.id, fromStatus: "resolved", toStatus: "closed", changedById: assigneeId, createdAt: closedAt },
+      ],
+    });
+  }
+
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('tickets', 'id'), (SELECT MAX(id) FROM tickets))`,
   );
@@ -370,6 +507,9 @@ export const SEED_COUNTS = {
   teams: TEAMS.length,
   users: USERS.length,
   categories: CATEGORIES.length,
-  tickets: TICKETS.length,
+  // Live demo tickets plus the closed back-catalogue — both are real rows, so
+  // reporting only the former would under-report what the seed just wrote.
+  tickets: TICKETS.length + CLOSED_HISTORY.length,
+  closedHistory: CLOSED_HISTORY.length,
   assets: ASSETS.length,
 };
