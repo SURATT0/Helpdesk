@@ -22,12 +22,28 @@ export const SLA_POLICY: Record<Priority, number> = {
 
 const HOUR_MS = 60 * 60 * 1000;
 
+/**
+ * Urgency thresholds on the time remaining until `due_at`. ONE definition drives
+ * both the read-time badge (`deriveSla`) and the background alert sweep
+ * (`slaAlertKind`), so what the UI calls "at risk" is exactly what triggers a
+ * notification — they cannot drift apart.
+ */
+export const SLA_DANGER_MS = HOUR_MS;
+export const SLA_WARN_MS = 4 * HOUR_MS;
+
+/** Statuses whose SLA clock is running — the only ones an alert can apply to. */
+export const SLA_ACTIVE_STATUSES = [
+  "new",
+  "open",
+  "in_progress",
+] as const satisfies readonly TicketStatus[];
+
 /** Due timestamp for a ticket created at `createdAt` with the given priority. */
 export function computeDueAt(priority: Priority, createdAt: Date): Date {
   return new Date(createdAt.getTime() + SLA_POLICY[priority] * HOUR_MS);
 }
 
-function formatRemaining(ms: number): string {
+export function formatRemaining(ms: number): string {
   const totalMinutes = Math.max(0, Math.floor(ms / 60000));
   const days = Math.floor(totalMinutes / (60 * 24));
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
@@ -62,6 +78,35 @@ export function deriveSla(
 
   const remainingMs = dueAt.getTime() - now.getTime();
   const state: SlaState =
-    remainingMs < HOUR_MS ? "danger" : remainingMs < 4 * HOUR_MS ? "warn" : "ok";
+    remainingMs < SLA_DANGER_MS
+      ? "danger"
+      : remainingMs < SLA_WARN_MS
+        ? "warn"
+        : "ok";
   return { slaDue: formatRemaining(remainingMs), slaState: state };
+}
+
+/** What kind of alert a running SLA clock currently deserves, if any. */
+export type SlaAlertKind = "warning" | "breach";
+
+/**
+ * Decide whether a ticket's SLA clock warrants a notification right now.
+ *
+ * Pure and separate from `deriveSla` because the two answer different questions:
+ * `deriveSla` colours a badge on every read, while this decides whether to
+ * *interrupt someone*. It deliberately reuses the same thresholds so the two
+ * agree. Returns null when the clock is comfortable — the caller then writes
+ * nothing.
+ *
+ * Callers must have already excluded paused (`pending`) and finished
+ * (`resolved`/`closed`) tickets; see SLA_ACTIVE_STATUSES.
+ */
+export function slaAlertKind(
+  dueAt: Date | null,
+  now: Date,
+): SlaAlertKind | null {
+  if (!dueAt) return null;
+  const remainingMs = dueAt.getTime() - now.getTime();
+  if (remainingMs <= 0) return "breach";
+  return remainingMs <= SLA_WARN_MS ? "warning" : null;
 }
