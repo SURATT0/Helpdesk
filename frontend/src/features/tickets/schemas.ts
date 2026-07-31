@@ -34,6 +34,14 @@ export const ticketSchema = z.object({
   slaDue: z.string(),
   slaState: slaStateSchema,
   attachments: z.number(),
+  /**
+   * The problem this incident is linked to, if any (many tickets → one problem).
+   * The API has always returned it; it was previously dropped here because zod
+   * strips unknown keys, so the UI could not show the link.
+   */
+  problem: z
+    .object({ id: z.number(), title: z.string(), status: z.string() })
+    .nullable(),
   createdAt: z.string(),
   closedAt: z.string().nullable(),
 });
