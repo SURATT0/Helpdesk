@@ -146,8 +146,7 @@ export function TicketTable() {
   const unassignedLabel = t("bulk.unassigned");
   const openRowLabel = (id: number) => t("tickets.openRow", { id });
   const selectRowLabel = (id: number) => t("tickets.selectRow", { id });
-  const { query, statuses, priorities, assigneeMe } = useSearch();
-  const { user } = useAuth();
+  const { query, statuses, priorities, assignees } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
   const [sort, setSort] = React.useState<SortState | null>(null);
@@ -170,14 +169,12 @@ export function TicketTable() {
   }
 
   const rows = React.useMemo(() => {
-    const filters = { query, statuses, priorities, assigneeMe };
-    const base = (data?.tickets ?? []).filter((x) =>
-      matchesFilters(x, filters, user?.name ?? null),
-    );
+    const filters = { query, statuses, priorities, assignees };
+    const base = (data?.tickets ?? []).filter((x) => matchesFilters(x, filters));
     if (!sort) return base;
     const dir = sort.dir === "asc" ? 1 : -1;
     return [...base].sort((a, b) => dir * COMPARATORS[sort.key](a, b));
-  }, [data, query, statuses, priorities, assigneeMe, user, sort]);
+  }, [data, query, statuses, priorities, assignees, sort]);
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 

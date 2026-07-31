@@ -28,6 +28,8 @@ export const ticketSchema = z.object({
   requester: z.string(),
   requesterEmail: z.string(),
   assignee: z.string().nullable(),
+  /** Filtering keys on this, not the display name — names are not unique. */
+  assigneeId: z.number().nullable(),
   category: z.string(),
   slaDue: z.string(),
   slaState: slaStateSchema,

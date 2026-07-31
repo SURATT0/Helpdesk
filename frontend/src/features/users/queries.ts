@@ -3,8 +3,16 @@ import { fetchUsers, updateUser, type UpdateUserInput } from "./api";
 
 export const userKeys = { all: ["users"] as const };
 
-export function useUsers() {
-  return useQuery({ queryKey: userKeys.all, queryFn: fetchUsers });
+/**
+ * The user directory. `enabled: false` for callers who can't read it — the
+ * endpoint requires `user:read`, so fetching it as a requester would just 403.
+ */
+export function useUsers(opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: userKeys.all,
+    queryFn: fetchUsers,
+    enabled: opts.enabled ?? true,
+  });
 }
 
 /**

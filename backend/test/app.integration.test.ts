@@ -108,6 +108,73 @@ describe("tickets — RBAC row scoping (multi-tenant)", () => {
   });
 });
 
+describe("tickets — assignee identity and filter", () => {
+  it("exposes assigneeId alongside the display name", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app).get(`${API}/tickets/1042`).set(bearer(dana));
+    expect(res.status).toBe(200);
+
+    const danaRow = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(res.body.data.assignee).toBe("Dana Reyes");
+    // The client filters and groups on the id, since names are not unique.
+    expect(res.body.data.assigneeId).toBe(danaRow.id);
+  });
+
+  it("reports assigneeId as null for an unassigned ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app).get(`${API}/tickets/1044`).set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(res.body.data.assignee).toBeNull();
+    expect(res.body.data.assigneeId).toBeNull();
+  });
+
+  it("filters the list to one agent's queue", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const danaRow = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=${danaRow.id}`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids).toContain(1042); // Dana's
+    expect(ids).not.toContain(1029); // Kai's
+    for (const row of res.body.data as Array<{ assigneeId: number }>) {
+      expect(row.assigneeId).toBe(danaRow.id);
+    }
+  });
+
+  it("filters the list to the unassigned queue", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=none`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids).toContain(1044); // Acme, unassigned
+    for (const row of res.body.data as Array<{ assigneeId: number | null }>) {
+      expect(row.assigneeId).toBeNull();
+    }
+  });
+
+  // The assignee filter is AND-ed with row scope, never a way around it.
+  it("cannot reach another customer's tickets through the filter", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    const owen = await prisma.user.findUniqueOrThrow({
+      where: { email: "owen.park@acme.com" }, // Globex agent
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=${owen.id}`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+});
+
 describe("tickets — status transitions", () => {
   it("allows a legal transition and appends a history row", async () => {
     const dana = await login("dana.reyes@acme.com");
