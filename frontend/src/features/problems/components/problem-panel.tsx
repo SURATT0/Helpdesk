@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Link2, Link2Off, Loader2, Pencil } from "lucide-react";
+import Link from "next/link";
+import {
+  BookOpen,
+  ExternalLink,
+  Link2,
+  Link2Off,
+  Loader2,
+  Pencil,
+} from "lucide-react";
 import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -96,6 +104,26 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
           <div className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-[#78350f]">
             {full.workaround}
           </div>
+        </div>
+      ) : null}
+
+      {/* The reason to link an article at all: from a ticket, one click to the
+          documented steps. Sits directly under the workaround. */}
+      {full?.kbArticle ? (
+        <Link
+          href={`/kb/${encodeURIComponent(full.kbArticle.id)}`}
+          className="mt-2 flex items-center gap-1.5 rounded-md border border-line bg-white px-2 py-1.5 text-[11.5px] font-semibold text-brand-hover hover:bg-app"
+        >
+          <BookOpen size={12} strokeWidth={2} className="flex-none" />
+          <span className="min-w-0 flex-1 truncate">{full.kbArticle.title}</span>
+          <ExternalLink size={11} className="flex-none text-faint" />
+        </Link>
+      ) : full?.kbArticleId ? (
+        // An id that no longer resolves — say so rather than dropping it, so
+        // whoever curates the KB can see the reference went stale.
+        <div className="mt-2 flex items-start gap-1.5 text-[11.5px] text-[#b45309]">
+          <BookOpen size={12} className="mt-px flex-none" />
+          <span>{t("problem.kbMissing", { id: full.kbArticleId })}</span>
         </div>
       ) : null}
 

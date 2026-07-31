@@ -1596,6 +1596,114 @@ describe("problems — linking and converting", () => {
       expect(JSON.stringify(meta)).not.toContain("secret internal detail");
     });
 
+    // The KB has no table, so nothing at the database level can reject a bad
+    // article id — validation on write is the only thing preventing dangling
+    // references, and resolution on read is what makes a stale one visible.
+    it("links a KB article and resolves it on read", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Outlook prompts");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" });
+      expect(res.status).toBe(200);
+      expect(res.body.data.kbArticleId).toBe("KB-042");
+      expect(res.body.data.kbArticle).toMatchObject({ id: "KB-042" });
+      expect(typeof res.body.data.kbArticle.title).toBe("string");
+      expect(res.body.data.kbArticle.title.length).toBeGreaterThan(0);
+    });
+
+    it("rejects an article id that does not exist (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Bad reference");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-does-not-exist" });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/knowledge-base article/i);
+
+      const after = await prisma.problem.findUniqueOrThrow({
+        where: { id: problem.id },
+      });
+      expect(after.kbArticleId).toBeNull();
+    });
+
+    it("unlinks the article with null", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Unlink kb");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" })
+        .expect(200);
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: null });
+      expect(res.status).toBe(200);
+      expect(res.body.data.kbArticleId).toBeNull();
+      expect(res.body.data.kbArticle).toBeNull();
+    });
+
+    // A reference can go stale when an article is dropped from the dataset. The
+    // problem must still load, with the link reported as unavailable.
+    it("reports a stale reference instead of failing the read", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Stale reference");
+      // Write a now-missing id directly — the API would reject it, which is the
+      // point: this state can only arise from the KB dataset changing later.
+      await prisma.problem.update({
+        where: { id: problem.id },
+        data: { kbArticleId: "KB-retired" },
+      });
+
+      const res = await request(app)
+        .get(`${API}/problems/${problem.id}`)
+        .set(bearer(dana));
+      expect(res.status).toBe(200);
+      expect(res.body.data.kbArticleId).toBe("KB-retired");
+      expect(res.body.data.kbArticle).toBeNull();
+    });
+
+    it("keeps the article link through an unrelated edit", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Sticky link");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" })
+        .expect(200);
+
+      // Patching only the status must not disturb the reference.
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "resolved" });
+      expect(res.body.data.kbArticleId).toBe("KB-042");
+    });
+
+    it("exposes the article on the list endpoint too", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Listed with kb");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" })
+        .expect(200);
+
+      const list = await request(app)
+        .get(`${API}/problems?search=Listed with kb`)
+        .set(bearer(dana));
+      const found = (
+        list.body.data as Array<{ id: number; kbArticle: { id: string } | null }>
+      ).find((p) => p.id === problem.id);
+      expect(found?.kbArticle?.id).toBe("KB-042");
+    });
+
     it("permits any status transition (no whitelist, unlike tickets)", async () => {
       const dana = await login("dana.reyes@acme.com");
       const problem = await convert(dana, 1042, "Transitions");

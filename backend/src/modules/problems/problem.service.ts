@@ -1,5 +1,6 @@
 import type { AuthUser } from "../../shared/auth";
 import { BadRequest, NotFound } from "../../shared/errors";
+import { kbService } from "../kb/kb.service";
 import { problemRepository, type ProblemDto } from "./problem.repository";
 import {
   announcesWorkaround,
@@ -45,6 +46,12 @@ export const problemService = {
     const current = await problemRepository.findStateForUpdate(id, actor);
     // Out of scope reads as "not found" rather than leaking existence.
     if (!current) throw NotFound(`Problem ${id} not found`);
+
+    // The KB reference is soft — no FK can reject a bad id, so check it here.
+    // Rejecting on write is what keeps a dangling link from ever being stored.
+    if (input.kbArticleId != null && !kbService.exists(input.kbArticleId)) {
+      throw BadRequest(`No knowledge-base article with id "${input.kbArticleId}"`);
+    }
 
     const next = nextProblemState(current, input);
     const problem = validateProblemState(next);

@@ -42,6 +42,8 @@ export type UpdateProblemInput = {
   rootCause?: string | null;
   workaround?: string | null;
   status?: ProblemStatus;
+  /** KB article id, e.g. "KB-042". `null` unlinks. Validated server-side. */
+  kbArticleId?: string | null;
 };
 
 export async function updateProblem(

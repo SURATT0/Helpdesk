@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api-client";
 import { useI18n } from "@/features/i18n/context";
 import { useUpdateProblem } from "../queries";
+import { KbArticlePicker } from "./kb-article-picker";
 import { PROBLEM_STATUSES, type Problem, type ProblemStatus } from "../schemas";
 
 /**
@@ -34,6 +35,7 @@ export function EditProblemModal({
   const [status, setStatus] = React.useState<ProblemStatus>(problem.status);
   const [rootCause, setRootCause] = React.useState(problem.rootCause ?? "");
   const [workaround, setWorkaround] = React.useState(problem.workaround ?? "");
+  const [kbArticleId, setKbArticleId] = React.useState(problem.kbArticleId);
   const [error, setError] = React.useState<string | null>(null);
 
   const needsWorkaround =
@@ -50,6 +52,7 @@ export function EditProblemModal({
           // Empty means "clear it", which the API expresses as null.
           rootCause: rootCause.trim() || null,
           workaround: workaround.trim() || null,
+          kbArticleId,
         },
       },
       {
@@ -139,6 +142,18 @@ export function EditProblemModal({
             />
             <span className="text-[11.5px] text-faint">
               {t("problem.workaroundHelp")}
+            </span>
+          </div>
+
+          {/* Sits with the workaround, not the root cause: both answer "how do
+              I get this user working now", which is what a known error is for. */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-faint">
+              {t("problem.kbLabel")}
+            </span>
+            <KbArticlePicker value={kbArticleId} onChange={setKbArticleId} />
+            <span className="text-[11.5px] text-faint">
+              {t("problem.kbHelp")}
             </span>
           </div>
 

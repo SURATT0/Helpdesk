@@ -352,6 +352,13 @@ const en: Dict = {
   "problem.save": "Save",
   "problem.saving": "Saving…",
   "problem.editError": "Couldn't save the problem",
+  "problem.kbLabel": "Knowledge-base article",
+  "problem.kbHelp":
+    "Link the article with the full steps, so agents can reach it from any linked ticket.",
+  "problem.kbSearchPlaceholder": "Search the knowledge base…",
+  "problem.kbNoneFound": "No matching articles",
+  "problem.kbClear": "Remove the linked article",
+  "problem.kbMissing": "Linked article {id} no longer exists",
 
   "att.empty": "No attachments yet.",
   "att.loadError": "Couldn't load attachments",
@@ -794,6 +801,13 @@ const th: Dict = {
   "problem.save": "บันทึก",
   "problem.saving": "กำลังบันทึก…",
   "problem.editError": "บันทึกปัญหาไม่สำเร็จ",
+  "problem.kbLabel": "บทความในฐานความรู้",
+  "problem.kbHelp":
+    "ผูกบทความที่มีขั้นตอนเต็ม เพื่อให้เจ้าหน้าที่เปิดจากเคสที่ผูกอยู่ได้ทันที",
+  "problem.kbSearchPlaceholder": "ค้นหาในฐานความรู้…",
+  "problem.kbNoneFound": "ไม่พบบทความที่ตรงกัน",
+  "problem.kbClear": "ยกเลิกการผูกบทความ",
+  "problem.kbMissing": "บทความ {id} ที่ผูกไว้ไม่มีอยู่แล้ว",
 
   "att.empty": "ยังไม่มีไฟล์แนบ",
   "att.loadError": "โหลดไฟล์แนบไม่สำเร็จ",

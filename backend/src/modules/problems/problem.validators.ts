@@ -23,6 +23,12 @@ export const updateProblemSchema = z
     rootCause: z.string().trim().max(5000).nullable().optional(),
     workaround: z.string().trim().max(5000).nullable().optional(),
     status: problemStatusSchema.optional(),
+    /**
+     * KB article documenting this known error, e.g. "KB-042". `null` unlinks.
+     * Shape only here — the service checks the id actually exists, since there
+     * is no table to hang a foreign key on.
+     */
+    kbArticleId: z.string().trim().min(1).max(40).nullable().optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, {
