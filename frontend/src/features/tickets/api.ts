@@ -9,6 +9,7 @@ import {
   historyListSchema,
   importResultEnvelope,
   readListSchema,
+  reassignEnvelopeSchema,
   replyResultEnvelope,
   ticketEnvelopeSchema,
   ticketListSchema,
@@ -17,6 +18,8 @@ import {
   type HistoryEntry,
   type ImportResult,
   type ReadMarker,
+  type ReassignInput,
+  type ReassignResult,
   type ReplyResult,
   type Ticket,
 } from "./schemas";
@@ -24,6 +27,11 @@ import {
 export type TicketFilter = {
   status?: TicketStatus;
   priority?: Priority;
+  /**
+   * A user id narrows the list to that agent's queue; `"none"` is the unassigned
+   * queue. Omit to not filter by assignee — which is NOT the same as `"none"`.
+   */
+  assigneeId?: number | "none";
 };
 
 export async function fetchTickets(
@@ -32,10 +40,29 @@ export async function fetchTickets(
   const qs = new URLSearchParams();
   if (filter.status) qs.set("status", filter.status);
   if (filter.priority) qs.set("priority", filter.priority);
+  // `!= null` on purpose: 0 is not a valid id, but "none" must survive, and a
+  // truthiness check would be a trap if ids ever start at 0.
+  if (filter.assigneeId != null) qs.set("assigneeId", String(filter.assigneeId));
   const suffix = qs.toString() ? `?${qs}` : "";
   const body = await apiRequest(`/tickets${suffix}`);
   const parsed = ticketListSchema.parse(body);
   return { tickets: parsed.data, total: parsed.meta.total };
+}
+
+/**
+ * Hand one person's queue to another, or back to the unassigned queue with
+ * `toUserId: null`. Server-side this is manager/admin only (`ticket:assign`) and
+ * touches only tickets the caller can already see; it defaults to the statuses
+ * still in flight, leaving resolved/closed history with its original assignee.
+ */
+export async function reassignTickets(
+  input: ReassignInput,
+): Promise<ReassignResult> {
+  const body = await apiRequest("/tickets/reassign", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return reassignEnvelopeSchema.parse(body).data;
 }
 
 export async function fetchTicket(id: number): Promise<Ticket> {

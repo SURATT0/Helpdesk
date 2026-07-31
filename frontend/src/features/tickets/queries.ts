@@ -17,6 +17,7 @@ import {
   fetchTicketHistory,
   fetchTickets,
   importTickets,
+  reassignTickets,
   sendReply,
   streamComments,
   updateTicketAssignee,
@@ -28,6 +29,7 @@ import {
   type SendReplyInput,
   type TicketFilter,
 } from "./api";
+import type { ReassignInput } from "./schemas";
 
 export const ticketKeys = {
   all: ["tickets"] as const,
@@ -40,6 +42,19 @@ export function useTickets(filter: TicketFilter = {}) {
   return useQuery({
     queryKey: ticketKeys.list(filter),
     queryFn: () => fetchTickets(filter),
+  });
+}
+
+/**
+ * Hand one person's queue to another. Invalidates every ticket query because a
+ * reassignment moves rows between whatever assignee-scoped lists are on screen,
+ * not just the one that triggered it.
+ */
+export function useReassignTickets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ReassignInput) => reassignTickets(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ticketKeys.all }),
   });
 }
 

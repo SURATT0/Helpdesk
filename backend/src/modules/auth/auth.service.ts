@@ -16,6 +16,13 @@ export type PublicUser = {
   email: string;
   role: Role;
   teamId: number | null;
+  /**
+   * Whether routed work is currently sent to this person. Part of the session
+   * payload because every user may toggle their own away state, including
+   * requesters, who hold no `user:read` permission and so cannot find themselves
+   * in the user directory.
+   */
+  availableForAssignment: boolean;
 };
 
 export type Session = {
@@ -34,11 +41,19 @@ type UserRow = {
   teamId: number | null;
   customerId: number | null;
   passwordHash: string | null;
+  availableForAssignment: boolean;
   team: { department: string } | null;
 };
 
 function toPublicUser(u: UserRow): PublicUser {
-  return { id: u.id, name: u.name, email: u.email, role: u.role, teamId: u.teamId };
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    teamId: u.teamId,
+    availableForAssignment: u.availableForAssignment,
+  };
 }
 
 /** Sign an access token and mint + persist a fresh refresh token in a family. */

@@ -38,6 +38,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "user:write",
     "asset:write",
     "problem:write",
+    // Deciding who is responsible for a project's tickets is management work.
+    // Agents may read the project list (routing context) but not change owners.
+    "project:write",
   ],
   agent: [
     "ticket:read",

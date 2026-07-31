@@ -85,10 +85,41 @@ model Customer {
   tickets   Ticket[]
   assets    Asset[]
   problems  Problem[]
+  projects  Project[]
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@map("customers")
+}
+
+// A grouping BELOW the customer — the unit a caseworker is responsible for.
+//
+// Purely a ROUTING dimension: it decides who a new ticket lands on, and never
+// who may see what. Visibility remains the customer boundary enforced in
+// ticketScopeWhere, so putting a ticket in a project can never hide it from that
+// customer's other agents or managers. Same stance as Team/department.
+//
+// `owner` is the caseworker; `backupOwner` stands in when the owner is
+// unavailable (see User.availableForAssignment) — without it, "the owner is out"
+// would silently mean "nobody is assigned".
+model Project {
+  id            Int      @id @default(autoincrement())
+  name          String
+  customerId    Int      @map("customer_id")
+  customer      Customer @relation(fields: [customerId], references: [id])
+  ownerId       Int?     @map("owner_id")
+  owner         User?    @relation("ProjectOwner", fields: [ownerId], references: [id])
+  backupOwnerId Int?     @map("backup_owner_id")
+  backupOwner   User?    @relation("ProjectBackupOwner", fields: [backupOwnerId], references: [id])
+  members       User[]   @relation("ProjectMember")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Names are unique per customer, not globally: two customers may each run a
+  // project called "Migration" without colliding.
+  @@unique([customerId, name])
+  @@index([customerId])
+  @@map("projects")
 }
 
 model Team {
@@ -106,30 +137,41 @@ model Team {
 }
 
 model User {
-  id               Int                   @id @default(autoincrement())
-  name             String
-  email            String                @unique
-  role             Role
-  teamId           Int?                  @map("team_id")
-  team             Team?                 @relation(fields: [teamId], references: [id])
-  customerId       Int?                  @map("customer_id") // tenant; null = platform-wide (admin)
-  customer         Customer?             @relation(fields: [customerId], references: [id])
-  passwordHash     String?               @map("password_hash") // filled by the auth milestone
-  requestedTickets Ticket[]              @relation("TicketRequester")
-  assignedTickets  Ticket[]              @relation("TicketAssignee")
-  statusChanges    TicketStatusHistory[]
-  refreshTokens    RefreshToken[]
-  auditLogs        AuditLog[]
-  comments         Comment[]
-  notifications    Notification[]
-  attachments      Attachment[]
-  ticketReads      TicketRead[]
+  id                     Int                   @id @default(autoincrement())
+  name                   String
+  email                  String                @unique
+  role                   Role
+  teamId                 Int?                  @map("team_id")
+  team                   Team?                 @relation(fields: [teamId], references: [id])
+  customerId             Int?                  @map("customer_id") // tenant; null = platform-wide (admin)
+  customer               Customer?             @relation(fields: [customerId], references: [id])
+  // Project this user's tickets route through. Routing only — never visibility.
+  projectId              Int?                  @map("project_id")
+  project                Project?              @relation("ProjectMember", fields: [projectId], references: [id])
+  // Whether new work may be routed to this person. The "ผู้ดูแลไม่สะดวก" switch:
+  // false makes project routing skip them in favour of the backup owner, and is
+  // what a manager flips before handing off an existing queue. It does NOT
+  // restrict what they can see or do — an unavailable agent still works their
+  // open tickets.
+  availableForAssignment Boolean               @default(true) @map("available_for_assignment")
+  ownedProjects          Project[]             @relation("ProjectOwner")
+  backupForProjects      Project[]             @relation("ProjectBackupOwner")
+  passwordHash           String?               @map("password_hash") // filled by the auth milestone
+  requestedTickets       Ticket[]              @relation("TicketRequester")
+  assignedTickets        Ticket[]              @relation("TicketAssignee")
+  statusChanges          TicketStatusHistory[]
+  refreshTokens          RefreshToken[]
+  auditLogs              AuditLog[]
+  comments               Comment[]
+  notifications          Notification[]
+  attachments            Attachment[]
+  ticketReads            TicketRead[]
   // Tickets where this user is an *affected* party rather than the requester.
-  affectedTickets  TicketAffectedUser[]
-  ownedAssets      Asset[]               @relation("AssetOwner")
-  createdProblems  Problem[]             @relation("ProblemCreatedBy")
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
+  affectedTickets        TicketAffectedUser[]
+  ownedAssets            Asset[]               @relation("AssetOwner")
+  createdProblems        Problem[]             @relation("ProblemCreatedBy")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
 
   @@map("users")
 }

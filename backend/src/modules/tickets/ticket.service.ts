@@ -5,10 +5,14 @@ import {
 } from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
 import {
+  BadRequest,
+  Forbidden,
   IllegalTransition,
   NotFound,
   ReopenWindowExpired,
 } from "../../shared/errors";
+import { mayReceiveAssignment } from "./ticket.scope";
+import { ACTIVE_STATUSES } from "./ticket.validators";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REOPEN_WINDOW_MS = 30 * DAY_MS;
@@ -20,6 +24,29 @@ import {
   type Ticket,
   type TicketFilter,
 } from "./ticket.repository";
+
+/**
+ * Ceiling on one reassignment call. Not a silent truncation — the result reports
+ * how many tickets were left over so the caller can repeat the call and, more
+ * importantly, knows the queue was not fully drained.
+ */
+const REASSIGN_BATCH_LIMIT = 500;
+
+export type ReassignInput = {
+  fromUserId: number;
+  toUserId: number | null;
+  /** Defaults to ACTIVE_STATUSES — the work still in flight. */
+  statuses?: TicketStatus[];
+};
+
+export type ReassignResult = {
+  fromUserId: number;
+  toUserId: number | null;
+  statuses: TicketStatus[];
+  movedTicketIds: number[];
+  /** Tickets matching the filter that this call did not reach (see the cap). */
+  remaining: number;
+};
 
 export type ImportRow = {
   subject: string;
@@ -184,6 +211,69 @@ export const ticketService = {
     const updated = await ticketRepository.updateAssignee(id, assigneeId, user.id);
     if (!updated) throw NotFound(`Ticket #${id} not found`);
     return updated;
+  },
+
+  /**
+   * Move one person's whole queue to another (or back to unassigned) — the
+   * "agent is on leave / has left" case, where reassigning ticket by ticket is
+   * the wrong tool.
+   *
+   * Deliberately loops the single-ticket assign path rather than issuing one bulk
+   * UPDATE: every move must append its own audit row and notify the participants,
+   * and a set-based update would silently skip both.
+   *
+   * Two independent guards, because neither covers the other:
+   *   - which tickets move is bounded by `ticketScopeWhere` in the repository, so
+   *     a manager cannot reach another customer's tickets by passing a user id;
+   *   - who may receive them is `mayReceiveAssignment`, which a where-clause on
+   *     tickets cannot express.
+   */
+  async reassignAll(
+    input: ReassignInput,
+    user: AuthUser,
+  ): Promise<ReassignResult> {
+    if (input.toUserId === input.fromUserId) {
+      throw BadRequest("Source and target assignee are the same");
+    }
+
+    if (input.toUserId != null) {
+      const candidate = await ticketRepository.findAssignmentCandidate(
+        input.toUserId,
+      );
+      if (!candidate) throw BadRequest(`Unknown user #${input.toUserId}`);
+      if (!mayReceiveAssignment(user, candidate)) {
+        // Same message either way: telling a manager apart "that user is in
+        // another customer" from "that user is a requester" would leak the
+        // directory of tenants they cannot see.
+        throw Forbidden(`User #${input.toUserId} cannot be assigned tickets`);
+      }
+    }
+
+    const statuses = input.statuses ?? [...ACTIVE_STATUSES];
+    const { ids, remaining } = await ticketRepository.findIdsByAssignee(
+      input.fromUserId,
+      statuses,
+      user,
+      REASSIGN_BATCH_LIMIT,
+    );
+
+    const movedTicketIds: number[] = [];
+    for (const id of ids) {
+      const updated = await ticketRepository.updateAssignee(
+        id,
+        input.toUserId,
+        user.id,
+      );
+      if (updated) movedTicketIds.push(id);
+    }
+
+    return {
+      fromUserId: input.fromUserId,
+      toUserId: input.toUserId,
+      statuses,
+      movedTicketIds,
+      remaining,
+    };
   },
 
   async changePriority(
