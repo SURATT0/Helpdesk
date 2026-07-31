@@ -212,6 +212,211 @@ describe("tickets — auto-close (resolved > 72h)", () => {
   });
 });
 
+describe("tickets — SLA alert sweep", () => {
+  const HOUR = 60 * 60 * 1000;
+  const now = new Date();
+  const inHours = (h: number) => new Date(now.getTime() + h * HOUR);
+
+  /** Park every seeded ticket's clock far in the future so tests start quiet. */
+  async function quietAllClocks() {
+    await prisma.ticket.updateMany({ data: { dueAt: inHours(500) } });
+  }
+
+  const slaNotifications = (ticketId: number) =>
+    prisma.notification.findMany({
+      where: {
+        ticketId,
+        type: { in: ["ticket.sla_warning", "ticket.sla_breach"] },
+      },
+      orderBy: { id: "asc" },
+    });
+
+  beforeEach(quietAllClocks);
+
+  it("warns the assignee when the clock enters the warn window", async () => {
+    // 1042: Acme, in_progress, assigned to Dana.
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned).toBe(1);
+    expect(res.breached).toBe(0);
+
+    const notes = await slaNotifications(1042);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_warning");
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(notes[0].userId).toBe(dana.id);
+    expect(notes[0].message).toContain("#1042");
+  });
+
+  it("reports a breach once the clock is past due", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+    const notes = await slaNotifications(1042);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_breach");
+  });
+
+  // The sweep runs every 15 minutes over the same at-risk rows.
+  it("is idempotent across runs", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+    const first = await ticketService.sweepSlaAlerts(now);
+    expect(first.warned).toBe(1);
+
+    const second = await ticketService.sweepSlaAlerts(new Date(now.getTime() + 60_000));
+    expect(second.warned).toBe(0);
+    expect(await slaNotifications(1042)).toHaveLength(1);
+  });
+
+  // Being warned must not swallow the breach that follows.
+  it("still raises a breach after having warned", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    // Time passes; the same ticket is now overdue.
+    const later = new Date(now.getTime() + 2 * HOUR);
+    const res = await ticketService.sweepSlaAlerts(later);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.type)).toEqual([
+      "ticket.sla_warning",
+      "ticket.sla_breach",
+    ]);
+  });
+
+  it("ignores a paused (pending) ticket — the clock is stopped", async () => {
+    // 1039 is seeded pending.
+    await prisma.ticket.update({
+      where: { id: 1039 },
+      data: { dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned + res.breached).toBe(0);
+    expect(await slaNotifications(1039)).toHaveLength(0);
+  });
+
+  it("ignores resolved and closed tickets", async () => {
+    await prisma.ticket.update({
+      where: { id: 1031 }, // seeded resolved
+      data: { dueAt: inHours(-5) },
+    });
+    await prisma.ticket.update({
+      where: { id: 1035 },
+      data: { status: "closed", closedAt: now, dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned + res.breached).toBe(0);
+  });
+
+  // An unassigned ticket is exactly where a breach goes unnoticed, so it falls
+  // to that customer's managers rather than nobody.
+  it("falls back to the customer's managers when unassigned", async () => {
+    await prisma.ticket.update({
+      where: { id: 1044 }, // Acme, new, assignee null
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1044);
+    const morgan = await prisma.user.findUniqueOrThrow({
+      where: { email: "morgan.lee@acme.com" }, // Acme manager
+    });
+    expect(notes.map((n) => n.userId)).toContain(morgan.id);
+
+    // Not the other customer's manager, and not the requester.
+    const nadia = await prisma.user.findUniqueOrThrow({
+      where: { email: "nadia.kofi@acme.com" }, // Globex manager
+    });
+    expect(notes.map((n) => n.userId)).not.toContain(nadia.id);
+    const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1044 } });
+    expect(notes.map((n) => n.userId)).not.toContain(t.requesterId);
+  });
+
+  it("counts tickets, not notification rows, when several managers are told", async () => {
+    await prisma.ticket.update({
+      where: { id: 1044 },
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    // One ticket breached, however many managers received a row for it.
+    expect(res.breached).toBe(1);
+    expect((await slaNotifications(1044)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("never notifies the requester", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" }, // requester of 1042
+    });
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.userId)).not.toContain(marcus.id);
+  });
+
+  it("notifies the new assignee after a reassignment", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const ana = await prisma.user.findUniqueOrThrow({
+      where: { email: "ana.m@acme.com" },
+    });
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { assigneeId: ana.id },
+    });
+
+    const res = await ticketService.sweepSlaAlerts(new Date(now.getTime() + 60_000));
+    expect(res.warned).toBe(1);
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.userId)).toContain(ana.id);
+  });
+
+  it("does nothing when every clock is comfortable", async () => {
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res).toEqual({ warned: 0, breached: 0 });
+  });
+
+  it("surfaces the alert on the recipient's notification feed", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/notifications`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const types: string[] = res.body.data.map((n: { type: string }) => n.type);
+    expect(types).toContain("ticket.sla_breach");
+    expect(res.body.meta.unread).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("tickets — create", () => {
   it("creates a ticket (201) with the caller as requester", async () => {
     const dana = await login("dana.reyes@acme.com");

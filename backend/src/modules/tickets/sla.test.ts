@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { SLA_POLICY, computeDueAt, deriveSla } from "./sla";
+import {
+  SLA_ACTIVE_STATUSES,
+  SLA_DANGER_MS,
+  SLA_POLICY,
+  SLA_WARN_MS,
+  computeDueAt,
+  deriveSla,
+  slaAlertKind,
+} from "./sla";
 
 const H = 3_600_000;
 const now = new Date("2026-07-10T12:00:00.000Z");
@@ -81,5 +89,63 @@ describe("deriveSla", () => {
       slaDue: "0h 0m",
       slaState: "danger",
     });
+  });
+});
+
+describe("slaAlertKind", () => {
+  it("says nothing for a comfortable clock", () => {
+    expect(slaAlertKind(inHours(10), now)).toBeNull();
+  });
+
+  it("says nothing when there is no due date", () => {
+    expect(slaAlertKind(null, now)).toBeNull();
+  });
+
+  it("warns inside the warn window", () => {
+    expect(slaAlertKind(inHours(3), now)).toBe("warning");
+    expect(slaAlertKind(inHours(0.5), now)).toBe("warning");
+  });
+
+  it("reports a breach at and past the due time", () => {
+    expect(slaAlertKind(now, now)).toBe("breach");
+    expect(slaAlertKind(inHours(-2), now)).toBe("breach");
+  });
+
+  // The boundary is what the sweep's horizon query is built from, so pin it.
+  it("treats exactly the warn threshold as a warning", () => {
+    const atThreshold = new Date(now.getTime() + SLA_WARN_MS);
+    expect(slaAlertKind(atThreshold, now)).toBe("warning");
+    expect(slaAlertKind(new Date(atThreshold.getTime() + 1), now)).toBeNull();
+  });
+
+  // deriveSla and slaAlertKind must agree about what "at risk" means — one set
+  // of thresholds, two consumers.
+  it("aligns with the badge deriveSla shows", () => {
+    for (const hours of [-1, 0.5, 2, 3.9, 5, 10]) {
+      const dueAt = inHours(hours);
+      const badge = deriveSla("open", dueAt, now).slaState;
+      const alert = slaAlertKind(dueAt, now);
+      expect(alert != null).toBe(badge === "warn" || badge === "danger");
+    }
+  });
+
+  it("keeps danger tighter than warn", () => {
+    expect(SLA_DANGER_MS).toBeLessThan(SLA_WARN_MS);
+  });
+});
+
+describe("SLA_ACTIVE_STATUSES", () => {
+  // A paused or finished ticket must never raise an alert; the sweep relies on
+  // this list rather than repeating the status logic in a query.
+  it("excludes paused and finished statuses", () => {
+    expect(SLA_ACTIVE_STATUSES).not.toContain("pending");
+    expect(SLA_ACTIVE_STATUSES).not.toContain("resolved");
+    expect(SLA_ACTIVE_STATUSES).not.toContain("closed");
+  });
+
+  it("covers every status whose clock deriveSla treats as running", () => {
+    for (const status of SLA_ACTIVE_STATUSES) {
+      expect(deriveSla(status, inHours(2), now).slaState).toBe("warn");
+    }
   });
 });

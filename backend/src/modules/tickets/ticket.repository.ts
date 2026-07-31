@@ -7,8 +7,22 @@ import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
 import { projectRepository } from "../projects/project.repository";
 import { resolveRoutedAssignee } from "../projects/project.routing";
-import { computeDueAt, deriveSla, type SlaState } from "./sla";
+import {
+  computeDueAt,
+  deriveSla,
+  SLA_ACTIVE_STATUSES,
+  type SlaState,
+} from "./sla";
 import { ticketScopeWhere, type AssignmentCandidate } from "./ticket.scope";
+
+/** A ticket the SLA sweep may need to raise an alert for. */
+export type SlaRiskTicket = {
+  id: number;
+  subject: string;
+  dueAt: Date | null;
+  assigneeId: number | null;
+  customerId: number | null;
+};
 
 /** Recipients for a ticket event: requester + assignee, minus the actor. */
 function recipientsFor(
@@ -243,6 +257,44 @@ export const ticketRepository = {
   async findStaleResolved(cutoff: Date): Promise<number[]> {
     const rows = await prisma.ticket.findMany({
       where: { status: "resolved", resolvedAt: { lte: cutoff } },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * Tickets whose running SLA clock reaches `horizon` — i.e. already breached or
+   * close enough to warn about. Deliberately unscoped by viewer: this feeds the
+   * background sweep, which acts on behalf of the system, not a session. Only
+   * statuses whose clock is actually running are considered, so a `pending`
+   * ticket (paused) never raises an alert.
+   */
+  async findSlaRisk(horizon: Date): Promise<SlaRiskTicket[]> {
+    return prisma.ticket.findMany({
+      where: {
+        status: { in: [...SLA_ACTIVE_STATUSES] },
+        dueAt: { not: null, lte: horizon },
+      },
+      select: {
+        id: true,
+        subject: true,
+        dueAt: true,
+        assigneeId: true,
+        customerId: true,
+      },
+      orderBy: { dueAt: "asc" },
+    }) as Promise<SlaRiskTicket[]>;
+  },
+
+  /**
+   * Manager ids for a customer — the fallback recipients for an unassigned
+   * ticket's SLA alert, since there is no assignee to tell. Platform admins are
+   * excluded on purpose: they span every customer and would drown in noise.
+   */
+  async findManagerIds(customerId: number | null): Promise<number[]> {
+    if (customerId == null) return [];
+    const rows = await prisma.user.findMany({
+      where: { role: "manager", customerId },
       select: { id: true },
     });
     return rows.map((r) => r.id);
