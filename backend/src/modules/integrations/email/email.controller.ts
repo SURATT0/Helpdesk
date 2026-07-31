@@ -29,6 +29,9 @@ export const emailController = {
 
     const mail = normalizeInbound(req.body);
     const result = await emailService.ingest(mail);
-    res.status(201).json({ data: result });
+    // 201 only when a ticket was actually created; a reply threaded onto an
+    // existing ticket (or a retried delivery) is a 200 so providers that treat
+    // the two differently don't read a retry as new work.
+    res.status(result.outcome === "created" ? 201 : 200).json({ data: result });
   },
 };

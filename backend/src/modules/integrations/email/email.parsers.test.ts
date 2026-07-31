@@ -3,6 +3,9 @@ import {
   parseEmailAddress,
   derivePriority,
   normalizeInbound,
+  ensureTicketRef,
+  parseTicketRef,
+  ticketRef,
 } from "./email.parsers";
 
 describe("parseEmailAddress", () => {
@@ -64,6 +67,56 @@ describe("derivePriority", () => {
       priority: "medium",
       subject: "[billing] Invoice question",
     });
+  });
+});
+
+describe("ticket reference round-trip", () => {
+  it("stamps a ref onto a subject that has none", () => {
+    expect(ensureTicketRef("Re: Printer is down", 42)).toBe(
+      "[#42] Re: Printer is down",
+    );
+  });
+
+  it("does not duplicate a ref that is already correct", () => {
+    expect(ensureTicketRef("[#42] Re: Printer is down", 42)).toBe(
+      "[#42] Re: Printer is down",
+    );
+  });
+
+  it("adds the right ref when the subject quotes a different ticket", () => {
+    // A requester forwarding an old thread must not hijack ticket 7's mail.
+    expect(ensureTicketRef("[#7] old thread", 42)).toBe("[#42] [#7] old thread");
+  });
+
+  it("reads back whatever ensureTicketRef wrote", () => {
+    const subject = ensureTicketRef("Cannot print", 1234);
+    expect(parseTicketRef(subject)).toEqual({
+      ticketId: 1234,
+      subject: "Cannot print",
+    });
+  });
+
+  it("finds a ref anywhere in a mangled reply subject", () => {
+    expect(parseTicketRef("Re: Fwd: [#42] Printer is down")).toEqual({
+      ticketId: 42,
+      subject: "Re: Fwd: Printer is down",
+    });
+  });
+
+  it("returns no id when there is no ref", () => {
+    expect(parseTicketRef("  Printer is down  ")).toEqual({
+      ticketId: null,
+      subject: "Printer is down",
+    });
+  });
+
+  it("ignores a bracket tag that is not a ticket ref", () => {
+    expect(parseTicketRef("[urgent] Server on fire").ticketId).toBeNull();
+    expect(parseTicketRef("[#abc] nope").ticketId).toBeNull();
+  });
+
+  it("formats the tag consistently", () => {
+    expect(ticketRef(9)).toBe("[#9]");
   });
 });
 

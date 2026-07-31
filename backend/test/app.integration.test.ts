@@ -762,6 +762,192 @@ describe("email-to-ticket webhook", () => {
   });
 });
 
+// Threading is what keeps an email conversation inside the ticket instead of
+// spawning a new one per reply. Ticket 1042: requester Marcus Chen, assignee
+// Dana Reyes, customer Acme Corp.
+describe("email-to-ticket threading", () => {
+  const ENDPOINT = `${API}/integrations/email-inbound`;
+  const SECRET = "test-webhook-secret";
+
+  const post = (body: Record<string, unknown>) =>
+    request(app).post(ENDPOINT).set("x-webhook-secret", SECRET).send(body);
+
+  const commentsOn = (ticketId: number) =>
+    prisma.comment.findMany({
+      where: { ticketId },
+      orderBy: { id: "asc" },
+    });
+
+  it("threads a requester's reply onto the ticket named in the subject", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Still happening this morning.",
+    });
+
+    // 200, not 201 — nothing was created.
+    expect(res.status).toBe(200);
+    expect(res.body.data.outcome).toBe("threaded");
+    expect(res.body.data.ticketId).toBe(1042);
+
+    const after = await commentsOn(1042);
+    expect(after.length).toBe(before.length + 1);
+    const added = after[after.length - 1];
+    expect(added.body).toBe("Still happening this morning.");
+    expect(added.channel).toBe("email");
+    expect(added.internal).toBe(false);
+  });
+
+  it("threads by In-Reply-To even when the subject ref is gone", async () => {
+    // Stand in for an outbound agent reply whose Message-ID we recorded.
+    const outbound = await prisma.comment.create({
+      data: {
+        ticketId: 1042,
+        authorId: (
+          await prisma.user.findUniqueOrThrow({
+            where: { email: "dana.reyes@acme.com" },
+          })
+        ).id,
+        body: "Can you try the 4.2.1 client?",
+        internal: false,
+        messageId: "<agent-reply-1@deskly.test>",
+      },
+    });
+
+    const res = await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: VPN drops", // no [#id] at all
+      "in-reply-to": "<agent-reply-1@deskly.test>",
+      text: "Tried it, same result.",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.outcome).toBe("threaded");
+    expect(res.body.data.ticketId).toBe(1042);
+    expect(res.body.data.commentId).not.toBe(outbound.id);
+  });
+
+  it("walks the References chain when In-Reply-To is absent", async () => {
+    await prisma.comment.create({
+      data: {
+        ticketId: 1035,
+        authorId: (
+          await prisma.user.findUniqueOrThrow({
+            where: { email: "dana.reyes@acme.com" },
+          })
+        ).id,
+        body: "Checking your group membership.",
+        internal: false,
+        messageId: "<agent-reply-2@deskly.test>",
+      },
+    });
+
+    const res = await post({
+      from: "j.petrov@acme.com", // requester of 1035
+      subject: "Re: shared drive",
+      references: "<root@mail.test> <agent-reply-2@deskly.test>",
+      text: "Any update?",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.ticketId).toBe(1035);
+  });
+
+  // The security case: the subject line is sender-controlled, so guessing a
+  // ticket id must not get you into someone else's conversation.
+  it("opens a new ticket instead of threading for an unrelated requester", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "t.alvarez@acme.com", // Acme requester, nothing to do with 1042
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Let me in.",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.outcome).toBe("created");
+    expect(res.body.data.ticketId).not.toBe(1042);
+    expect(await commentsOn(1042)).toHaveLength(before.length);
+
+    // The quoted ref is stripped so the new ticket's title isn't misleading.
+    const created = await prisma.ticket.findUniqueOrThrow({
+      where: { id: res.body.data.ticketId },
+    });
+    expect(created.subject).not.toContain("#1042");
+  });
+
+  it("does not let another customer's user thread onto an Acme ticket", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "priya.shah@acme.com", // seeded address, but a Globex user
+      subject: "[#1042] give me the details",
+      text: "hello",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.outcome).toBe("created");
+    expect(await commentsOn(1042)).toHaveLength(before.length);
+  });
+
+  it("does not let an unknown sender thread onto a ticket", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "stranger@elsewhere.example",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "interesting",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.outcome).toBe("created");
+    expect(res.body.data.requesterCreated).toBe(true);
+    expect(await commentsOn(1042)).toHaveLength(before.length);
+  });
+
+  it("lets the assigned agent thread a reply in", async () => {
+    const res = await post({
+      from: "dana.reyes@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Escalating to Network Ops.",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.outcome).toBe("threaded");
+  });
+
+  it("ignores a redelivered message instead of double-posting", async () => {
+    const payload = {
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      "message-id": "<dup-1@mail.test>",
+      text: "Sending again in case you missed it.",
+    };
+
+    const first = await post(payload);
+    expect(first.status).toBe(200);
+    expect(first.body.data.outcome).toBe("threaded");
+    const afterFirst = await commentsOn(1042);
+
+    const second = await post(payload);
+    expect(second.status).toBe(200);
+    expect(second.body.data.outcome).toBe("duplicate");
+    expect(second.body.data.commentId).toBe(first.body.data.commentId);
+    expect(await commentsOn(1042)).toHaveLength(afterFirst.length);
+  });
+
+  it("shows a threaded email reply to the requester in the ticket thread", async () => {
+    await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Adding a screenshot next time.",
+    });
+
+    const marcus = await login("marcus.chen@acme.com");
+    const thread = await request(app)
+      .get(`${API}/tickets/1042/comments`)
+      .set(bearer(marcus));
+    expect(thread.status).toBe(200);
+    const emailed = (
+      thread.body.data as Array<{ body: string; channel: string }>
+    ).find((c) => c.body === "Adding a screenshot next time.");
+    expect(emailed?.channel).toBe("email");
+  });
+});
+
 describe("tickets — agent email reply", () => {
   it("records a public comment and reports the mail transport (201)", async () => {
     const dana = await login("dana.reyes@acme.com"); // assignee of 1042
@@ -789,6 +975,63 @@ describe("tickets — agent email reply", () => {
       .set(bearer(dana))
       .send({ to: "marcus.chen@acme.com", body: "Update inside." });
     expect(res.body.data.mail.subject).toContain("#1042");
+  });
+
+  // Without the ref a reply can't be matched back to its ticket, so a
+  // caller-supplied subject must not be able to drop it.
+  it("stamps the ticket ref onto a custom subject too", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({
+        to: "marcus.chen@acme.com",
+        subject: "About your VPN problem",
+        body: "Update inside.",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.mail.subject).toBe("[#1042] About your VPN problem");
+  });
+
+  // The data-leak guard: replies must come back to the helpdesk inbox, never to
+  // the agent's personal mailbox, or the rest of the thread leaves the ticket.
+  it("routes replies to the system inbox, not the agent's own address", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({ to: "marcus.chen@acme.com", body: "On it." })
+      .expect(201);
+
+    const entry = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "ticket.reply_email", entityId: 1042 },
+      orderBy: { id: "desc" },
+    });
+    const meta = entry.meta as { replyTo?: string | null };
+    expect(meta.replyTo).toBe("helpdesk@deskly.test");
+    expect(meta.replyTo).not.toBe("dana.reyes@acme.com");
+  });
+
+  it("round-trips: a reply to an agent's mail threads back onto the ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const sent = await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({ to: "marcus.chen@acme.com", body: "Can you retry?" })
+      .expect(201);
+
+    // The requester replies to exactly what they received.
+    const back = await request(app)
+      .post(`${API}/integrations/email-inbound`)
+      .set("x-webhook-secret", "test-webhook-secret")
+      .send({
+        from: "marcus.chen@acme.com",
+        subject: `Re: ${sent.body.data.mail.subject}`,
+        text: "Retried, no luck.",
+      });
+    expect(back.status).toBe(200);
+    expect(back.body.data.outcome).toBe("threaded");
+    expect(back.body.data.ticketId).toBe(1042);
   });
 
   it("forbids a requester from sending a reply (403)", async () => {

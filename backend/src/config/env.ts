@@ -120,6 +120,13 @@ export const env = {
     password: process.env.SMTP_PASSWORD || undefined,
     // Envelope From for outbound mail (falls back to the agent's address).
     from: process.env.SMTP_FROM || undefined,
+    // Where requester replies must land: the shared helpdesk inbox that feeds
+    // the inbound webhook / IMAP poller. Set as Reply-To on every agent reply so
+    // the conversation threads back onto the ticket instead of into the agent's
+    // personal mailbox. Falls back to SMTP_FROM; if NEITHER is set, replies go
+    // out with no reply address rather than exposing the agent's — see
+    // reply.service.ts and the validateEnv warning below.
+    replyTo: process.env.SMTP_REPLY_TO || undefined,
   },
 };
 
@@ -195,6 +202,16 @@ export function validateEnv(): { warnings: string[] } {
     if (env.redis.url && redisTls && !env.redis.tlsRejectUnauthorized) {
       warnings.push(
         "REDIS_TLS_REJECT_UNAUTHORIZED is false in production — the Redis server certificate is not verified, exposing the event bus to MITM. Only acceptable for a self-signed cert on a trusted network.",
+      );
+    }
+    // Outbound mail with no system reply address: agent replies then carry no
+    // Reply-To, so a requester hitting "reply" reaches nobody and the thread
+    // dies outside the ticket. Deliberately a warning, not a hard failure — the
+    // alternative (falling back to the agent's own address) is the data-leak
+    // this exists to prevent.
+    if (env.smtp.host && !env.smtp.replyTo && !env.smtp.from) {
+      warnings.push(
+        "SMTP_HOST is set but neither SMTP_REPLY_TO nor SMTP_FROM is — agent replies will be sent without a Reply-To, so requester replies cannot thread back onto the ticket. Set SMTP_REPLY_TO to the shared helpdesk inbox that feeds the inbound webhook.",
       );
     }
   }

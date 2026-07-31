@@ -43,6 +43,36 @@ export const commentService = {
   },
 
   /**
+   * File an inbound email onto a ticket as a public, email-channel comment.
+   *
+   * Takes a plain user id rather than an AuthUser because there is no session
+   * here — the webhook authenticates the *provider*, not the sender. Authorizing
+   * the sender against the ticket is `emailService`'s job (see
+   * `maySenderPostOnTicket`); by the time this runs that decision is made, which
+   * is why this deliberately skips the AuthUser row-scope check the other
+   * methods apply. Never call it from a request-scoped path.
+   */
+  async createFromEmail(input: {
+    ticketId: number;
+    authorId: number;
+    body: string;
+    messageId?: string;
+  }): Promise<CommentDto> {
+    const comment = await commentRepository.create({
+      ticketId: input.ticketId,
+      authorId: input.authorId,
+      body: input.body,
+      internal: false, // mail from a requester is never an internal note
+      channel: "email",
+      messageId: input.messageId,
+    });
+    // Same fan-out as a web comment, so an agent watching the ticket sees the
+    // email arrive live rather than on next refresh.
+    bus.emit("comment.created", { ticketId: input.ticketId, comment });
+    return comment;
+  },
+
+  /**
    * Authorize a real-time subscription to a ticket's comments. Applies the same
    * row scope as reads (404 if out of scope) and reports whether the subscriber
    * may receive internal notes.

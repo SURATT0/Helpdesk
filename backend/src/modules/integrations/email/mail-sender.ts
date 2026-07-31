@@ -28,7 +28,14 @@ class LogMailSender implements IMailSender {
   readonly transport = "log";
   async send(mail: OutboundMail): Promise<SendResult> {
     logger.info(
-      { to: mail.to, from: mail.from, subject: mail.subject },
+      {
+        to: mail.to,
+        from: mail.from,
+        // Logged so the reply-routing fix is verifiable in dev: this must be the
+        // helpdesk inbox, never the agent's own address.
+        replyTo: mail.replyTo ?? null,
+        subject: mail.subject,
+      },
       "outbound email (log transport — SMTP not configured)",
     );
     return { transport: this.transport };

@@ -21,6 +21,10 @@ export default defineConfig({
       // tests; route new email tickets to a category that exists in the seed.
       EMAIL_WEBHOOK_SECRET: "test-webhook-secret",
       EMAIL_DEFAULT_CATEGORY: "Email",
+      // The shared helpdesk inbox agent replies must point back at. Set here so
+      // the reply-routing assertions don't depend on the developer's own .env
+      // (SMTP_HOST stays unset, so mail still goes to the "log" transport).
+      SMTP_REPLY_TO: "helpdesk@deskly.test",
     },
     fileParallelism: false, // one shared DB — run files serially
     hookTimeout: 30_000,

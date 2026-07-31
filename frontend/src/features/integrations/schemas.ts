@@ -34,6 +34,8 @@ export const emailStatusSchema = z.object({
   webhookEnabled: z.boolean(),
   endpoint: z.string(),
   imapConfigured: z.boolean(),
+  /** False = agent replies carry no Reply-To, so replies can't thread back. */
+  replyToConfigured: z.boolean(),
 });
 export const emailStatusEnvelope = z.object({ data: emailStatusSchema });
 

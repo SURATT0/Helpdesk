@@ -68,6 +68,10 @@ export const commentRepository = {
     authorId: number;
     body: string;
     internal: boolean;
+    /** Defaults to `web`; `email` marks a message threaded in from the mailbox. */
+    channel?: "web" | "email";
+    /** RFC 5322 Message-ID. Unique — pass it to make ingestion idempotent. */
+    messageId?: string;
   }): Promise<CommentDto> {
     return prisma.$transaction(async (tx) => {
       const created = await tx.comment.create({ data, include: commentInclude });
@@ -77,7 +81,11 @@ export const commentRepository = {
           action: "comment.create",
           entity: "comment",
           entityId: created.id,
-          meta: { ticketId: data.ticketId, internal: data.internal },
+          meta: {
+            ticketId: data.ticketId,
+            internal: data.internal,
+            channel: data.channel ?? "web",
+          },
         },
         tx,
       );
@@ -108,6 +116,16 @@ export const commentRepository = {
 
       return toDto(created);
     });
+  },
+
+  /**
+   * Record the Message-ID of the mail we just sent for a comment, so a reply
+   * carrying it as In-Reply-To threads back onto this ticket. Best-effort: the
+   * comment is already saved, and a failure here only costs header-based
+   * matching, which the `[#id]` subject tag still covers.
+   */
+  async attachMessageId(id: number, messageId: string): Promise<void> {
+    await prisma.comment.update({ where: { id }, data: { messageId } });
   },
 
   /** Advance a user's read pointer for a ticket (never moves backwards). */

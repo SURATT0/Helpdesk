@@ -147,6 +147,8 @@ const en: Dict = {
   "integrations.email.disabled": "Disabled",
   "integrations.email.enableHint":
     "Set EMAIL_WEBHOOK_SECRET in the server .env, then point your provider's inbound-parse route at this endpoint.",
+  "integrations.email.replyToWarning":
+    "Agent replies are going out without a reply address, so requester replies cannot come back onto the ticket. Set SMTP_REPLY_TO to the same inbox that feeds this endpoint.",
 
   "kb.search": "Search articles…",
   "kb.all": "All",
@@ -544,6 +546,8 @@ const th: Dict = {
   "integrations.email.disabled": "ปิดอยู่",
   "integrations.email.enableHint":
     "ตั้งค่า EMAIL_WEBHOOK_SECRET ใน .env ของเซิร์ฟเวอร์ แล้วชี้ inbound-parse ของผู้ให้บริการมาที่ endpoint นี้",
+  "integrations.email.replyToWarning":
+    "อีเมลตอบกลับของเจ้าหน้าที่ถูกส่งออกโดยไม่มีที่อยู่สำหรับตอบกลับ ทำให้ผู้แจ้งตอบกลับเข้าตั๋วเดิมไม่ได้ ตั้งค่า SMTP_REPLY_TO ให้เป็น inbox เดียวกับที่ส่งเข้า endpoint นี้",
 
   "kb.search": "ค้นหาบทความ…",
   "kb.all": "ทั้งหมด",

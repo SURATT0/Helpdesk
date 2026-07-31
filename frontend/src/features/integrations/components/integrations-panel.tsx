@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Mail, Plug, RefreshCw } from "lucide-react";
+import { AlertTriangle, Mail, Plug, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api-client";
@@ -195,6 +195,15 @@ export function IntegrationsPanel() {
               {!email.webhookEnabled ? (
                 <div className="mt-1 text-[11.5px] text-faint">
                   {t("integrations.email.enableHint")}
+                </div>
+              ) : null}
+              {/* A missing Reply-To silently breaks the inbound loop: mail goes
+                  out, but nothing can come back. Surfaced as a warning rather
+                  than hidden in the server logs. */}
+              {!email.replyToConfigured ? (
+                <div className="mt-1.5 flex items-start gap-1.5 text-[11.5px] font-medium text-[#b45309]">
+                  <AlertTriangle size={13} className="mt-px flex-none" />
+                  <span>{t("integrations.email.replyToWarning")}</span>
                 </div>
               ) : null}
             </div>
