@@ -13,6 +13,7 @@ import {
 } from "../../shared/errors";
 import { notificationRepository } from "../notifications/notification.repository";
 import { mayReceiveAssignment } from "./ticket.scope";
+import { resolvePeriod, type Granularity, type Period } from "./history.period";
 import { formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
 import { ACTIVE_STATUSES } from "./ticket.validators";
 
@@ -86,6 +87,37 @@ export type ImportResult = {
 export const ticketService = {
   list(filter: TicketFilter, user: AuthUser): Promise<Ticket[]> {
     return ticketRepository.findMany(filter, user);
+  },
+
+  /**
+   * The closed-ticket history log for one calendar period. Resolves the window
+   * here rather than accepting raw `from`/`to` from the client so that "this
+   * month" means one thing across the app, and echoes the resolved period back
+   * so the client can label it and drive prev/next without repeating the maths.
+   */
+  async closedHistory(
+    input: {
+      granularity: Granularity;
+      anchor?: Date;
+      limit: number;
+      offset: number;
+    },
+    user: AuthUser,
+  ): Promise<{ items: Ticket[]; total: number; period: Period }> {
+    const period = resolvePeriod(
+      input.granularity,
+      input.anchor ?? new Date(),
+    );
+    const { items, total } = await ticketRepository.findClosedInPeriod(
+      {
+        start: period.start,
+        end: period.end,
+        limit: input.limit,
+        offset: input.offset,
+      },
+      user,
+    );
+    return { items, total, period };
   },
 
   create(

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Archive,
   LayoutDashboard,
   Ticket,
   Users,
@@ -35,6 +36,9 @@ const NAV: Array<{
 }> = [
   { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   { href: "/tickets", key: "nav.tickets", icon: Ticket },
+  // No `roles`: the closed-ticket log is a ticket read, so repository row
+  // scoping already narrows it — a requester sees their own closed tickets.
+  { href: "/history", key: "nav.history", icon: Archive },
   { href: "/users", key: "nav.users", icon: Users },
   { href: "/projects", key: "nav.projects", icon: FolderKanban },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },

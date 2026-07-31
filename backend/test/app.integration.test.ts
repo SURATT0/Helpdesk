@@ -108,6 +108,135 @@ describe("tickets — RBAC row scoping (multi-tenant)", () => {
   });
 });
 
+describe("tickets — closed history log", () => {
+  /**
+   * The seed closes nothing (1031 ships as `resolved`), so each case arranges
+   * its own closures. Timestamps are built with the LOCAL date constructor
+   * because period bounds are server-local by design — UTC literals would make
+   * these assertions pass only in UTC.
+   */
+  const now = new Date();
+  const inThisMonth = new Date(now.getFullYear(), now.getMonth(), 15, 12);
+  const inLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15, 12);
+
+  const close = (id: number, closedAt: Date) =>
+    prisma.ticket.update({
+      where: { id },
+      data: { status: "closed", closedAt },
+    });
+
+  const idsOf = (res: { body: { data: { id: number }[] } }) =>
+    res.body.data.map((t) => t.id);
+
+  const get = (token: string, qs = "") =>
+    request(app).get(`${API}/tickets/closed${qs}`).set(bearer(token));
+
+  it("returns tickets closed in the current period and excludes older ones", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=month");
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toContain(1031);
+    expect(idsOf(res)).not.toContain(1029);
+    expect(res.body.meta.total).toBe(1);
+    expect(res.body.meta.period.granularity).toBe("month");
+    expect(res.body.meta.period.isCurrent).toBe(true);
+  });
+
+  it("steps to the previous period with the anchor it was handed", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const current = await get(dana, "?granularity=month");
+    const older = await get(
+      dana,
+      `?granularity=month&anchor=${current.body.meta.period.prevAnchor}`,
+    );
+
+    expect(older.status).toBe(200);
+    expect(idsOf(older)).toEqual([1029]);
+    expect(older.body.meta.period.isCurrent).toBe(false);
+  });
+
+  it("widens to the year, holding both months", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=year");
+    // Guard: in January the previous month falls in the previous YEAR, so only
+    // assert the pair together when both sit inside one calendar year.
+    if (inLastMonth.getFullYear() === inThisMonth.getFullYear()) {
+      expect(idsOf(res)).toEqual(expect.arrayContaining([1031, 1029]));
+    } else {
+      expect(idsOf(res)).toContain(1031);
+      expect(idsOf(res)).not.toContain(1029);
+    }
+  });
+
+  it("excludes a reopened ticket that still carries its old closedAt", async () => {
+    // `closedAt` is never cleared — the 30-day reopen check reads it back — so
+    // the status is what keeps a reopened ticket out of the log.
+    await close(1031, inThisMonth);
+    await prisma.ticket.update({ where: { id: 1031 }, data: { status: "open" } });
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=month");
+    expect(idsOf(res)).not.toContain(1031);
+    expect(res.body.meta.total).toBe(0);
+  });
+
+  it("scopes the log per role, exactly like the live ticket list", async () => {
+    await close(1031, inThisMonth); // Acme, requested by A. Lindqvist
+    await close(2001, inThisMonth); // Globex — another customer
+
+    const dana = await login("dana.reyes@acme.com"); // agent, Acme
+    expect(idsOf(await get(dana, "?granularity=month"))).toEqual([1031]);
+
+    const lindqvist = await login("a.lindqvist@acme.com"); // requester, owns 1031
+    expect(idsOf(await get(lindqvist, "?granularity=month"))).toEqual([1031]);
+
+    const marcus = await login("marcus.chen@acme.com"); // requester, owns neither
+    expect(idsOf(await get(marcus, "?granularity=month"))).toEqual([]);
+
+    const sam = await login("sam.rivera@acme.com"); // platform admin
+    expect(idsOf(await get(sam, "?granularity=month"))).toEqual(
+      expect.arrayContaining([1031, 2001]),
+    );
+  });
+
+  it("paginates within the period", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inThisMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const page = await get(dana, "?granularity=month&limit=1&offset=0");
+    expect(page.body.data).toHaveLength(1);
+    expect(page.body.meta.total).toBe(2);
+    expect(page.body.meta.returned).toBe(1);
+
+    const next = await get(dana, "?granularity=month&limit=1&offset=1");
+    expect(idsOf(next)).not.toEqual(idsOf(page));
+  });
+
+  it("rejects an unknown granularity with 400", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await get(dana, "?granularity=decade").expect(400);
+  });
+
+  it("requires authentication", async () => {
+    await request(app).get(`${API}/tickets/closed`).expect(401);
+  });
+
+  it("does not shadow the /tickets/:id route", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(`${API}/tickets/1042`).set(bearer(dana)).expect(200);
+  });
+});
+
 describe("tickets — assignee identity and filter", () => {
   it("exposes assigneeId alongside the display name", async () => {
     const dana = await login("dana.reyes@acme.com");

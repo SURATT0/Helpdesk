@@ -29,6 +29,22 @@ export const listTicketsQuery = z.object({
   assigneeId: assigneeFilter.optional(),
 });
 
+/**
+ * Query for the closed-ticket history log.
+ *
+ * `granularity` picks the window size and `anchor` is any date inside the wanted
+ * window — the client navigates by sending back the `prevAnchor`/`nextAnchor`
+ * the server handed it, so calendar arithmetic stays in `history.period.ts`
+ * alone and the client never has to know how long a month is. An absent anchor
+ * means the period containing now, which is what the page opens on.
+ */
+export const closedHistoryQuery = z.object({
+  granularity: z.enum(["week", "month", "year"]).default("month"),
+  anchor: z.coerce.date().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 /** Statuses a reassignment touches by default: the work still in flight. */
 export const ACTIVE_STATUSES = [
   "new",
