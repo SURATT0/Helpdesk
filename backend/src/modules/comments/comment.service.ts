@@ -86,8 +86,11 @@ export const commentService = {
     if (!comment || comment.deletedAt) throw NotFound("Comment not found");
 
     const isOwner = comment.authorId === user.id;
-    const isManager = user.role === "admin" || user.role === "manager";
-    if (!isOwner && !isManager) throw Forbidden("Cannot delete this comment");
+    // Deleting someone else's comment is moderation, so it stays at the top tier —
+    // the same line as before, when it was manager-or-admin. An admin working the
+    // case can still delete their own.
+    const mayModerate = user.role === "super_admin";
+    if (!isOwner && !mayModerate) throw Forbidden("Cannot delete this comment");
 
     await ticketService.get(comment.ticketId, user); // ticket must be in scope
     await commentRepository.softDelete(id, user.id);

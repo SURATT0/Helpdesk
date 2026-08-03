@@ -46,12 +46,12 @@ const NAV: Array<{
     href: "/projects",
     key: "nav.projects",
     icon: FolderKanban,
-    roles: ["admin", "manager"],
+    roles: ["super_admin"],
   },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
   // Mirrors the server's audit:read grant (manager + admin).
-  { href: "/audit", key: "nav.audit", icon: ScrollText, roles: ["admin", "manager"] },
+  { href: "/audit", key: "nav.audit", icon: ScrollText, roles: ["super_admin"] },
   { href: "/permissions", key: "nav.permissions", icon: ShieldCheck },
   { href: "/settings", key: "nav.settings", icon: Settings },
 ];

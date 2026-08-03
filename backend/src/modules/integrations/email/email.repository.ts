@@ -42,10 +42,10 @@ export const emailRepository = {
    * created user has no password (they never sign in — they only correspond by
    * email), matching the nullable password_hash column.
    *
-   * `customerId` is required for the create path: a requester with no customer
-   * produces a ticket with no customer, and `ticketScopeWhere` matches staff on
-   * `customerId` equality — so such a ticket is invisible to every agent and
-   * manager, and only a platform admin would ever find it.
+   * `customerId` is required for the create path: a user with no customer produces
+   * a ticket with no customer, and `ticketScopeWhere` matches staff on `customerId`
+   * equality — so such a ticket is invisible to all customer-bound staff, and only
+   * a platform-wide super admin would ever find it.
    */
   async findOrCreateRequester(
     email: string,
@@ -62,7 +62,7 @@ export const emailRepository = {
       data: {
         name: name?.trim() || email.split("@")[0],
         email: email.toLowerCase(),
-        role: "requester",
+        role: "user",
         passwordHash: null,
         customerId,
       },

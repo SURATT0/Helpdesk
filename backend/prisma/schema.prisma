@@ -31,11 +31,14 @@ enum Priority {
   critical
 }
 
+// Three tiers, highest first. `super_admin` covers what used to be split between
+// manager and admin; which customers one reaches is decided by `users.customerId`
+// (null = the whole platform), NOT by the role name — collapsing the two roles
+// without that would have handed every former manager every other tenant's data.
 enum Role {
+  super_admin
   admin
-  manager
-  agent
-  requester
+  user
 }
 
 // Configuration-item kinds for the asset registry. Deliberately coarse — this is

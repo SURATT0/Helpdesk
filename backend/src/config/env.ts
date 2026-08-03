@@ -104,7 +104,7 @@ export const env = {
     // `defaultCustomer` names the tenant an unknown sender is filed under. It has
     // NO fallback on purpose: the customer is the isolation boundary, so guessing
     // it would either leak mail into someone else's tenant or (with no customer
-    // at all) create a ticket that no agent or manager can see — `ticketScopeWhere`
+    // at all) create a ticket that no customer-bound staff can see — `ticketScopeWhere`
     // matches staff on `customerId` equality, which never matches null. Unset
     // means unknown senders are refused rather than filed invisibly.
     email: {

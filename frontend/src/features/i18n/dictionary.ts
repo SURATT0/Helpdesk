@@ -22,10 +22,9 @@ const en: Dict = {
   "sidebar.view.pending": "Pending on requester",
   "sidebar.signOut": "Sign out",
 
+  "role.super_admin": "Super Admin",
   "role.admin": "Admin",
-  "role.manager": "Manager",
-  "role.agent": "Agent",
-  "role.requester": "Requester",
+  "role.user": "User",
 
   "perm.yourAccess": "Your access",
   "perm.yourRole": "You're signed in as {role}",
@@ -44,12 +43,13 @@ const en: Dict = {
   "cap.viewUsers": "View user directory",
   "cap.manageUsers": "Manage users & roles",
   "cap.routingProjects": "View & manage routing projects",
+  "cap.audit": "Read the activity log",
   "perm.userScopeNote":
-    "Managers view and manage users only within their own customer; admins manage everyone across all customers.",
-  "scope.requester": "Only tickets you opened",
-  "scope.agent": "All tickets in your customer (every department)",
-  "scope.manager": "All tickets in your customer (every department)",
-  "scope.admin": "All tickets (every customer)",
+    "A super admin who belongs to a customer manages only that customer's users. A super admin with no customer of their own is platform-wide and manages everyone.",
+  "scope.user": "Only tickets you opened",
+  "scope.admin": "All tickets in your customer (every department)",
+  "scope.super_admin":
+    "All tickets in your customer — or every customer, if you belong to none",
 
   "topbar.search": "Search tickets, users, articles…",
   "topbar.newTicket": "New ticket",
@@ -155,7 +155,7 @@ const en: Dict = {
     "Set EMAIL_WEBHOOK_SECRET in the server .env, then point your provider's inbound-parse route at this endpoint.",
 
   "audit.explainer":
-    "Every change made through Deskly is recorded here — who did it, what changed, and when. The trail is append-only: entries are never edited or deleted. Managers see their own organisation's activity; admins see every customer.",
+    "Every change made through Deskly is recorded here — who did it, what changed, and when. The trail is append-only: entries are never edited or deleted. A super admin sees their own organisation's activity; one with no customer of their own sees every customer.",
   "audit.col.when": "When",
   "audit.col.action": "Action",
   "audit.col.actor": "Who",
@@ -172,7 +172,7 @@ const en: Dict = {
   "audit.next": "Next",
   "audit.forbidden": "You don't have access to the activity log",
   "audit.forbiddenNote":
-    "The activity log is available to managers and admins. Ask an administrator if you need access.",
+    "The activity log is available to super admins. Ask an administrator if you need access.",
 
   "closedLog.explainer":
     "Closed tickets, kept as a permanent log — tickets are closed, never deleted. Pick a week, month, or year, then step through the periods or choose one from the list to jump straight to it. You see the same tickets you can see anywhere else in Deskly.",
@@ -492,7 +492,7 @@ const en: Dict = {
     "New tickets from a project's members go to its caseworker — or to the backup when the caseworker is away. Projects decide who work is assigned to, never who can see it.",
   "projects.forbidden": "You don't have access to routing projects",
   "projects.forbiddenNote":
-    "Projects decide who a customer's incoming tickets are assigned to, so they're available to managers and admins. Ask an administrator if you need access.",
+    "Projects decide who a customer's incoming tickets are assigned to, so they're available to super admins. Ask an administrator if you need access.",
   "projects.new": "New project",
   "projects.create": "Create",
   "projects.saving": "Saving…",
@@ -547,10 +547,9 @@ const th: Dict = {
   "sidebar.view.pending": "รอผู้แจ้ง",
   "sidebar.signOut": "ออกจากระบบ",
 
+  "role.super_admin": "ผู้ดูแลระบบสูงสุด",
   "role.admin": "ผู้ดูแลระบบ",
-  "role.manager": "ผู้จัดการ",
-  "role.agent": "เจ้าหน้าที่",
-  "role.requester": "ผู้แจ้ง",
+  "role.user": "ผู้ใช้",
 
   "perm.yourAccess": "สิทธิของคุณ",
   "perm.yourRole": "คุณเข้าสู่ระบบเป็น{role}",
@@ -569,12 +568,13 @@ const th: Dict = {
   "cap.viewUsers": "ดูรายชื่อผู้ใช้",
   "cap.manageUsers": "จัดการผู้ใช้ & บทบาท",
   "cap.routingProjects": "ดูและจัดการโปรเจกต์สำหรับจ่ายงาน",
+  "cap.audit": "อ่านประวัติการใช้งาน",
   "perm.userScopeNote":
-    "ผู้จัดการดูและจัดการผู้ใช้เฉพาะในลูกค้าของตัวเอง; ผู้ดูแลระบบจัดการได้ทุกคนทุกลูกค้า",
-  "scope.requester": "เฉพาะตั๋วที่คุณเปิด",
-  "scope.agent": "ตั๋วทั้งหมดในลูกค้าของคุณ (ทุกแผนก)",
-  "scope.manager": "ตั๋วทั้งหมดในลูกค้าของคุณ (ทุกแผนก)",
-  "scope.admin": "ตั๋วทั้งหมด (ทุกลูกค้า)",
+    "ผู้ดูแลระบบสูงสุดที่สังกัดลูกค้าใด จะจัดการผู้ใช้เฉพาะของลูกค้านั้น · ถ้าไม่สังกัดลูกค้าใดเลยจะเป็นระดับแพลตฟอร์ม จัดการได้ทุกคน",
+  "scope.user": "เฉพาะตั๋วที่คุณเปิด",
+  "scope.admin": "ตั๋วทั้งหมดในลูกค้าของคุณ (ทุกแผนก)",
+  "scope.super_admin":
+    "ตั๋วทั้งหมดในลูกค้าของคุณ — หรือทุกลูกค้า ถ้าคุณไม่สังกัดลูกค้าใด",
 
   "topbar.search": "ค้นหาตั๋ว ผู้ใช้ บทความ…",
   "topbar.newTicket": "สร้างตั๋ว",
@@ -697,7 +697,7 @@ const th: Dict = {
   "audit.next": "ถัดไป",
   "audit.forbidden": "คุณไม่มีสิทธิ์เข้าถึงประวัติการใช้งาน",
   "audit.forbiddenNote":
-    "ประวัติการใช้งานเปิดให้ผู้จัดการและผู้ดูแลระบบ หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
+    "ประวัติการใช้งานเปิดให้ผู้ดูแลระบบสูงสุด หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
 
   "closedLog.explainer":
     "ตั๋วงานที่ปิดแล้วจะถูกเก็บเป็นประวัติถาวร — ตั๋วงานถูกปิด ไม่ถูกลบ เลือกดูเป็นรายสัปดาห์ รายเดือน หรือรายปี แล้วเลื่อนดูช่วงก่อนหน้า หรือกดเลือกช่วงจากรายการเพื่อข้ามไปเลยก็ได้ คุณจะเห็นเฉพาะตั๋วงานที่คุณมีสิทธิ์เห็นเช่นเดียวกับหน้าอื่น",
@@ -1018,7 +1018,7 @@ const th: Dict = {
     "ตั๋วใหม่จากสมาชิกของโปรเจกต์จะไปที่ผู้ดูแล — หรือไปที่ผู้ดูแลสำรองเมื่อผู้ดูแลไม่สะดวก โปรเจกต์กำหนดว่างานถูก assign ให้ใคร ไม่ได้กำหนดว่าใครมองเห็นได้",
   "projects.forbidden": "คุณไม่มีสิทธิ์เข้าถึงโปรเจกต์สำหรับจ่ายงาน",
   "projects.forbiddenNote":
-    "โปรเจกต์กำหนดว่าตั๋วที่เข้ามาของลูกค้าจะถูก assign ให้ใคร จึงเปิดให้ผู้จัดการและผู้ดูแลระบบ หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
+    "โปรเจกต์กำหนดว่าตั๋วที่เข้ามาของลูกค้าจะถูก assign ให้ใคร จึงเปิดให้ผู้ดูแลระบบสูงสุด หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
   "projects.new": "เพิ่มโปรเจกต์",
   "projects.create": "สร้าง",
   "projects.saving": "กำลังบันทึก…",

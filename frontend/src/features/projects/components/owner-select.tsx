@@ -34,7 +34,7 @@ export function OwnerSelect({
   onChange: (userId: number | null) => void;
 }) {
   const { t } = useI18n();
-  const assignable = users.filter((u) => u.role !== "requester");
+  const assignable = users.filter((u) => u.role !== "user");
 
   return (
     <select

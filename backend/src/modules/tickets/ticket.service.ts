@@ -420,13 +420,13 @@ export const ticketService = {
     );
 
     // One lookup per distinct customer, not per ticket.
-    const managersByCustomer = new Map<number, number[]>();
-    const managersFor = async (customerId: number | null) => {
+    const escalationByCustomer = new Map<number, number[]>();
+    const escalateTo = async (customerId: number | null) => {
       if (customerId == null) return [];
-      const cached = managersByCustomer.get(customerId);
+      const cached = escalationByCustomer.get(customerId);
       if (cached) return cached;
-      const ids = await ticketRepository.findManagerIds(customerId);
-      managersByCustomer.set(customerId, ids);
+      const ids = await ticketRepository.findCustomerSuperAdminIds(customerId);
+      escalationByCustomer.set(customerId, ids);
       return ids;
     };
 
@@ -447,7 +447,7 @@ export const ticketService = {
       const recipients =
         ticket.assigneeId != null
           ? [ticket.assigneeId]
-          : await managersFor(ticket.customerId);
+          : await escalateTo(ticket.customerId);
 
       let notifiedForThisTicket = false;
       for (const userId of new Set(recipients)) {

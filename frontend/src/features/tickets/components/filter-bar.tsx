@@ -115,12 +115,12 @@ export function FilterBar() {
   // ever sees their own tickets — an assignee facet would be meaningless there.
   const isStaff =
     user != null &&
-    (user.role === "agent" || user.role === "manager" || user.role === "admin");
+    user.role !== "user";
   const { data: users = [] } = useUsers({ enabled: isStaff });
 
   // Anyone who can hold a queue. Requesters raise tickets, they don't own them.
   const assignable = React.useMemo(
-    () => users.filter((u) => u.role !== "requester"),
+    () => users.filter((u) => u.role !== "user"),
     [users],
   );
   const nameById = React.useMemo(

@@ -28,7 +28,7 @@ import {
 } from "./queries";
 import type { Attachment } from "./schemas";
 
-const MANAGE_ROLES = new Set(["admin", "manager", "agent"]);
+const MANAGE_ROLES = new Set(["super_admin", "admin"]);
 
 /** Trash button with a two-step inline confirm (no blocking dialog). */
 function DeleteButton({

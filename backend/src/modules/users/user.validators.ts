@@ -6,7 +6,7 @@ export const userIdParam = z.object({
 
 export const updateUserBody = z
   .object({
-    role: z.enum(["admin", "manager", "agent", "requester"]).optional(),
+    role: z.enum(["super_admin", "admin", "user"]).optional(),
     teamId: z.number().int().positive().nullable().optional(),
     /**
      * Project this user's tickets route through; `null` detaches them. Routing

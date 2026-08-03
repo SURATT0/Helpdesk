@@ -38,7 +38,7 @@ export function HandoverQueueModal({
   const [error, setError] = React.useState<string | null>(null);
 
   const eligible = React.useMemo(
-    () => candidates.filter((u) => u.id !== from.id && u.role !== "requester"),
+    () => candidates.filter((u) => u.id !== from.id && u.role !== "user"),
     [candidates, from.id],
   );
 

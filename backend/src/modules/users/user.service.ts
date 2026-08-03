@@ -1,5 +1,5 @@
 import { Forbidden, NotFound } from "../../shared/errors";
-import type { AuthUser } from "../../shared/auth";
+import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import type { Role } from "../../shared/domain";
 import { userRepository, type UserDto } from "./user.repository";
 
@@ -24,13 +24,17 @@ export const userService = {
     },
     actor: AuthUser,
   ): Promise<UserDto> {
-    // Only an admin may grant the admin role (no privilege escalation by a
-    // department manager editing within their scope).
-    if (data.role === "admin" && actor.role !== "admin") {
-      throw Forbidden("Only an admin can grant the admin role");
+    // Granting the top role stays with the platform, not with a single customer's
+    // super_admin. This is the same rule as before under the old names — it was
+    // "only an admin may grant admin", and the old admin was precisely the
+    // platform-wide principal. Keying on reach rather than role name is what keeps
+    // it that way now that a customer's own manager shares the super_admin role:
+    // otherwise they could promote themselves past their own tenant.
+    if (data.role === "super_admin" && !isPlatformWide(actor)) {
+      throw Forbidden("Only a platform super admin can grant the super admin role");
     }
-    // Scope is enforced in the repository (managers → own department only); an
-    // out-of-scope target 404s.
+    // Scope is enforced in the repository (customer-bound actors → their own
+    // customer only); an out-of-scope target 404s.
     const user = await userRepository.update(id, data, actor);
     if (!user) throw NotFound(`User #${id} not found`);
     return user;

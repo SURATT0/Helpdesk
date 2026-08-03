@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 type View = "list" | "board";
 
 // Roles that may bulk-import tickets (mirrors the backend `ticket:import` grant).
-const CAN_IMPORT = new Set(["admin", "manager", "agent"]);
+const CAN_IMPORT = new Set(["super_admin", "admin"]);
 
 export default function TicketsPage() {
   const { t } = useI18n();

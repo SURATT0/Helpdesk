@@ -54,10 +54,26 @@ test("a manager reaches routing projects from the nav", async ({ page }) => {
   ).toBeHidden();
 });
 
-test("a requester sees their own role flagged", async ({ page }) => {
-  await loginAs(page, "marcus.chen@acme.com"); // requester
+test("a user sees their own role flagged", async ({ page }) => {
+  await loginAs(page, "marcus.chen@acme.com"); // user — the bottom tier
   await page.goto("/permissions");
   await expect(page.getByText("Your access")).toBeVisible();
-  // Requester scope line is present.
+  // The user scope line is present.
   await expect(page.getByText("Only tickets you opened")).toBeVisible();
+});
+
+test("the matrix names the three tiers and holds role apart from reach", async ({
+  page,
+}) => {
+  await login(page); // admin
+  await page.goto("/permissions");
+
+  for (const label of ["User", "Admin", "Super Admin"]) {
+    await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
+  }
+  // The top row's reach depends on more than the role, so the copy has to say so —
+  // a super admin who belongs to a customer stays inside it.
+  await expect(
+    page.getByText(/or every customer, if you belong to none/),
+  ).toBeVisible();
 });

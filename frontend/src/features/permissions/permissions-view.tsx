@@ -10,29 +10,38 @@ import type { Role } from "@/features/auth/schemas";
 // Columns in ascending privilege. Kept in sync with the backend's
 // ROLE_PERMISSIONS + repository row-scoping — this page documents what the API
 // actually enforces (verified by the RBAC integration tests).
-const ROLES: Role[] = ["requester", "agent", "manager", "admin"];
+const ROLES: Role[] = ["user", "admin", "super_admin"];
 
-// A capability → the roles that hold it. Mirrors the enforced permission checks:
-// ticket:write (reply/status/notes/assign), ticket:import, user:read, user:write.
+// A capability → the roles that hold it. Mirrors the enforced permission checks in
+// the backend's ROLE_PERMISSIONS: ticket:write (reply/status/notes), ticket:import,
+// ticket:assign (handing over a whole queue), user:read, user:write, audit:read,
+// project:read/write.
 const CAPABILITIES: { key: string; roles: Role[] }[] = [
-  { key: "cap.viewTickets", roles: ["requester", "agent", "manager", "admin"] },
-  { key: "cap.createTicket", roles: ["requester", "agent", "manager", "admin"] },
-  { key: "cap.reply", roles: ["agent", "manager", "admin"] },
-  { key: "cap.internalNote", roles: ["agent", "manager", "admin"] },
-  { key: "cap.assign", roles: ["agent", "manager", "admin"] },
-  { key: "cap.import", roles: ["agent", "manager", "admin"] },
-  { key: "cap.viewUsers", roles: ["agent", "manager", "admin"] },
-  { key: "cap.manageUsers", roles: ["manager", "admin"] },
-  // Routing projects sit at manager level and up, read and write together.
-  { key: "cap.routingProjects", roles: ["manager", "admin"] },
+  { key: "cap.viewTickets", roles: ["user", "admin", "super_admin"] },
+  { key: "cap.createTicket", roles: ["user", "admin", "super_admin"] },
+  { key: "cap.reply", roles: ["admin", "super_admin"] },
+  { key: "cap.internalNote", roles: ["admin", "super_admin"] },
+  { key: "cap.import", roles: ["admin", "super_admin"] },
+  { key: "cap.viewUsers", roles: ["admin", "super_admin"] },
+  // Assigning one ticket rides on ticket:write, but handing over a whole queue
+  // needs ticket:assign, which stops at the top tier.
+  { key: "cap.assign", roles: ["super_admin"] },
+  { key: "cap.manageUsers", roles: ["super_admin"] },
+  { key: "cap.routingProjects", roles: ["super_admin"] },
+  { key: "cap.audit", roles: ["super_admin"] },
 ];
 
-// Row-level scope enforced in the repository WHERE clause.
+/**
+ * Row-level scope enforced in the repository WHERE clause.
+ *
+ * Note this is keyed on role but the top row depends on more than the role: a
+ * super_admin reaches every customer only when they have no customer of their own.
+ * The copy for that row says so, since the table cannot.
+ */
 const SCOPE: { role: Role; key: string }[] = [
-  { role: "requester", key: "scope.requester" },
-  { role: "agent", key: "scope.agent" },
-  { role: "manager", key: "scope.manager" },
+  { role: "user", key: "scope.user" },
   { role: "admin", key: "scope.admin" },
+  { role: "super_admin", key: "scope.super_admin" },
 ];
 
 export function PermissionsView() {

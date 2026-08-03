@@ -16,11 +16,11 @@ import { useI18n } from "@/features/i18n/context";
 import type { User, UserRole } from "@/features/users/schemas";
 import { cn } from "@/lib/utils";
 
+// Descending privilege, so the badge colours read as a ladder at a glance.
 const ROLE_STYLE: Record<UserRole, { fg: string; bg: string }> = {
-  admin: { fg: "#6d28d9", bg: "#ede9fe" },
-  manager: { fg: "#0369a1", bg: "#e0f2fe" },
-  agent: { fg: "#15803d", bg: "#dcfce7" },
-  requester: { fg: "#475569", bg: "#f1f5f9" },
+  super_admin: { fg: "#6d28d9", bg: "#ede9fe" },
+  admin: { fg: "#15803d", bg: "#dcfce7" },
+  user: { fg: "#475569", bg: "#f1f5f9" },
 };
 
 const COLS =
@@ -41,7 +41,7 @@ export default function UsersPage() {
 
   // Mirrors the server's user:write grant. The API is the real gate; this only
   // avoids rendering controls that would be refused.
-  const canEdit = me?.role === "admin" || me?.role === "manager";
+  const canEdit = me?.role === "super_admin";
   // Handing over a whole queue needs ticket:assign — managers and admins only,
   // unlike single-ticket assignment which any agent may do.
   const canHandover = canEdit;
@@ -156,7 +156,7 @@ export default function UsersPage() {
 
                 <span>
                   {/* Requesters raise tickets, they never hold a queue. */}
-                  {canHandover && u.role !== "requester" ? (
+                  {canHandover && u.role !== "user" ? (
                     <button
                       type="button"
                       onClick={() => setHandoverFor(u)}
