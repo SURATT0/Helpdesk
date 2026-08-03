@@ -241,6 +241,33 @@ export const ticketRepository = {
   },
 
   /**
+   * Every `closedAt` in the viewer's scope, newest first — the raw material for
+   * the history log's period picker.
+   *
+   * Deliberately just the timestamps: which calendar bucket each falls into is
+   * business logic, because the boundaries are server-local and defined in
+   * `history.period.ts`, so the grouping happens in the service. The reports
+   * module aggregates the same way, over fetched rows rather than in SQL.
+   *
+   * Fine at help-desk scale, where the closed archive is thousands of rows at
+   * most. If it ever outgrows that, this becomes a grouped query with an explicit
+   * timezone — and the period boundaries would have to move into SQL with it.
+   */
+  async findClosedAtValues(user: AuthUser): Promise<Date[]> {
+    const rows = await prisma.ticket.findMany({
+      where: {
+        AND: [
+          ticketScopeWhere(user),
+          { status: "closed", closedAt: { not: null } },
+        ],
+      },
+      select: { closedAt: true },
+      orderBy: { closedAt: "desc" },
+    });
+    return rows.flatMap((r) => (r.closedAt ? [r.closedAt] : []));
+  },
+
+  /**
    * A prospective assignee's role and tenant — the facts `mayReceiveAssignment`
    * needs. Intentionally NOT scoped: staff directories are readable within a
    * tenant, and the decision function is what rejects an out-of-tenant target.

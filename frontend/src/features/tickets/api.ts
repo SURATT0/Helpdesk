@@ -4,6 +4,7 @@ import type { Priority, TicketStatus } from "@/lib/domain";
 import {
   categoryListSchema,
   closedHistorySchema,
+  closedPeriodsSchema,
   commentEnvelopeSchema,
   commentListSchema,
   commentSchema,
@@ -16,6 +17,7 @@ import {
   ticketListSchema,
   type Category,
   type ClosedHistoryPage,
+  type ClosedPeriodsPage,
   type Comment,
   type Granularity,
   type HistoryEntry,
@@ -63,6 +65,20 @@ export type ClosedHistoryFilter = {
   limit: number;
   offset: number;
 };
+
+/**
+ * The periods that actually hold closed tickets, newest first — what the picker
+ * lists. Only populated periods come back, so choosing one never lands on an
+ * empty window.
+ */
+export async function fetchClosedPeriods(
+  granularity: Granularity,
+): Promise<ClosedPeriodsPage> {
+  const body = await apiRequest(
+    `/tickets/closed/periods?granularity=${granularity}`,
+  );
+  return closedPeriodsSchema.parse(body);
+}
 
 /** One page of the closed-ticket history log for a single calendar period. */
 export async function fetchClosedHistory(

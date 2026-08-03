@@ -72,6 +72,28 @@ export const periodSchema = z.object({
   isCurrent: z.boolean(),
 });
 
+/**
+ * One populated period offered by the picker. Carries its own window so the same
+ * formatter labels it as labels the window on screen, and a count so the user can
+ * see where the volume is before jumping.
+ */
+export const closedPeriodSchema = z.object({
+  start: z.string(),
+  end: z.string(),
+  count: z.number(),
+});
+
+export const closedPeriodsSchema = z.object({
+  data: z.array(closedPeriodSchema),
+  meta: z.object({
+    granularity: granularitySchema,
+    returned: z.number(),
+    limit: z.number(),
+    /** The archive had more periods than the cap — the list is partial. */
+    truncated: z.boolean(),
+  }),
+});
+
 export const closedHistorySchema = z.object({
   data: z.array(ticketSchema),
   meta: z.object({
@@ -86,6 +108,8 @@ export const closedHistorySchema = z.object({
 export type Granularity = z.infer<typeof granularitySchema>;
 export type Period = z.infer<typeof periodSchema>;
 export type ClosedHistoryPage = z.infer<typeof closedHistorySchema>;
+export type ClosedPeriod = z.infer<typeof closedPeriodSchema>;
+export type ClosedPeriodsPage = z.infer<typeof closedPeriodsSchema>;
 
 /**
  * Result of handing one person's queue to another. `remaining` is non-zero when
