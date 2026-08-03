@@ -202,6 +202,45 @@ export const ticketRepository = {
   },
 
   /**
+   * The closed-ticket history log: tickets whose `closedAt` falls inside the
+   * half-open window `[start, end)`, newest first. `total` is the count within
+   * the same scope and window, for pagination.
+   *
+   * Row scope is AND-ed in exactly as it is for the live list above, so no
+   * window can widen what a viewer sees — a requester's log holds only their own
+   * tickets.
+   *
+   * The `status` check rides along with the date range on purpose. `closedAt` is
+   * stamped on the transition into `closed` and deliberately never cleared (the
+   * 30-day reopen check in the service reads it back), so a reopened ticket
+   * still carries the timestamp of its earlier closure; requiring the status too
+   * keeps it out of the log until it is genuinely closed again.
+   */
+  async findClosedInPeriod(
+    window: { start: Date; end: Date; limit: number; offset: number },
+    user: AuthUser,
+  ): Promise<{ items: Ticket[]; total: number }> {
+    const where: Prisma.TicketWhereInput = {
+      AND: [
+        ticketScopeWhere(user),
+        { status: "closed", closedAt: { gte: window.start, lt: window.end } },
+      ],
+    };
+
+    const [rows, total] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        include: ticketInclude,
+        orderBy: { closedAt: "desc" },
+        take: window.limit,
+        skip: window.offset,
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+    return { items: rows.map(toTicketDto), total };
+  },
+
+  /**
    * A prospective assignee's role and tenant — the facts `mayReceiveAssignment`
    * needs. Intentionally NOT scoped: staff directories are readable within a
    * tenant, and the decision function is what rejects an out-of-tenant target.

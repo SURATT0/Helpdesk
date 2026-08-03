@@ -5,6 +5,7 @@ type Dict = Record<string, string>;
 const en: Dict = {
   "nav.dashboard": "Dashboard",
   "nav.tickets": "Tickets",
+  "nav.history": "Ticket history",
   "nav.users": "Users",
   "nav.reports": "Reports",
   "nav.kb": "Knowledge Base",
@@ -171,6 +172,33 @@ const en: Dict = {
   "audit.forbidden": "You don't have access to the activity log",
   "audit.forbiddenNote":
     "The activity log is available to managers and admins. Ask an administrator if you need access.",
+
+  "closedLog.explainer":
+    "Closed tickets, kept as a permanent log — tickets are closed, never deleted. Pick a week, month, or year and step back through the periods. You see the same tickets you can see anywhere else in Deskly.",
+  "closedLog.granularity.week": "Week",
+  "closedLog.granularity.month": "Month",
+  "closedLog.granularity.year": "Year",
+  "closedLog.olderPeriod": "Earlier period",
+  "closedLog.newerPeriod": "Later period",
+  "closedLog.closedCount": "{count} closed in this period",
+  "closedLog.col.id": "Ticket",
+  "closedLog.col.subject": "Subject",
+  "closedLog.col.priority": "Priority",
+  "closedLog.col.requester": "Requester",
+  "closedLog.col.assignee": "Handled by",
+  "closedLog.col.closedAt": "Closed",
+  "closedLog.col.duration": "Open for",
+  "closedLog.unassigned": "Unassigned",
+  "closedLog.loading": "Loading history…",
+  "closedLog.loadError": "Couldn't load the ticket history",
+  "closedLog.empty": "No tickets were closed in this period",
+  "closedLog.range": "{from}–{to} of {total}",
+  "closedLog.prevPage": "Previous",
+  "closedLog.nextPage": "Next",
+  // Duration units, kept short so a cell reads "1d 3h" without wrapping.
+  "closedLog.unit.d": "d",
+  "closedLog.unit.h": "h",
+  "closedLog.unit.m": "m",
 
   "kb.search": "Search articles…",
   "kb.all": "All",
@@ -471,6 +499,7 @@ const en: Dict = {
 const th: Dict = {
   "nav.dashboard": "แดชบอร์ด",
   "nav.tickets": "ตั๋วงาน",
+  "nav.history": "ประวัติตั๋วงาน",
   "nav.users": "ผู้ใช้",
   "nav.reports": "รายงาน",
   "nav.kb": "ฐานความรู้",
@@ -637,6 +666,33 @@ const th: Dict = {
   "audit.forbidden": "คุณไม่มีสิทธิ์เข้าถึงประวัติการใช้งาน",
   "audit.forbiddenNote":
     "ประวัติการใช้งานเปิดให้ผู้จัดการและผู้ดูแลระบบ หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
+
+  "closedLog.explainer":
+    "ตั๋วงานที่ปิดแล้วจะถูกเก็บเป็นประวัติถาวร — ตั๋วงานถูกปิด ไม่ถูกลบ เลือกดูเป็นรายสัปดาห์ รายเดือน หรือรายปี และย้อนดูช่วงก่อนหน้าได้ คุณจะเห็นเฉพาะตั๋วงานที่คุณมีสิทธิ์เห็นเช่นเดียวกับหน้าอื่น",
+  "closedLog.granularity.week": "รายสัปดาห์",
+  "closedLog.granularity.month": "รายเดือน",
+  "closedLog.granularity.year": "รายปี",
+  "closedLog.olderPeriod": "ช่วงก่อนหน้า",
+  "closedLog.newerPeriod": "ช่วงถัดไป",
+  "closedLog.closedCount": "ปิดไป {count} ใบ ในช่วงนี้",
+  "closedLog.col.id": "ตั๋วงาน",
+  "closedLog.col.subject": "หัวข้อ",
+  "closedLog.col.priority": "ความสำคัญ",
+  "closedLog.col.requester": "ผู้แจ้ง",
+  "closedLog.col.assignee": "ผู้รับผิดชอบ",
+  "closedLog.col.closedAt": "ปิดเมื่อ",
+  "closedLog.col.duration": "ใช้เวลา",
+  "closedLog.unassigned": "ไม่มีผู้รับผิดชอบ",
+  "closedLog.loading": "กำลังโหลดประวัติตั๋วงาน…",
+  "closedLog.loadError": "โหลดประวัติตั๋วงานไม่สำเร็จ",
+  "closedLog.empty": "ไม่มีตั๋วงานที่ปิดในช่วงนี้",
+  "closedLog.range": "{from}–{to} จาก {total}",
+  "closedLog.prevPage": "ก่อนหน้า",
+  "closedLog.nextPage": "ถัดไป",
+  // หน่วยเวลาแบบย่อ ให้อ่านเป็น "1ว 3ชม" ได้ในบรรทัดเดียว
+  "closedLog.unit.d": "ว",
+  "closedLog.unit.h": "ชม",
+  "closedLog.unit.m": "น",
 
   "kb.search": "ค้นหาบทความ…",
   "kb.all": "ทั้งหมด",

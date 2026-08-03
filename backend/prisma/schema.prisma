@@ -242,6 +242,8 @@ model Ticket {
   @@index([priority])
   @@index([customerId])
   @@index([problemId])
+  // The closed-ticket history log filters on a closedAt range and orders by it.
+  @@index([closedAt])
   @@map("tickets")
 }
 

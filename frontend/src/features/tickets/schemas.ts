@@ -53,6 +53,40 @@ export const ticketListSchema = z.object({
 
 export const ticketEnvelopeSchema = z.object({ data: ticketSchema });
 
+export const granularitySchema = z.enum(["week", "month", "year"]);
+
+/**
+ * The window the server resolved, echoed back on every history response. The
+ * client labels the period from `start`/`end` and navigates with the anchors —
+ * it never computes calendar boundaries itself, so "this month" can't drift
+ * between the two sides.
+ */
+export const periodSchema = z.object({
+  granularity: granularitySchema,
+  start: z.string(),
+  /** Exclusive: the first instant of the next period. */
+  end: z.string(),
+  prevAnchor: z.string(),
+  nextAnchor: z.string(),
+  /** The window contains now — the UI disables "newer" on it. */
+  isCurrent: z.boolean(),
+});
+
+export const closedHistorySchema = z.object({
+  data: z.array(ticketSchema),
+  meta: z.object({
+    total: z.number(),
+    limit: z.number(),
+    offset: z.number(),
+    returned: z.number(),
+    period: periodSchema,
+  }),
+});
+
+export type Granularity = z.infer<typeof granularitySchema>;
+export type Period = z.infer<typeof periodSchema>;
+export type ClosedHistoryPage = z.infer<typeof closedHistorySchema>;
+
 /**
  * Result of handing one person's queue to another. `remaining` is non-zero when
  * the queue was larger than one call's cap — the server reports the leftover
