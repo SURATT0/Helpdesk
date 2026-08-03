@@ -1,6 +1,6 @@
 "use client";
 
-import { Info } from "lucide-react";
+import { Info, ShieldAlert } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { useAuth } from "@/features/auth/context";
@@ -76,15 +76,38 @@ function OwnerCell({
 export function ProjectsView() {
   const { t } = useI18n();
   const { user } = useAuth();
-  const { data, isLoading, isError, refetch } = useProjects();
-  const { data: users } = useUsers();
+  // Mirrors the server's project:read grant. The API is the real gate; this keeps
+  // a direct visit from firing a request that would only come back 403, and shows
+  // something better than an error for it.
+  const canRead = user?.role === "admin" || user?.role === "manager";
+  const { data, isLoading, isError, refetch } = useProjects({ enabled: canRead });
+  const { data: users } = useUsers({ enabled: canRead });
   const update = useUpdateProject();
 
   const projects = data?.projects ?? [];
-  // Mirrors the server's project:write grant. The API is the real gate; this only
-  // avoids offering a control that would be refused.
-  const canEdit = user?.role === "admin" || user?.role === "manager";
+  // Reading and writing are held together from manager up, so anyone who can see
+  // this page can also act on it.
+  const canEdit = canRead;
   const savingId = update.isPending ? update.variables?.id : undefined;
+
+  if (!canRead) {
+    return (
+      <>
+        <Topbar titleKey="nav.projects" showSearch={false} />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-line bg-panel p-10 text-center">
+            <ShieldAlert size={22} className="text-faint" />
+            <div className="text-[13.5px] font-semibold text-ink">
+              {t("projects.forbidden")}
+            </div>
+            <div className="max-w-[46ch] text-[12.5px] text-[#475569]">
+              {t("projects.forbiddenNote")}
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   return (
     <>

@@ -245,6 +245,94 @@ describe("tickets — closed history log", () => {
   });
 });
 
+/**
+ * Routing projects sit at manager level and up: project:read to see them,
+ * project:write to change them, held together so the two never disagree. Reads
+ * were previously ungated — no test covered that, which is how the reversal went
+ * unnoticed, so the whole surface is pinned here.
+ *
+ * Seeded: 1 = Acme Migration, 2 = Acme Facilities (customer 1), 3 = Globex Rollout
+ * (customer 2).
+ */
+describe("projects — permission level and row scope", () => {
+  const list = (token: string) =>
+    request(app).get(`${API}/projects`).set(bearer(token));
+  const detail = (token: string, id: number) =>
+    request(app).get(`${API}/projects/${id}`).set(bearer(token));
+
+  const namesOf = (res: { body: { data: { name: string }[] } }) =>
+    res.body.data.map((p) => p.name);
+
+  it("lets a manager read their own customer's projects, and no others", async () => {
+    const morgan = await login("morgan.lee@acme.com"); // manager, Acme
+    const res = await list(morgan);
+    expect(res.status).toBe(200);
+    expect(namesOf(res)).toEqual(
+      expect.arrayContaining(["Acme Migration", "Acme Facilities"]),
+    );
+    expect(namesOf(res)).not.toContain("Globex Rollout");
+  });
+
+  it("lets a platform admin read every customer's projects", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const res = await list(sam);
+    expect(res.status).toBe(200);
+    expect(namesOf(res)).toEqual(
+      expect.arrayContaining(["Acme Migration", "Globex Rollout"]),
+    );
+  });
+
+  it("scopes a manager of another customer to their own", async () => {
+    const nadia = await login("nadia.kofi@acme.com"); // manager, Globex
+    const res = await list(nadia);
+    expect(namesOf(res)).toEqual(["Globex Rollout"]);
+  });
+
+  it("refuses an agent: routing structure is management work, not desk work", async () => {
+    const dana = await login("dana.reyes@acme.com"); // agent, Acme
+    await list(dana).expect(403);
+    // Even a project they personally own — the grant is by level, not ownership.
+    await detail(dana, 2).expect(403);
+  });
+
+  it("refuses a requester", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    await list(marcus).expect(403);
+    await detail(marcus, 1).expect(403);
+  });
+
+  it("still refuses an agent's write, as it always did", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/projects/2`)
+      .set(bearer(dana))
+      .send({ backupOwnerId: null })
+      .expect(403);
+  });
+
+  it("lets a manager set the owners", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    const ana = await prisma.user.findUniqueOrThrow({
+      where: { email: "ana.m@acme.com" },
+    });
+    const res = await request(app)
+      .patch(`${API}/projects/2`) // Acme Facilities
+      .set(bearer(morgan))
+      .send({ backupOwnerId: ana.id });
+    expect(res.status).toBe(200);
+    expect(res.body.data.backupOwner.id).toBe(ana.id);
+  });
+
+  it("404s another customer's project for a manager instead of leaking it", async () => {
+    const morgan = await login("morgan.lee@acme.com"); // Acme
+    await detail(morgan, 3).expect(404); // Globex Rollout
+  });
+
+  it("requires authentication", async () => {
+    await request(app).get(`${API}/projects`).expect(401);
+  });
+});
+
 describe("tickets — closed history period picker", () => {
   const periods = (token: string, qs = "") =>
     request(app)
