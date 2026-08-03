@@ -54,3 +54,21 @@ if (env.autoClose) {
   sweep();
   setInterval(sweep, 60 * 60 * 1000).unref();
 }
+
+// Background sweep: notify staff about SLA clocks nearing or past due. Every 15
+// minutes rather than hourly — the danger threshold is one hour, so an hourly
+// cadence could deliver a "breaches in 1h" warning after it had already
+// breached. The sweep is idempotent, so the extra runs are cheap no-ops.
+if (env.slaAlerts) {
+  const sweep = () =>
+    ticketService
+      .sweepSlaAlerts()
+      .then(({ warned, breached }) => {
+        if (warned + breached > 0) {
+          logger.info({ warned, breached }, "sent SLA alerts");
+        }
+      })
+      .catch((err) => logger.error({ err }, "SLA alert sweep failed"));
+  sweep();
+  setInterval(sweep, 15 * 60 * 1000).unref();
+}

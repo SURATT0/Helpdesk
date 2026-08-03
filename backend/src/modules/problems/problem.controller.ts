@@ -5,6 +5,7 @@ import { problemService } from "./problem.service";
 import {
   linkOrConvertSchema,
   listProblemsQuerySchema,
+  updateProblemSchema,
 } from "./problem.validators";
 
 const idParam = z.object({ id: z.coerce.number().int().positive() });
@@ -25,6 +26,14 @@ export const problemController = {
   async get(req: Request, res: Response) {
     const { id } = idParam.parse(req.params);
     const data = await problemService.get(id, currentUser(req));
+    res.json({ data });
+  },
+
+  /** PATCH /problems/:id — edit the investigation (root cause, workaround, …). */
+  async update(req: Request, res: Response) {
+    const { id } = idParam.parse(req.params);
+    const input = updateProblemSchema.parse(req.body);
+    const data = await problemService.update(id, input, currentUser(req));
     res.json({ data });
   },
 

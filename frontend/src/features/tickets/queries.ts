@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -11,6 +12,7 @@ import {
   createComment,
   createTicket,
   fetchCategories,
+  fetchClosedHistory,
   fetchComments,
   fetchReads,
   fetchTicket,
@@ -23,6 +25,7 @@ import {
   updateTicketAssignee,
   updateTicketPriority,
   updateTicketStatus,
+  type ClosedHistoryFilter,
   type CreateCommentInput,
   type CreateTicketInput,
   type ImportTicketRow,
@@ -36,12 +39,27 @@ export const ticketKeys = {
   list: (filter: TicketFilter) => ["tickets", "list", filter] as const,
   detail: (id: number) => ["tickets", "detail", id] as const,
   history: (id: number) => ["tickets", "history", id] as const,
+  closed: (filter: ClosedHistoryFilter) =>
+    ["tickets", "closed", filter] as const,
 };
 
 export function useTickets(filter: TicketFilter = {}) {
   return useQuery({
     queryKey: ticketKeys.list(filter),
     queryFn: () => fetchTickets(filter),
+  });
+}
+
+/**
+ * One page of the closed-ticket history log. `keepPreviousData` holds the rows
+ * on screen while the next period or page loads, so stepping through months
+ * doesn't flash an empty table — same reason the audit trail uses it.
+ */
+export function useClosedHistory(filter: ClosedHistoryFilter) {
+  return useQuery({
+    queryKey: ticketKeys.closed(filter),
+    queryFn: () => fetchClosedHistory(filter),
+    placeholderData: keepPreviousData,
   });
 }
 

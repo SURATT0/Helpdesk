@@ -2,8 +2,12 @@ import { Prisma } from "@prisma/client";
 import type { AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
+import { kbService } from "../kb/kb.service";
+import { notificationRepository } from "../notifications/notification.repository";
 import { ticketScopeWhere } from "../tickets/ticket.scope";
+import type { ProblemState } from "./problem.rules";
 import type { ProblemStatus } from "./problem.types";
+import type { UpdateProblemInput } from "./problem.validators";
 
 /**
  * Row-level problem visibility, mirroring `ticketScopeWhere`: admins see every
@@ -29,6 +33,15 @@ export type ProblemDto = {
   status: ProblemStatus;
   rootCause: string | null;
   workaround: string | null;
+  /** The stored KB article id, whether or not it still resolves. */
+  kbArticleId: string | null;
+  /**
+   * The same article resolved against the KB dataset, or null when the id no
+   * longer matches anything. Both fields are exposed on purpose: an id present
+   * with a null reference is a STALE link, and the UI can say so instead of
+   * silently dropping it.
+   */
+  kbArticle: { id: string; title: string; category: string } | null;
   createdBy: { id: number; name: string } | null;
   ticketCount: number;
   createdAt: string;
@@ -42,6 +55,9 @@ function toDto(row: ProblemRow, ticketCount = 0): ProblemDto {
     status: row.status,
     rootCause: row.rootCause,
     workaround: row.workaround,
+    kbArticleId: row.kbArticleId,
+    // Free to resolve: the KB dataset is in-process, so this costs no query.
+    kbArticle: kbService.reference(row.kbArticleId),
     createdBy: row.createdBy,
     ticketCount,
     createdAt: row.createdAt.toISOString(),
@@ -76,6 +92,94 @@ export const problemRepository = {
       include: { ...problemInclude, _count: { select: { tickets: true } } },
     });
     return row ? toDto(row, row._count.tickets) : null;
+  },
+
+  /** The fields the edit rules need, scoped — null when out of scope. */
+  async findStateForUpdate(
+    id: number,
+    actor: AuthUser,
+  ): Promise<ProblemState | null> {
+    const row = await prisma.problem.findFirst({
+      where: { AND: [{ id }, problemScopeWhere(actor)] },
+      select: { status: true, workaround: true },
+    });
+    return row ?? null;
+  },
+
+  /**
+   * Apply an edit. Row scope is checked by the caller via `findStateForUpdate`,
+   * so reaching here means the problem is visible to the actor.
+   *
+   * `announce` is decided by the pure rules, not here: when a workaround first
+   * becomes available, everyone holding a linked incident is told, because a
+   * workaround nobody hears about is the same as no workaround. Requesters are
+   * not notified — this is internal remediation detail.
+   */
+  async update(
+    id: number,
+    patch: UpdateProblemInput,
+    actor: AuthUser,
+    announce: boolean,
+  ): Promise<ProblemDto> {
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.problem.update({
+        where: { id },
+        data: {
+          ...(patch.title !== undefined ? { title: patch.title } : {}),
+          ...(patch.description !== undefined
+            ? { description: patch.description }
+            : {}),
+          ...(patch.rootCause !== undefined
+            ? { rootCause: patch.rootCause }
+            : {}),
+          ...(patch.workaround !== undefined
+            ? { workaround: patch.workaround }
+            : {}),
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.kbArticleId !== undefined
+            ? { kbArticleId: patch.kbArticleId }
+            : {}),
+        },
+        include: { ...problemInclude, _count: { select: { tickets: true } } },
+      });
+
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "problem.update",
+          entity: "problem",
+          entityId: id,
+          // Field NAMES plus the new status only. Root cause and workaround are
+          // free text that can run to 5k chars; the audit row records that they
+          // changed, not their contents.
+          meta: {
+            fields: Object.keys(patch),
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+          },
+        },
+        tx,
+      );
+
+      if (announce) {
+        const linked = await tx.ticket.findMany({
+          where: { problemId: id, assigneeId: { not: null } },
+          select: { id: true, assigneeId: true },
+        });
+        await notificationRepository.createMany(
+          linked
+            .filter((t) => t.assigneeId !== actor.id)
+            .map((t) => ({
+              userId: t.assigneeId as number,
+              type: "problem.workaround_available",
+              ticketId: t.id,
+              message: `A workaround is now documented for "${updated.title}" — see ticket #${t.id}`,
+            })),
+          tx,
+        );
+      }
+
+      return toDto(updated, updated._count.tickets);
+    });
   },
 
   /**

@@ -28,10 +28,20 @@ export const ticketSchema = z.object({
   requester: z.string(),
   requesterEmail: z.string(),
   assignee: z.string().nullable(),
+  /** Filtering keys on this, not the display name — names are not unique. */
+  assigneeId: z.number().nullable(),
   category: z.string(),
   slaDue: z.string(),
   slaState: slaStateSchema,
   attachments: z.number(),
+  /**
+   * The problem this incident is linked to, if any (many tickets → one problem).
+   * The API has always returned it; it was previously dropped here because zod
+   * strips unknown keys, so the UI could not show the link.
+   */
+  problem: z
+    .object({ id: z.number(), title: z.string(), status: z.string() })
+    .nullable(),
   createdAt: z.string(),
   closedAt: z.string().nullable(),
 });
@@ -42,6 +52,40 @@ export const ticketListSchema = z.object({
 });
 
 export const ticketEnvelopeSchema = z.object({ data: ticketSchema });
+
+export const granularitySchema = z.enum(["week", "month", "year"]);
+
+/**
+ * The window the server resolved, echoed back on every history response. The
+ * client labels the period from `start`/`end` and navigates with the anchors —
+ * it never computes calendar boundaries itself, so "this month" can't drift
+ * between the two sides.
+ */
+export const periodSchema = z.object({
+  granularity: granularitySchema,
+  start: z.string(),
+  /** Exclusive: the first instant of the next period. */
+  end: z.string(),
+  prevAnchor: z.string(),
+  nextAnchor: z.string(),
+  /** The window contains now — the UI disables "newer" on it. */
+  isCurrent: z.boolean(),
+});
+
+export const closedHistorySchema = z.object({
+  data: z.array(ticketSchema),
+  meta: z.object({
+    total: z.number(),
+    limit: z.number(),
+    offset: z.number(),
+    returned: z.number(),
+    period: periodSchema,
+  }),
+});
+
+export type Granularity = z.infer<typeof granularitySchema>;
+export type Period = z.infer<typeof periodSchema>;
+export type ClosedHistoryPage = z.infer<typeof closedHistorySchema>;
 
 /**
  * Result of handing one person's queue to another. `remaining` is non-zero when

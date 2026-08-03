@@ -109,6 +109,208 @@ describe("tickets — RBAC row scoping (multi-tenant)", () => {
   });
 });
 
+describe("tickets — closed history log", () => {
+  /**
+   * The seed closes nothing (1031 ships as `resolved`), so each case arranges
+   * its own closures. Timestamps are built with the LOCAL date constructor
+   * because period bounds are server-local by design — UTC literals would make
+   * these assertions pass only in UTC.
+   */
+  const now = new Date();
+  const inThisMonth = new Date(now.getFullYear(), now.getMonth(), 15, 12);
+  const inLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15, 12);
+
+  const close = (id: number, closedAt: Date) =>
+    prisma.ticket.update({
+      where: { id },
+      data: { status: "closed", closedAt },
+    });
+
+  const idsOf = (res: { body: { data: { id: number }[] } }) =>
+    res.body.data.map((t) => t.id);
+
+  const get = (token: string, qs = "") =>
+    request(app).get(`${API}/tickets/closed${qs}`).set(bearer(token));
+
+  it("returns tickets closed in the current period and excludes older ones", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=month");
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toContain(1031);
+    expect(idsOf(res)).not.toContain(1029);
+    expect(res.body.meta.total).toBeGreaterThanOrEqual(1);
+    expect(res.body.meta.period.granularity).toBe("month");
+    expect(res.body.meta.period.isCurrent).toBe(true);
+  });
+
+  it("steps to the previous period with the anchor it was handed", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const current = await get(dana, "?granularity=month");
+    const older = await get(
+      dana,
+      `?granularity=month&anchor=${current.body.meta.period.prevAnchor}`,
+    );
+
+    expect(older.status).toBe(200);
+    expect(idsOf(older)).toContain(1029);
+    expect(idsOf(older)).not.toContain(1031);
+    expect(older.body.meta.period.isCurrent).toBe(false);
+  });
+
+  it("widens to the year, holding both months", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=year");
+    // Guard: in January the previous month falls in the previous YEAR, so only
+    // assert the pair together when both sit inside one calendar year.
+    if (inLastMonth.getFullYear() === inThisMonth.getFullYear()) {
+      expect(idsOf(res)).toEqual(expect.arrayContaining([1031, 1029]));
+    } else {
+      expect(idsOf(res)).toContain(1031);
+      expect(idsOf(res)).not.toContain(1029);
+    }
+  });
+
+  it("excludes a reopened ticket that still carries its old closedAt", async () => {
+    // `closedAt` is never cleared — the 30-day reopen check reads it back — so
+    // the status is what keeps a reopened ticket out of the log.
+    await close(1031, inThisMonth);
+    await prisma.ticket.update({ where: { id: 1031 }, data: { status: "open" } });
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=month");
+    expect(idsOf(res)).not.toContain(1031);
+  });
+
+  it("scopes the log per role, exactly like the live ticket list", async () => {
+    await close(1031, inThisMonth); // Acme, requested by A. Lindqvist
+    await close(2001, inThisMonth); // Globex — another customer
+
+    const dana = await login("dana.reyes@acme.com"); // agent, Acme
+    const asAgent = idsOf(await get(dana, "?granularity=month"));
+    expect(asAgent).toContain(1031);
+    expect(asAgent).not.toContain(2001); // other customer, hidden
+
+    const lindqvist = await login("a.lindqvist@acme.com"); // requester, owns 1031
+    const asOwner = idsOf(await get(lindqvist, "?granularity=month"));
+    expect(asOwner).toContain(1031);
+    expect(asOwner).not.toContain(2001);
+
+    // Marcus is deliberately absent from the seeded closure history, so his log
+    // is genuinely empty rather than merely missing 1031.
+    const marcus = await login("marcus.chen@acme.com"); // requester, owns neither
+    expect(idsOf(await get(marcus, "?granularity=month"))).toEqual([]);
+
+    const sam = await login("sam.rivera@acme.com"); // platform admin
+    expect(idsOf(await get(sam, "?granularity=month"))).toEqual(
+      expect.arrayContaining([1031, 2001]),
+    );
+  });
+
+  it("paginates within the period", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inThisMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const page = await get(dana, "?granularity=month&limit=1&offset=0");
+    expect(page.body.data).toHaveLength(1);
+    expect(page.body.meta.total).toBeGreaterThanOrEqual(2);
+    expect(page.body.meta.returned).toBe(1);
+
+    const next = await get(dana, "?granularity=month&limit=1&offset=1");
+    expect(idsOf(next)).not.toEqual(idsOf(page));
+  });
+
+  it("rejects an unknown granularity with 400", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await get(dana, "?granularity=decade").expect(400);
+  });
+
+  it("requires authentication", async () => {
+    await request(app).get(`${API}/tickets/closed`).expect(401);
+  });
+
+  it("does not shadow the /tickets/:id route", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(`${API}/tickets/1042`).set(bearer(dana)).expect(200);
+  });
+});
+
+describe("tickets — assignee identity and filter", () => {
+  it("exposes assigneeId alongside the display name", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app).get(`${API}/tickets/1042`).set(bearer(dana));
+    expect(res.status).toBe(200);
+
+    const danaRow = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(res.body.data.assignee).toBe("Dana Reyes");
+    // The client filters and groups on the id, since names are not unique.
+    expect(res.body.data.assigneeId).toBe(danaRow.id);
+  });
+
+  it("reports assigneeId as null for an unassigned ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app).get(`${API}/tickets/1044`).set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(res.body.data.assignee).toBeNull();
+    expect(res.body.data.assigneeId).toBeNull();
+  });
+
+  it("filters the list to one agent's queue", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const danaRow = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=${danaRow.id}`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids).toContain(1042); // Dana's
+    expect(ids).not.toContain(1029); // Kai's
+    for (const row of res.body.data as Array<{ assigneeId: number }>) {
+      expect(row.assigneeId).toBe(danaRow.id);
+    }
+  });
+
+  it("filters the list to the unassigned queue", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=none`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids).toContain(1044); // Acme, unassigned
+    for (const row of res.body.data as Array<{ assigneeId: number | null }>) {
+      expect(row.assigneeId).toBeNull();
+    }
+  });
+
+  // The assignee filter is AND-ed with row scope, never a way around it.
+  it("cannot reach another customer's tickets through the filter", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    const owen = await prisma.user.findUniqueOrThrow({
+      where: { email: "owen.park@acme.com" }, // Globex agent
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=${owen.id}`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+});
+
 describe("tickets — status transitions", () => {
   it("allows a legal transition and appends a history row", async () => {
     const dana = await login("dana.reyes@acme.com");
@@ -210,6 +412,211 @@ describe("tickets — auto-close (resolved > 72h)", () => {
     expect(closed).toBe(0);
     const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1031 } });
     expect(t.status).toBe("resolved");
+  });
+});
+
+describe("tickets — SLA alert sweep", () => {
+  const HOUR = 60 * 60 * 1000;
+  const now = new Date();
+  const inHours = (h: number) => new Date(now.getTime() + h * HOUR);
+
+  /** Park every seeded ticket's clock far in the future so tests start quiet. */
+  async function quietAllClocks() {
+    await prisma.ticket.updateMany({ data: { dueAt: inHours(500) } });
+  }
+
+  const slaNotifications = (ticketId: number) =>
+    prisma.notification.findMany({
+      where: {
+        ticketId,
+        type: { in: ["ticket.sla_warning", "ticket.sla_breach"] },
+      },
+      orderBy: { id: "asc" },
+    });
+
+  beforeEach(quietAllClocks);
+
+  it("warns the assignee when the clock enters the warn window", async () => {
+    // 1042: Acme, in_progress, assigned to Dana.
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned).toBe(1);
+    expect(res.breached).toBe(0);
+
+    const notes = await slaNotifications(1042);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_warning");
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(notes[0].userId).toBe(dana.id);
+    expect(notes[0].message).toContain("#1042");
+  });
+
+  it("reports a breach once the clock is past due", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+    const notes = await slaNotifications(1042);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_breach");
+  });
+
+  // The sweep runs every 15 minutes over the same at-risk rows.
+  it("is idempotent across runs", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+    const first = await ticketService.sweepSlaAlerts(now);
+    expect(first.warned).toBe(1);
+
+    const second = await ticketService.sweepSlaAlerts(new Date(now.getTime() + 60_000));
+    expect(second.warned).toBe(0);
+    expect(await slaNotifications(1042)).toHaveLength(1);
+  });
+
+  // Being warned must not swallow the breach that follows.
+  it("still raises a breach after having warned", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    // Time passes; the same ticket is now overdue.
+    const later = new Date(now.getTime() + 2 * HOUR);
+    const res = await ticketService.sweepSlaAlerts(later);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.type)).toEqual([
+      "ticket.sla_warning",
+      "ticket.sla_breach",
+    ]);
+  });
+
+  it("ignores a paused (pending) ticket — the clock is stopped", async () => {
+    // 1039 is seeded pending.
+    await prisma.ticket.update({
+      where: { id: 1039 },
+      data: { dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned + res.breached).toBe(0);
+    expect(await slaNotifications(1039)).toHaveLength(0);
+  });
+
+  it("ignores resolved and closed tickets", async () => {
+    await prisma.ticket.update({
+      where: { id: 1031 }, // seeded resolved
+      data: { dueAt: inHours(-5) },
+    });
+    await prisma.ticket.update({
+      where: { id: 1035 },
+      data: { status: "closed", closedAt: now, dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned + res.breached).toBe(0);
+  });
+
+  // An unassigned ticket is exactly where a breach goes unnoticed, so it falls
+  // to that customer's managers rather than nobody.
+  it("falls back to the customer's managers when unassigned", async () => {
+    await prisma.ticket.update({
+      where: { id: 1044 }, // Acme, new, assignee null
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1044);
+    const morgan = await prisma.user.findUniqueOrThrow({
+      where: { email: "morgan.lee@acme.com" }, // Acme manager
+    });
+    expect(notes.map((n) => n.userId)).toContain(morgan.id);
+
+    // Not the other customer's manager, and not the requester.
+    const nadia = await prisma.user.findUniqueOrThrow({
+      where: { email: "nadia.kofi@acme.com" }, // Globex manager
+    });
+    expect(notes.map((n) => n.userId)).not.toContain(nadia.id);
+    const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1044 } });
+    expect(notes.map((n) => n.userId)).not.toContain(t.requesterId);
+  });
+
+  it("counts tickets, not notification rows, when several managers are told", async () => {
+    await prisma.ticket.update({
+      where: { id: 1044 },
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    // One ticket breached, however many managers received a row for it.
+    expect(res.breached).toBe(1);
+    expect((await slaNotifications(1044)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("never notifies the requester", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" }, // requester of 1042
+    });
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.userId)).not.toContain(marcus.id);
+  });
+
+  it("notifies the new assignee after a reassignment", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const ana = await prisma.user.findUniqueOrThrow({
+      where: { email: "ana.m@acme.com" },
+    });
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { assigneeId: ana.id },
+    });
+
+    const res = await ticketService.sweepSlaAlerts(new Date(now.getTime() + 60_000));
+    expect(res.warned).toBe(1);
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.userId)).toContain(ana.id);
+  });
+
+  it("does nothing when every clock is comfortable", async () => {
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res).toEqual({ warned: 0, breached: 0 });
+  });
+
+  it("surfaces the alert on the recipient's notification feed", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/notifications`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const types: string[] = res.body.data.map((n: { type: string }) => n.type);
+    expect(types).toContain("ticket.sla_breach");
+    expect(res.body.meta.unread).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -1449,5 +1856,707 @@ describe("comments — read receipts", () => {
       .get(`${API}/tickets/1039/comments/reads`)
       .set(bearer(marcus))
       .expect(404);
+  });
+});
+
+// audit_logs starts empty after resetDb (the seed writes no audit rows), so each
+// test controls exactly what ends up in the trail.
+describe("audit trail read", () => {
+  const ENDPOINT = `${API}/audit`;
+
+  const entityIds = (res: { body: { data: Array<{ entityId: number }> } }) =>
+    res.body.data.map((e) => e.entityId);
+
+  /** Produce one Acme audit row and one Globex audit row. */
+  async function makeCrossCustomerActivity() {
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+
+    const owen = await login("owen.park@acme.com"); // Globex agent
+    await request(app)
+      .patch(`${API}/tickets/2001/priority`)
+      .set(bearer(owen))
+      .send({ priority: "low" })
+      .expect(200);
+  }
+
+  it("lets an admin read every customer's entries", async () => {
+    await makeCrossCustomerActivity();
+    const admin = await login("sam.rivera@acme.com"); // platform admin, no customer
+    const res = await request(app).get(ENDPOINT).set(bearer(admin));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).toContain(2001);
+  });
+
+  // The tenant boundary: audit_logs has no customer_id of its own, so scope is
+  // derived from the actor. A manager must not see another customer's activity.
+  it("confines a manager to their own customer's entries", async () => {
+    await makeCrossCustomerActivity();
+    const morgan = await login("morgan.lee@acme.com"); // Acme manager
+    const res = await request(app).get(ENDPOINT).set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).not.toContain(2001);
+  });
+
+  it("shows the other side of the boundary to the other customer's manager", async () => {
+    await makeCrossCustomerActivity();
+    const nadia = await login("nadia.kofi@acme.com"); // Globex manager
+    const res = await request(app).get(ENDPOINT).set(bearer(nadia));
+    expect(entityIds(res)).toContain(2001);
+    expect(entityIds(res)).not.toContain(1042);
+  });
+
+  it("forbids an agent (403) — the trail is management work", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(ENDPOINT).set(bearer(dana)).expect(403);
+  });
+
+  it("forbids a requester (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    await request(app).get(ENDPOINT).set(bearer(marcus)).expect(403);
+  });
+
+  it("requires authentication (401)", async () => {
+    await request(app).get(ENDPOINT).expect(401);
+  });
+
+  it("filters by action prefix so a whole family matches", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+    await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "note" })
+      .expect(201);
+
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .get(`${ENDPOINT}?action=ticket`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    const actions: string[] = res.body.data.map(
+      (e: { action: string }) => e.action,
+    );
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.every((a) => a.startsWith("ticket."))).toBe(true);
+  });
+
+  // Filters are AND-ed with the scope clause, so no filter can widen visibility.
+  it("cannot widen scope through a filter", async () => {
+    await makeCrossCustomerActivity();
+    const morgan = await login("morgan.lee@acme.com"); // Acme
+    const res = await request(app)
+      .get(`${ENDPOINT}?entity=ticket&entityId=2001`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it("paginates with a scoped total in meta", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const priority of ["low", "medium", "high"]) {
+      await request(app)
+        .patch(`${API}/tickets/1042/priority`)
+        .set(bearer(dana))
+        .send({ priority })
+        .expect(200);
+    }
+
+    const morgan = await login("morgan.lee@acme.com");
+    const page = await request(app)
+      .get(`${ENDPOINT}?limit=2&offset=0`)
+      .set(bearer(morgan));
+    expect(page.status).toBe(200);
+    expect(page.body.data).toHaveLength(2);
+    expect(page.body.meta.total).toBeGreaterThanOrEqual(3);
+    expect(page.body.meta.limit).toBe(2);
+
+    const next = await request(app)
+      .get(`${ENDPOINT}?limit=2&offset=2`)
+      .set(bearer(morgan));
+    const firstIds: number[] = page.body.data.map((e: { id: number }) => e.id);
+    const nextIds: number[] = next.body.data.map((e: { id: number }) => e.id);
+    expect(nextIds.some((id) => firstIds.includes(id))).toBe(false);
+  });
+
+  it("returns newest first", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const priority of ["low", "high"]) {
+      await request(app)
+        .patch(`${API}/tickets/1042/priority`)
+        .set(bearer(dana))
+        .send({ priority })
+        .expect(200);
+    }
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app).get(ENDPOINT).set(bearer(morgan));
+    const ids: number[] = res.body.data.map((e: { id: number }) => e.id);
+    expect(ids).toEqual([...ids].sort((a, b) => b - a));
+  });
+
+  it("rejects an out-of-range limit (400)", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    await request(app)
+      .get(`${ENDPOINT}?limit=500`)
+      .set(bearer(morgan))
+      .expect(400);
+  });
+
+  it("lists the distinct action names in scope", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .get(`${ENDPOINT}/actions`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toContain("ticket.priority_change");
+  });
+
+  // The trail is append-only by construction: no write route is registered.
+  it("has no write surface — POST and DELETE are not routed", async () => {
+    const admin = await login("sam.rivera@acme.com"); // platform admin, no customer
+    const post = await request(app)
+      .post(ENDPOINT)
+      .set(bearer(admin))
+      .send({ action: "forged.entry", entity: "ticket" });
+    expect(post.status).toBe(404);
+    const del = await request(app).delete(`${ENDPOINT}/1`).set(bearer(admin));
+    expect(del.status).toBe(404);
+  });
+});
+
+describe("problems — linking and converting", () => {
+  const problemOn = (ticketId: number) => `${API}/tickets/${ticketId}/problem`;
+
+  /** Convert a ticket into a new problem and return the created problem. */
+  async function convert(token: string, ticketId: number, title: string) {
+    const res = await request(app)
+      .post(problemOn(ticketId))
+      .set(bearer(token))
+      .send({ title });
+    expect(res.status).toBe(201);
+    return res.body.data as { id: number; title: string; ticketCount: number };
+  }
+
+  it("converts a ticket into a new problem (201) and links it", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "VPN gateway 4.2 regression");
+    expect(problem.title).toBe("VPN gateway 4.2 regression");
+
+    // The ticket now carries the link, which is what the rail renders.
+    const ticket = await request(app)
+      .get(`${API}/tickets/1042`)
+      .set(bearer(dana));
+    expect(ticket.body.data.problem).toMatchObject({
+      id: problem.id,
+      title: "VPN gateway 4.2 regression",
+      status: "investigating",
+    });
+  });
+
+  // The whole point of problems: many incidents, one root cause.
+  it("links several incidents to one problem and counts them", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Shared drive outage");
+
+    for (const ticketId of [1035, 1029]) {
+      const res = await request(app)
+        .post(problemOn(ticketId))
+        .set(bearer(dana))
+        .send({ problemId: problem.id });
+      // Linking is a 200 — nothing new was created.
+      expect(res.status).toBe(200);
+    }
+
+    const list = await request(app)
+      .get(`${API}/problems?search=Shared drive`)
+      .set(bearer(dana));
+    expect(list.status).toBe(200);
+    const found = (list.body.data as Array<{ id: number; ticketCount: number }>)
+      .find((p) => p.id === problem.id);
+    expect(found?.ticketCount).toBe(3);
+  });
+
+  it("unlinks a ticket without deleting the problem (204)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Printer firmware fault");
+
+    await request(app)
+      .delete(problemOn(1042))
+      .set(bearer(dana))
+      .expect(204);
+
+    const ticket = await request(app)
+      .get(`${API}/tickets/1042`)
+      .set(bearer(dana));
+    expect(ticket.body.data.problem).toBeNull();
+
+    // The problem survives — unlinking one incident must not destroy the record.
+    const still = await request(app)
+      .get(`${API}/problems/${problem.id}`)
+      .set(bearer(dana));
+    expect(still.status).toBe(200);
+  });
+
+  it("rejects passing both problemId and title (400)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1035, "Ambiguity check");
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(dana))
+      .send({ problemId: problem.id, title: "also this" })
+      .expect(400);
+  });
+
+  it("rejects passing neither (400)", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(dana))
+      .send({})
+      .expect(400);
+  });
+
+  it("forbids a requester from linking (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com"); // requester of 1042
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(marcus))
+      .send({ title: "should not work" })
+      .expect(403);
+  });
+
+  it("404s converting a ticket outside the actor's scope", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    await request(app)
+      .post(problemOn(2001)) // Globex
+      .set(bearer(dana))
+      .send({ title: "cross-tenant attempt" })
+      .expect(404);
+  });
+
+  // Linking is a write that names a problem id, so it must not become a way to
+  // discover or attach to another tenant's problem.
+  it("404s linking to another customer's problem", async () => {
+    const owen = await login("owen.park@acme.com"); // Globex agent
+    const globexProblem = await convert(owen, 2001, "Globex badge reader");
+
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    await request(app)
+      .post(problemOn(1042))
+      .set(bearer(dana))
+      .send({ problemId: globexProblem.id })
+      .expect(404);
+  });
+
+  it("scopes the problem list to the caller's customer", async () => {
+    const owen = await login("owen.park@acme.com");
+    await convert(owen, 2001, "Globex only problem");
+    const dana = await login("dana.reyes@acme.com");
+    await convert(dana, 1042, "Acme only problem");
+
+    const asDana = await request(app).get(`${API}/problems`).set(bearer(dana));
+    const titles: string[] = asDana.body.data.map(
+      (p: { title: string }) => p.title,
+    );
+    expect(titles).toContain("Acme only problem");
+    expect(titles).not.toContain("Globex only problem");
+  });
+
+  it("lets a platform admin see every customer's problems", async () => {
+    const owen = await login("owen.park@acme.com");
+    await convert(owen, 2001, "Globex side");
+    const dana = await login("dana.reyes@acme.com");
+    await convert(dana, 1042, "Acme side");
+
+    const sam = await login("sam.rivera@acme.com");
+    const res = await request(app).get(`${API}/problems`).set(bearer(sam));
+    const titles: string[] = res.body.data.map((p: { title: string }) => p.title);
+    expect(titles).toContain("Acme side");
+    expect(titles).toContain("Globex side");
+  });
+
+  // The two writes are audited against different entities on purpose: creating a
+  // problem is a fact about the problem, linking is a fact about the ticket.
+  it("audits the conversion against the problem and the unlink against the ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Audited problem");
+    await request(app).delete(problemOn(1042)).set(bearer(dana)).expect(204);
+
+    const onProblem = await prisma.auditLog.findMany({
+      where: { entity: "problem", entityId: problem.id },
+      select: { action: true, meta: true },
+    });
+    expect(onProblem.map((a) => a.action)).toContain(
+      "problem.create_from_ticket",
+    );
+    expect(onProblem[0].meta).toMatchObject({ ticketId: 1042 });
+
+    const onTicket = await prisma.auditLog.findMany({
+      where: { entity: "ticket", entityId: 1042 },
+      select: { action: true },
+    });
+    expect(onTicket.map((a) => a.action)).toContain("problem.unlink_ticket");
+  });
+
+  // Before PATCH existed, rootCause/workaround/status were write-once at
+  // creation — so a "known error" could never acquire the workaround the status
+  // promises. These pin the rule that makes the status mean something.
+  describe("editing the investigation", () => {
+    it("updates root cause, workaround and status", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "VPN 4.2 regression");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({
+          rootCause: "Gateway rejects OTP after the 4.2 upgrade",
+          workaround: "Use the legacy 4.1 client until the patch lands",
+          status: "known_error",
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("known_error");
+      expect(res.body.data.workaround).toContain("legacy 4.1");
+      expect(res.body.data.rootCause).toContain("OTP");
+    });
+
+    it("refuses known_error without a workaround (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "No workaround yet");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error" });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/workaround/i);
+
+      // And it really didn't move.
+      const after = await prisma.problem.findUniqueOrThrow({
+        where: { id: problem.id },
+      });
+      expect(after.status).toBe("investigating");
+    });
+
+    it("allows known_error when the workaround arrives in the same request", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Same-request workaround");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "Restart the print spooler" })
+        .expect(200);
+    });
+
+    // The rules judge the resulting state, not the patch.
+    it("allows known_error later, using the stored workaround", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Stored workaround");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ workaround: "Use the web client" })
+        .expect(200);
+      // Second call sends only the status.
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error" })
+        .expect(200);
+    });
+
+    it("refuses to clear the workaround out from under known_error (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Clear guard");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "Use the web client" })
+        .expect(200);
+
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ workaround: null })
+        .expect(400);
+    });
+
+    it("rejects an empty patch and an unknown field (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Validator checks");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({})
+        .expect(400);
+      // .strict() — a typo'd key must not silently no-op.
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ rootCauze: "typo" })
+        .expect(400);
+    });
+
+    it("forbids a requester (403)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Requester guard");
+      const marcus = await login("marcus.chen@acme.com");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(marcus))
+        .send({ rootCause: "nope" })
+        .expect(403);
+    });
+
+    it("404s another customer's problem instead of leaking it", async () => {
+      const owen = await login("owen.park@acme.com"); // Globex
+      const globex = await convert(owen, 2001, "Globex internal");
+      const dana = await login("dana.reyes@acme.com"); // Acme
+      await request(app)
+        .patch(`${API}/problems/${globex.id}`)
+        .set(bearer(dana))
+        .send({ rootCause: "cross-tenant write" })
+        .expect(404);
+
+      const untouched = await prisma.problem.findUniqueOrThrow({
+        where: { id: globex.id },
+      });
+      expect(untouched.rootCause).toBeNull();
+    });
+
+    it("notifies the assignees of linked incidents when a workaround lands", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Announce me");
+      // 1027 is Acme, assigned to Ana M. — a different agent.
+      await request(app)
+        .post(`${API}/tickets/1027/problem`)
+        .set(bearer(dana))
+        .send({ problemId: problem.id })
+        .expect(200);
+
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "Use the web client" })
+        .expect(200);
+
+      const ana = await prisma.user.findUniqueOrThrow({
+        where: { email: "ana.m@acme.com" },
+      });
+      const notes = await prisma.notification.findMany({
+        where: { userId: ana.id, type: "problem.workaround_available" },
+      });
+      expect(notes).toHaveLength(1);
+      expect(notes[0].ticketId).toBe(1027);
+    });
+
+    it("does not re-notify when an existing known error is edited again", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "No repeat");
+      await request(app)
+        .post(`${API}/tickets/1027/problem`)
+        .set(bearer(dana))
+        .send({ problemId: problem.id })
+        .expect(200);
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "known_error", workaround: "first text" })
+        .expect(200);
+
+      const countAfterFirst = await prisma.notification.count({
+        where: { type: "problem.workaround_available" },
+      });
+
+      // Correcting a typo must not interrupt everyone a second time.
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ workaround: "clearer text" })
+        .expect(200);
+
+      expect(
+        await prisma.notification.count({
+          where: { type: "problem.workaround_available" },
+        }),
+      ).toBe(countAfterFirst);
+    });
+
+    it("audits the edit with field names but not free-text contents", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Audit me");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ rootCause: "a very secret internal detail", status: "resolved" })
+        .expect(200);
+
+      const row = await prisma.auditLog.findFirstOrThrow({
+        where: {
+          entity: "problem",
+          entityId: problem.id,
+          action: "problem.update",
+        },
+      });
+      const meta = row.meta as { fields: string[]; status?: string };
+      expect(meta.fields).toContain("rootCause");
+      expect(meta.status).toBe("resolved");
+      // Free text can run to 5k chars; the trail records that it changed only.
+      expect(JSON.stringify(meta)).not.toContain("secret internal detail");
+    });
+
+    // The KB has no table, so nothing at the database level can reject a bad
+    // article id — validation on write is the only thing preventing dangling
+    // references, and resolution on read is what makes a stale one visible.
+    it("links a KB article and resolves it on read", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Outlook prompts");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" });
+      expect(res.status).toBe(200);
+      expect(res.body.data.kbArticleId).toBe("KB-042");
+      expect(res.body.data.kbArticle).toMatchObject({ id: "KB-042" });
+      expect(typeof res.body.data.kbArticle.title).toBe("string");
+      expect(res.body.data.kbArticle.title.length).toBeGreaterThan(0);
+    });
+
+    it("rejects an article id that does not exist (400)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Bad reference");
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-does-not-exist" });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/knowledge-base article/i);
+
+      const after = await prisma.problem.findUniqueOrThrow({
+        where: { id: problem.id },
+      });
+      expect(after.kbArticleId).toBeNull();
+    });
+
+    it("unlinks the article with null", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Unlink kb");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" })
+        .expect(200);
+
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: null });
+      expect(res.status).toBe(200);
+      expect(res.body.data.kbArticleId).toBeNull();
+      expect(res.body.data.kbArticle).toBeNull();
+    });
+
+    // A reference can go stale when an article is dropped from the dataset. The
+    // problem must still load, with the link reported as unavailable.
+    it("reports a stale reference instead of failing the read", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Stale reference");
+      // Write a now-missing id directly — the API would reject it, which is the
+      // point: this state can only arise from the KB dataset changing later.
+      await prisma.problem.update({
+        where: { id: problem.id },
+        data: { kbArticleId: "KB-retired" },
+      });
+
+      const res = await request(app)
+        .get(`${API}/problems/${problem.id}`)
+        .set(bearer(dana));
+      expect(res.status).toBe(200);
+      expect(res.body.data.kbArticleId).toBe("KB-retired");
+      expect(res.body.data.kbArticle).toBeNull();
+    });
+
+    it("keeps the article link through an unrelated edit", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Sticky link");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" })
+        .expect(200);
+
+      // Patching only the status must not disturb the reference.
+      const res = await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ status: "resolved" });
+      expect(res.body.data.kbArticleId).toBe("KB-042");
+    });
+
+    it("exposes the article on the list endpoint too", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Listed with kb");
+      await request(app)
+        .patch(`${API}/problems/${problem.id}`)
+        .set(bearer(dana))
+        .send({ kbArticleId: "KB-042" })
+        .expect(200);
+
+      const list = await request(app)
+        .get(`${API}/problems?search=Listed with kb`)
+        .set(bearer(dana));
+      const found = (
+        list.body.data as Array<{ id: number; kbArticle: { id: string } | null }>
+      ).find((p) => p.id === problem.id);
+      expect(found?.kbArticle?.id).toBe("KB-042");
+    });
+
+    it("permits any status transition (no whitelist, unlike tickets)", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const problem = await convert(dana, 1042, "Transitions");
+      for (const status of ["resolved", "closed", "investigating"] as const) {
+        await request(app)
+          .patch(`${API}/problems/${problem.id}`)
+          .set(bearer(dana))
+          .send({ status })
+          .expect(200);
+      }
+    });
+  });
+
+  it("audits a link to an existing problem", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const problem = await convert(dana, 1042, "Link audit");
+    await request(app)
+      .post(problemOn(1035))
+      .set(bearer(dana))
+      .send({ problemId: problem.id })
+      .expect(200);
+
+    const rows = await prisma.auditLog.findMany({
+      where: { entity: "ticket", entityId: 1035, action: "problem.link_ticket" },
+      select: { meta: true },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].meta).toMatchObject({ problemId: problem.id });
   });
 });

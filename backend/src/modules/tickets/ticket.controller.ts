@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { Unauthorized } from "../../shared/errors";
 import { ticketService } from "./ticket.service";
 import {
+  closedHistoryQuery,
   createTicketBody,
   importTicketsBody,
   listTicketsQuery,
@@ -25,6 +26,36 @@ export const ticketController = {
     const query = listTicketsQuery.parse(req.query);
     const data = await ticketService.list(query, currentUser(req));
     res.json({ data, meta: { total: data.length } });
+  },
+
+  /**
+   * The closed-ticket history log. `meta.period` carries the window the server
+   * resolved plus the anchors either side, so the client labels and navigates
+   * from the response instead of computing calendar boundaries itself.
+   */
+  async closedHistory(req: Request, res: Response) {
+    const query = closedHistoryQuery.parse(req.query);
+    const { items, total, period } = await ticketService.closedHistory(
+      query,
+      currentUser(req),
+    );
+    res.json({
+      data: items,
+      meta: {
+        total,
+        limit: query.limit,
+        offset: query.offset,
+        returned: items.length,
+        period: {
+          granularity: period.granularity,
+          start: period.start.toISOString(),
+          end: period.end.toISOString(),
+          prevAnchor: period.prevAnchor.toISOString(),
+          nextAnchor: period.nextAnchor.toISOString(),
+          isCurrent: period.isCurrent,
+        },
+      },
+    });
   },
 
   async get(req: Request, res: Response) {

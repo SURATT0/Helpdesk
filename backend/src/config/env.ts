@@ -51,6 +51,10 @@ export const env = {
   authRateLimit: Number(process.env.AUTH_RATE_LIMIT ?? 20),
   // Background sweep that closes tickets left resolved > 72h. Set AUTO_CLOSE=false to disable.
   autoClose: process.env.AUTO_CLOSE !== "false",
+  // Background sweep that notifies staff about SLA clocks nearing or past their
+  // due time. Set SLA_ALERTS=false to disable (the SLA badge on reads is
+  // unaffected — this only controls the push).
+  slaAlerts: process.env.SLA_ALERTS !== "false",
   // Log aggregation. Structured JSON always goes to stdout (the baseline any
   // infra log shipper scrapes); when LOKI_URL is set the logger ALSO ships to a
   // Grafana Loki endpoint (`/loki/api/v1/push`). Basic-auth creds are optional

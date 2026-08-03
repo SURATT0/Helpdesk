@@ -3,10 +3,14 @@
 import * as React from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
+import { Avatar } from "@/components/ui/avatar";
+import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { useUsers } from "@/features/users/queries";
 import type { Priority, TicketStatus } from "@/lib/domain";
 import { cn } from "@/lib/utils";
-import { useSearch } from "../search-context";
+import { toneForName } from "../data";
+import { useSearch, type AssigneeKey } from "../search-context";
 
 const STATUSES: TicketStatus[] = [
   "new",
@@ -18,7 +22,9 @@ const STATUSES: TicketStatus[] = [
 ];
 const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];
 
-function FacetDropdown<T extends string>({
+// `T` allows numbers as well as strings so the same control can list assignee
+// ids alongside the `"none"` sentinel, not just string enums.
+function FacetDropdown<T extends string | number>({
   label,
   options,
   selected,
@@ -26,7 +32,7 @@ function FacetDropdown<T extends string>({
   renderOption,
 }: {
   label: string;
-  options: T[];
+  options: readonly T[];
   selected: Set<T>;
   onToggle: (v: T) => void;
   renderOption: (v: T) => React.ReactNode;
@@ -91,6 +97,7 @@ function FacetDropdown<T extends string>({
 
 export function FilterBar() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const {
     query,
     setQuery,
@@ -98,11 +105,37 @@ export function FilterBar() {
     toggleStatus,
     priorities,
     togglePriority,
-    assigneeMe,
-    setAssigneeMe,
+    assignees,
+    toggleAssignee,
     clearFilters,
     activeCount,
   } = useSearch();
+
+  // Only staff can read the user directory (user:read), and a requester only
+  // ever sees their own tickets — an assignee facet would be meaningless there.
+  const isStaff =
+    user != null &&
+    (user.role === "agent" || user.role === "manager" || user.role === "admin");
+  const { data: users = [] } = useUsers({ enabled: isStaff });
+
+  // Anyone who can hold a queue. Requesters raise tickets, they don't own them.
+  const assignable = React.useMemo(
+    () => users.filter((u) => u.role !== "requester"),
+    [users],
+  );
+  const nameById = React.useMemo(
+    () => new Map(assignable.map((u) => [u.id, u.name])),
+    [assignable],
+  );
+
+  const assigneeOptions: AssigneeKey[] = React.useMemo(
+    () => ["none", ...assignable.map((u) => u.id)],
+    [assignable],
+  );
+
+  // "Assigned to me" is a shortcut into the same set, not separate state — so
+  // picking yourself from the dropdown lights the button up too.
+  const meSelected = user != null && assignees.has(user.id);
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-6 py-4">
@@ -131,23 +164,55 @@ export function FilterBar() {
         renderOption={(p) => <PriorityIndicator priority={p} />}
       />
 
-      <button
-        type="button"
-        onClick={() => setAssigneeMe(!assigneeMe)}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12.5px]",
-          assigneeMe
-            ? "border-[#b4dcc3] bg-[#e4f2ea] font-semibold text-brand-hover"
-            : "border-dashed border-[#cbd5e1] font-medium text-muted hover:border-[#94a3b8]",
-        )}
-      >
-        {assigneeMe ? (
-          <Check size={12} strokeWidth={3} />
-        ) : (
-          <span className="leading-none">＋</span>
-        )}
-        {t("filter.assigneeMe")}
-      </button>
+      {isStaff ? (
+        <FacetDropdown
+          label={t("filter.assignee")}
+          options={assigneeOptions}
+          selected={assignees}
+          onToggle={toggleAssignee}
+          renderOption={(a) =>
+            a === "none" ? (
+              <span className="text-[12.5px] font-medium text-muted">
+                {t("filter.unassigned")}
+              </span>
+            ) : (
+              <span className="flex min-w-0 items-center gap-2">
+                <Avatar
+                  name={nameById.get(a) ?? "?"}
+                  tone={toneForName(nameById.get(a) ?? "?")}
+                  size={20}
+                />
+                <span className="truncate text-[12.5px] text-ink">
+                  {nameById.get(a)}
+                  {user?.id === a ? (
+                    <span className="text-faint"> · {t("filter.you")}</span>
+                  ) : null}
+                </span>
+              </span>
+            )
+          }
+        />
+      ) : null}
+
+      {user != null ? (
+        <button
+          type="button"
+          onClick={() => toggleAssignee(user.id)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12.5px]",
+            meSelected
+              ? "border-[#b4dcc3] bg-[#e4f2ea] font-semibold text-brand-hover"
+              : "border-dashed border-[#cbd5e1] font-medium text-muted hover:border-[#94a3b8]",
+          )}
+        >
+          {meSelected ? (
+            <Check size={12} strokeWidth={3} />
+          ) : (
+            <span className="leading-none">＋</span>
+          )}
+          {t("filter.assigneeMe")}
+        </button>
+      ) : null}
 
       {activeCount > 0 ? (
         <button

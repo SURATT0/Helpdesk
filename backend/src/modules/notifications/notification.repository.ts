@@ -64,6 +64,28 @@ export const notificationRepository = {
     return result;
   },
 
+  /**
+   * Which `(ticketId, userId, type)` combinations already exist, as a set of
+   * `"<ticketId>:<userId>:<type>"` keys.
+   *
+   * This is the idempotency guard for the recurring SLA sweep, which re-examines
+   * the same at-risk tickets every time it runs and must not re-notify. Done as a
+   * lookup rather than a unique index because the dedupe is per alert TYPE, not
+   * per ticket: a ticket that was warned and later breaches should still produce
+   * the breach alert, and a reassignment should still notify the new assignee.
+   */
+  async findExistingKeys(
+    types: readonly string[],
+    ticketIds: readonly number[],
+  ): Promise<Set<string>> {
+    if (ticketIds.length === 0 || types.length === 0) return new Set();
+    const rows = await prisma.notification.findMany({
+      where: { type: { in: [...types] }, ticketId: { in: [...ticketIds] } },
+      select: { ticketId: true, userId: true, type: true },
+    });
+    return new Set(rows.map((r) => `${r.ticketId}:${r.userId}:${r.type}`));
+  },
+
   async listForUser(userId: number, limit = 20): Promise<NotificationDto[]> {
     const rows = await prisma.notification.findMany({
       where: { userId },
