@@ -167,7 +167,17 @@ const HOUR_MS = 3_600_000;
  * seed runs) or a calendar position — `monthsAgo: 1, day: 14` means the 14th of
  * last month, local time, because that is how the history log slices periods.
  */
-type Closure = { hoursAgo: number } | { monthsAgo: number; day: number };
+type Closure =
+  | { hoursAgo: number }
+  | { monthsAgo: number; day: number }
+  /**
+   * A fixed month/day in the PREVIOUS calendar year (month is 1-12). Needed
+   * because `monthsAgo` cannot express that: seeded in January, `monthsAgo: 13`
+   * lands in December two years back, not last year. The history log's year view
+   * — and the E2E spec that steps back one year — need last year to be populated
+   * whatever month the seed runs in.
+   */
+  | { prevYear: { month: number; day: number } };
 
 /**
  * Closed tickets stretching back over a year, so the history log has something
@@ -220,9 +230,9 @@ const CLOSED_HISTORY: {
   { id: 1017, subject: "Contractor access revoked late — audit finding", priority: "high", requester: "HR Ops", assignee: "Dana Reyes", category: "Access", customer: "Acme Corp", closure: { monthsAgo: 4, day: 16 }, openHours: 16 },
   { id: 1018, subject: "Printer driver rollout broke Finance queue", priority: "medium", requester: "R. Danforth", assignee: "Ana M.", category: "Hardware", customer: "Acme Corp", closure: { monthsAgo: 5, day: 8 }, openHours: 52 },
 
-  // --- Last year (13+ months back always crosses the year boundary) ---
-  { id: 1019, subject: "Annual access review — dormant accounts", priority: "medium", requester: "HR Ops", assignee: "Dana Reyes", category: "Accounts", customer: "Acme Corp", closure: { monthsAgo: 13, day: 15 }, openHours: 96 },
-  { id: 1020, subject: "Mailbox migration wave 2 — Globex HQ", priority: "high", requester: "Priya Shah", assignee: "Owen Park", category: "Email", customer: "Globex Inc", closure: { monthsAgo: 14, day: 21 }, openHours: 36 },
+  // --- Last year (pinned to the previous calendar year, not a month offset) ---
+  { id: 1019, subject: "Annual access review — dormant accounts", priority: "medium", requester: "HR Ops", assignee: "Dana Reyes", category: "Accounts", customer: "Acme Corp", closure: { prevYear: { month: 6, day: 15 } }, openHours: 96 },
+  { id: 1020, subject: "Mailbox migration wave 2 — Globex HQ", priority: "high", requester: "Priya Shah", assignee: "Owen Park", category: "Email", customer: "Globex Inc", closure: { prevYear: { month: 5, day: 21 } }, openHours: 36 },
 ];
 
 /**
@@ -237,6 +247,16 @@ const CLOSED_HISTORY: {
 function closureAt(now: Date, closure: Closure): Date {
   if ("hoursAgo" in closure) {
     return new Date(now.getTime() - closure.hoursAgo * HOUR_MS);
+  }
+  if ("prevYear" in closure) {
+    // Always in the past, so no future clamp is needed.
+    return new Date(
+      now.getFullYear() - 1,
+      closure.prevYear.month - 1,
+      closure.prevYear.day,
+      14,
+      30,
+    );
   }
   const month = now.getMonth() - closure.monthsAgo;
   const lastDay = new Date(now.getFullYear(), month + 1, 0).getDate();

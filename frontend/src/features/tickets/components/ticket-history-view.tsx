@@ -199,7 +199,13 @@ export function TicketHistoryView() {
           >
             <ChevronLeft size={14} />
           </button>
-          <span className="min-w-[13ch] text-center text-[13px] font-semibold text-ink">
+          {/* Test id, not a semantic handle: the label is plain text whose shape
+              varies by granularity and locale, so there is nothing stable to
+              match on from the outside. */}
+          <span
+            data-testid="history-period"
+            className="min-w-[13ch] text-center text-[13px] font-semibold text-ink"
+          >
             {period ? periodLabel(period, lang) : "—"}
           </span>
           <button
