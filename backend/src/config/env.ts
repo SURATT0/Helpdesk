@@ -96,9 +96,17 @@ export const env = {
     // (providers must present it). Unknown senders become `requester` users
     // automatically unless disabled. `defaultCategory` names the category new
     // email tickets land in (falls back to the first category if unset/unknown).
+    //
+    // `defaultCustomer` names the tenant an unknown sender is filed under. It has
+    // NO fallback on purpose: the customer is the isolation boundary, so guessing
+    // it would either leak mail into someone else's tenant or (with no customer
+    // at all) create a ticket that no agent or manager can see — `ticketScopeWhere`
+    // matches staff on `customerId` equality, which never matches null. Unset
+    // means unknown senders are refused rather than filed invisibly.
     email: {
       webhookSecret: process.env.EMAIL_WEBHOOK_SECRET || undefined,
       defaultCategory: process.env.EMAIL_DEFAULT_CATEGORY || undefined,
+      defaultCustomer: process.env.EMAIL_DEFAULT_CUSTOMER || undefined,
       createUnknownRequester:
         process.env.EMAIL_CREATE_UNKNOWN_REQUESTER !== "false",
     },

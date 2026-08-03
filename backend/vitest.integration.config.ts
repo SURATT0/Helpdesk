@@ -21,6 +21,11 @@ export default defineConfig({
       // tests; route new email tickets to a category that exists in the seed.
       EMAIL_WEBHOOK_SECRET: "test-webhook-secret",
       EMAIL_DEFAULT_CATEGORY: "Email",
+      // The tenant an unknown sender is filed under. REQUIRED to accept mail
+      // from a stranger: without it the created requester — and then the ticket —
+      // would carry customerId null, which no agent or manager can ever see.
+      // A seeded customer, so the created user lands somewhere real.
+      EMAIL_DEFAULT_CUSTOMER: "Acme Corp",
     },
     fileParallelism: false, // one shared DB — run files serially
     hookTimeout: 30_000,

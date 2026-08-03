@@ -7,13 +7,25 @@ export type InboundEmail = {
   subject: string;
   /** Plain-text body. */
   text: string;
+  /** RFC 5322 Message-ID of this mail, when the provider passes it through. */
+  messageId?: string;
+  /** In-Reply-To header — kept for a future header-based threading upgrade. */
+  inReplyTo?: string;
 };
 
+/**
+ * What one inbound mail turned into. `kind` distinguishes the two paths:
+ * a reply recognised by its `[#123]` subject tag is appended to that ticket's
+ * thread; anything else opens a new ticket.
+ */
 export type IngestResult = {
+  kind: "ticket" | "comment" | "duplicate";
   ticketId: number;
   requesterId: number;
   /** True when the sender wasn't a known user and a requester was created. */
   requesterCreated: boolean;
+  /** Set when the mail was threaded onto an existing ticket. */
+  commentId?: number;
 };
 
 export type EmailStatus = {

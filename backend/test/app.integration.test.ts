@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
+import { env } from "../src/config/env";
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { prisma, resetDb } from "./db";
 
@@ -1166,6 +1167,242 @@ describe("email-to-ticket webhook", () => {
       .set("x-webhook-secret", SECRET)
       .send({ subject: "orphan", text: "no sender" });
     expect(res.status).toBe(400);
+  });
+
+  // The reason EMAIL_DEFAULT_CUSTOMER exists. A requester created with
+  // customerId null produces a ticket with customerId null, and
+  // ticketScopeWhere matches staff on customerId EQUALITY — so that ticket is
+  // invisible to every agent and manager. Silently filing an unseeable ticket is
+  // worse than refusing the mail.
+  it("files an unknown sender under the configured tenant", async () => {
+    const res = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", SECRET)
+      .send({
+        from: "stranger@partner.example",
+        subject: "Cannot reach the portal",
+        text: "It times out.",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.requesterCreated).toBe(true);
+
+    const acme = await prisma.customer.findUniqueOrThrow({
+      where: { name: "Acme Corp" },
+    });
+    const user = await prisma.user.findFirstOrThrow({
+      where: { email: "stranger@partner.example" },
+    });
+    expect(user.customerId).toBe(acme.id);
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: res.body.data.ticketId },
+    });
+    expect(ticket.customerId).toBe(acme.id);
+  });
+
+  // The consequence that actually matters: staff can see it.
+  it("makes that ticket visible to an agent of the tenant", async () => {
+    const created = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", SECRET)
+      .send({
+        from: "stranger2@partner.example",
+        subject: "Printer offline",
+        text: "Nothing prints.",
+      });
+    expect(created.status).toBe(201);
+
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    const list = await request(app).get(`${API}/tickets`).set(bearer(dana));
+    const ids: number[] = list.body.data.map((t: { id: number }) => t.id);
+    expect(ids).toContain(created.body.data.ticketId);
+  });
+
+  it("refuses an unknown sender when no tenant is configured (400)", async () => {
+    // env is read once at import; this property is what the service consults, so
+    // override it for the duration of the check and put it back.
+    const original = env.integrations.email.defaultCustomer;
+    env.integrations.email.defaultCustomer = undefined;
+    try {
+      const res = await request(app)
+        .post(ENDPOINT)
+        .set("x-webhook-secret", SECRET)
+        .send({
+          from: "nowhere@partner.example",
+          subject: "No tenant",
+          text: "x",
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/EMAIL_DEFAULT_CUSTOMER/);
+      // Nothing was created — not a half-written user with no tenant.
+      expect(
+        await prisma.user.count({ where: { email: "nowhere@partner.example" } }),
+      ).toBe(0);
+    } finally {
+      env.integrations.email.defaultCustomer = original;
+    }
+  });
+
+  it("refuses when the configured tenant does not exist (400)", async () => {
+    const original = env.integrations.email.defaultCustomer;
+    env.integrations.email.defaultCustomer = "No Such Customer Ltd";
+    try {
+      const res = await request(app)
+        .post(ENDPOINT)
+        .set("x-webhook-secret", SECRET)
+        .send({
+          from: "ghost@partner.example",
+          subject: "Bad tenant",
+          text: "x",
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/No Such Customer Ltd/);
+    } finally {
+      env.integrations.email.defaultCustomer = original;
+    }
+  });
+
+  it("leaves a known sender's own tenant alone", async () => {
+    // Marcus is Acme; the default customer must not override a real membership.
+    const res = await request(app)
+      .post(ENDPOINT)
+      .set("x-webhook-secret", SECRET)
+      .send({
+        from: "marcus.chen@acme.com",
+        subject: "Known sender",
+        text: "x",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.requesterCreated).toBe(false);
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    expect(res.body.data.requesterId).toBe(marcus.id);
+  });
+});
+
+// The other half of this branch: a mailed reply carrying [#123] joins that
+// ticket's thread instead of opening a duplicate ticket. Ticket 1042 is Acme,
+// requester Marcus Chen, assignee Dana Reyes.
+describe("email-to-ticket threading", () => {
+  const ENDPOINT = `${API}/integrations/email-inbound`;
+  const SECRET = "test-webhook-secret";
+
+  const post = (body: Record<string, unknown>) =>
+    request(app).post(ENDPOINT).set("x-webhook-secret", SECRET).send(body);
+
+  const commentsOn = (ticketId: number) =>
+    prisma.comment.findMany({ where: { ticketId }, orderBy: { id: "asc" } });
+
+  it("threads the requester's reply onto the referenced ticket", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Still happening this morning.",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("comment");
+    expect(res.body.data.ticketId).toBe(1042);
+
+    const after = await commentsOn(1042);
+    expect(after.length).toBe(before.length + 1);
+    const added = after[after.length - 1];
+    expect(added.body).toBe("Still happening this morning.");
+    expect(added.channel).toBe("email");
+    expect(added.internal).toBe(false);
+  });
+
+  it("lets the assigned agent thread a reply in", async () => {
+    const res = await post({
+      from: "dana.reyes@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Escalating to Network Ops.",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("comment");
+  });
+
+  // The security case: a subject line is sender-controlled, so guessing an id
+  // must not reach someone else's conversation.
+  it("opens a new ticket instead of threading for an unrelated requester", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "t.alvarez@acme.com", // Acme requester, nothing to do with 1042
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Let me in.",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("ticket");
+    expect(res.body.data.ticketId).not.toBe(1042);
+    expect(await commentsOn(1042)).toHaveLength(before.length);
+
+    // The quoted ref is stripped so the new ticket's title isn't misleading.
+    const created = await prisma.ticket.findUniqueOrThrow({
+      where: { id: res.body.data.ticketId },
+    });
+    expect(created.subject).not.toContain("#1042");
+  });
+
+  it("does not let another customer's user thread onto an Acme ticket", async () => {
+    const before = await commentsOn(1042);
+    const res = await post({
+      from: "priya.shah@acme.com", // seeded address, but a Globex user
+      subject: "[#1042] give me the details",
+      text: "hello",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("ticket");
+    expect(await commentsOn(1042)).toHaveLength(before.length);
+  });
+
+  it("ignores a redelivered message instead of double-posting", async () => {
+    const payload = {
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      "message-id": "<dup-1@mail.test>",
+      text: "Sending again in case you missed it.",
+    };
+
+    const first = await post(payload);
+    expect(first.status).toBe(201);
+    expect(first.body.data.kind).toBe("comment");
+    const afterFirst = await commentsOn(1042);
+
+    const second = await post(payload);
+    // 200, not 201 — nothing was created the second time.
+    expect(second.status).toBe(200);
+    expect(second.body.data.kind).toBe("duplicate");
+    expect(second.body.data.commentId).toBe(first.body.data.commentId);
+    expect(await commentsOn(1042)).toHaveLength(afterFirst.length);
+  });
+
+  it("shows a threaded email reply to the requester in the ticket thread", async () => {
+    await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#1042] VPN drops every 10 minutes after 4.2 update",
+      text: "Adding a screenshot next time.",
+    });
+
+    const marcus = await login("marcus.chen@acme.com");
+    const thread = await request(app)
+      .get(`${API}/tickets/1042/comments`)
+      .set(bearer(marcus));
+    expect(thread.status).toBe(200);
+    const bodies: string[] = thread.body.data.map(
+      (c: { body: string }) => c.body,
+    );
+    expect(bodies).toContain("Adding a screenshot next time.");
+  });
+
+  it("opens a new ticket when the referenced id does not exist", async () => {
+    const res = await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: [#999999] something that was never real",
+      text: "x",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("ticket");
   });
 });
 
