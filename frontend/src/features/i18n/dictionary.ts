@@ -174,12 +174,15 @@ const en: Dict = {
     "The activity log is available to managers and admins. Ask an administrator if you need access.",
 
   "closedLog.explainer":
-    "Closed tickets, kept as a permanent log — tickets are closed, never deleted. Pick a week, month, or year and step back through the periods. You see the same tickets you can see anywhere else in Deskly.",
+    "Closed tickets, kept as a permanent log — tickets are closed, never deleted. Pick a week, month, or year, then step through the periods or choose one from the list to jump straight to it. You see the same tickets you can see anywhere else in Deskly.",
   "closedLog.granularity.week": "Week",
   "closedLog.granularity.month": "Month",
   "closedLog.granularity.year": "Year",
   "closedLog.olderPeriod": "Earlier period",
   "closedLog.newerPeriod": "Later period",
+  "closedLog.pickPeriod": "Choose a period",
+  "closedLog.noPeriods": "No tickets have been closed yet",
+  "closedLog.periodsTruncated": "Showing the {limit} most recent",
   "closedLog.closedCount": "{count} closed in this period",
   "closedLog.col.id": "Ticket",
   "closedLog.col.subject": "Subject",
@@ -693,12 +696,15 @@ const th: Dict = {
     "ประวัติการใช้งานเปิดให้ผู้จัดการและผู้ดูแลระบบ หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
 
   "closedLog.explainer":
-    "ตั๋วงานที่ปิดแล้วจะถูกเก็บเป็นประวัติถาวร — ตั๋วงานถูกปิด ไม่ถูกลบ เลือกดูเป็นรายสัปดาห์ รายเดือน หรือรายปี และย้อนดูช่วงก่อนหน้าได้ คุณจะเห็นเฉพาะตั๋วงานที่คุณมีสิทธิ์เห็นเช่นเดียวกับหน้าอื่น",
+    "ตั๋วงานที่ปิดแล้วจะถูกเก็บเป็นประวัติถาวร — ตั๋วงานถูกปิด ไม่ถูกลบ เลือกดูเป็นรายสัปดาห์ รายเดือน หรือรายปี แล้วเลื่อนดูช่วงก่อนหน้า หรือกดเลือกช่วงจากรายการเพื่อข้ามไปเลยก็ได้ คุณจะเห็นเฉพาะตั๋วงานที่คุณมีสิทธิ์เห็นเช่นเดียวกับหน้าอื่น",
   "closedLog.granularity.week": "รายสัปดาห์",
   "closedLog.granularity.month": "รายเดือน",
   "closedLog.granularity.year": "รายปี",
   "closedLog.olderPeriod": "ช่วงก่อนหน้า",
   "closedLog.newerPeriod": "ช่วงถัดไป",
+  "closedLog.pickPeriod": "เลือกช่วงเวลา",
+  "closedLog.noPeriods": "ยังไม่มีตั๋วงานที่ปิด",
+  "closedLog.periodsTruncated": "แสดง {limit} ช่วงล่าสุด",
   "closedLog.closedCount": "ปิดไป {count} ใบ ในช่วงนี้",
   "closedLog.col.id": "ตั๋วงาน",
   "closedLog.col.subject": "หัวข้อ",

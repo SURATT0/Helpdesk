@@ -38,6 +38,14 @@ export const listTicketsQuery = z.object({
  * alone and the client never has to know how long a month is. An absent anchor
  * means the period containing now, which is what the page opens on.
  */
+/**
+ * Which periods the picker should list. No anchor or range: the answer is "every
+ * period that holds something", which the server derives from the data itself.
+ */
+export const closedPeriodsQuery = z.object({
+  granularity: z.enum(["week", "month", "year"]).default("month"),
+});
+
 export const closedHistoryQuery = z.object({
   granularity: z.enum(["week", "month", "year"]).default("month"),
   anchor: z.coerce.date().optional(),

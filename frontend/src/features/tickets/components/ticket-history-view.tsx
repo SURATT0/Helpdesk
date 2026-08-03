@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { PriorityIndicator } from "@/components/ui/status-badge";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
@@ -10,7 +10,7 @@ import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import { toneForName } from "../data";
 import { formatDuration, openDuration } from "../duration";
-import { useClosedHistory } from "../queries";
+import { useClosedHistory, useClosedPeriods } from "../queries";
 import type { Granularity, Period, Ticket } from "../schemas";
 
 const PAGE_SIZE = 50;
@@ -22,11 +22,17 @@ const GRANULARITIES: readonly Granularity[] = ["week", "month", "year"];
 const locale = (lang: string) => (lang === "th" ? "th-TH" : "en-US");
 
 /**
- * Label the window from its own bounds rather than from a granularity switch on
+ * Label a window from its own bounds rather than from a granularity switch on
  * the client, so the text always describes what the server actually queried.
  * `end` is exclusive, so the week label counts back a day to name its last day.
+ *
+ * Takes just the three fields it reads, so the same formatter labels the window
+ * on screen and every entry in the picker — those cannot drift apart.
  */
-function periodLabel(period: Period, lang: string): string {
+function periodLabel(
+  period: { granularity: Granularity; start: string; end: string },
+  lang: string,
+): string {
   const start = new Date(period.start);
   const loc = locale(lang);
 
@@ -127,6 +133,127 @@ function Row({ ticket, last }: { ticket: Ticket; last: boolean }) {
 }
 
 /**
+ * The window on screen, as a button that opens a list of the periods that hold
+ * something. The arrows either side step one period at a time; this is how you
+ * cross years without clicking twelve times, and it also makes the label
+ * discoverable as a control rather than looking like static text.
+ *
+ * Only populated periods are listed, so every entry leads somewhere — and the
+ * list doubles as an answer to "which years do we even have history for", which
+ * the stepper alone could only reveal by trial.
+ */
+function PeriodPicker({
+  granularity,
+  current,
+  onPick,
+}: {
+  granularity: Granularity;
+  current: Period | undefined;
+  onPick: (anchor: string) => void;
+}) {
+  const { t, lang } = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const boxRef = React.useRef<HTMLDivElement>(null);
+
+  // Fetch only once opened: the picker is a detour, not the main path.
+  const { data, isLoading } = useClosedPeriods(granularity, { enabled: open });
+  const periods = data?.data ?? [];
+
+  // Close on an outside click or Escape, like the other menus in the app.
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const label = current ? periodLabel(current, lang) : "—";
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={!current}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        // Test id, not a semantic handle: the label is plain text whose shape
+        // varies by granularity and locale, so there is nothing stable to match
+        // on from the outside.
+        data-testid="history-period"
+        className="flex min-w-[15ch] items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-semibold text-ink hover:bg-app disabled:opacity-40"
+      >
+        {label}
+        <ChevronDown size={13} className="text-faint" />
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          aria-label={t("closedLog.pickPeriod")}
+          className="absolute right-0 z-20 mt-1 max-h-[320px] w-[240px] overflow-y-auto rounded-lg border border-line bg-panel py-1 shadow-lg"
+        >
+          {isLoading ? (
+            <div className="px-3 py-2 text-[12.5px] text-faint">
+              {t("closedLog.loading")}
+            </div>
+          ) : null}
+
+          {!isLoading && periods.length === 0 ? (
+            <div className="px-3 py-2 text-[12.5px] text-faint">
+              {t("closedLog.noPeriods")}
+            </div>
+          ) : null}
+
+          {periods.map((p) => {
+            const selected = current?.start === p.start;
+            return (
+              <button
+                key={p.start}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  // `start` is inside its own period, so it works as the anchor.
+                  onPick(p.start);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[12.5px] hover:bg-app",
+                  selected ? "font-semibold text-brand-hover" : "text-ink",
+                )}
+              >
+                <span className="truncate">
+                  {periodLabel({ granularity, start: p.start, end: p.end }, lang)}
+                </span>
+                <span className="flex-none tabular-nums text-[11.5px] text-faint">
+                  {p.count}
+                </span>
+              </button>
+            );
+          })}
+
+          {data?.meta.truncated ? (
+            <div className="border-t border-[#f1f4f8] px-3 py-1.5 text-[11.5px] text-faint">
+              {t("closedLog.periodsTruncated", { limit: data.meta.limit })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The closed-ticket history log: one calendar period at a time, stepped with the
  * anchors the server returns. Changing granularity clears the anchor so the view
  * lands on the *current* week/month/year rather than reinterpreting the period
@@ -199,15 +326,11 @@ export function TicketHistoryView() {
           >
             <ChevronLeft size={14} />
           </button>
-          {/* Test id, not a semantic handle: the label is plain text whose shape
-              varies by granularity and locale, so there is nothing stable to
-              match on from the outside. */}
-          <span
-            data-testid="history-period"
-            className="min-w-[13ch] text-center text-[13px] font-semibold text-ink"
-          >
-            {period ? periodLabel(period, lang) : "—"}
-          </span>
+          <PeriodPicker
+            granularity={granularity}
+            current={period}
+            onPick={goTo}
+          />
           <button
             type="button"
             onClick={() => period && goTo(period.nextAnchor)}

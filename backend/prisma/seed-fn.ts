@@ -171,13 +171,13 @@ type Closure =
   | { hoursAgo: number }
   | { monthsAgo: number; day: number }
   /**
-   * A fixed month/day in the PREVIOUS calendar year (month is 1-12). Needed
-   * because `monthsAgo` cannot express that: seeded in January, `monthsAgo: 13`
-   * lands in December two years back, not last year. The history log's year view
-   * — and the E2E spec that steps back one year — need last year to be populated
-   * whatever month the seed runs in.
+   * A fixed month/day in a WHOLE number of calendar years back (month is 1-12,
+   * `yearsAgo: 1` = last year). Needed because `monthsAgo` cannot express that:
+   * seeded in January, `monthsAgo: 13` lands in December two years back, not last
+   * year. The history log's year picker — and the E2E spec that steps back exactly
+   * one year — need each past year populated whatever month the seed runs in.
    */
-  | { prevYear: { month: number; day: number } };
+  | { pastYear: { yearsAgo: number; month: number; day: number } };
 
 /**
  * Closed tickets stretching back over a year, so the history log has something
@@ -230,9 +230,16 @@ const CLOSED_HISTORY: {
   { id: 1017, subject: "Contractor access revoked late — audit finding", priority: "high", requester: "HR Ops", assignee: "Dana Reyes", category: "Access", customer: "Acme Corp", closure: { monthsAgo: 4, day: 16 }, openHours: 16 },
   { id: 1018, subject: "Printer driver rollout broke Finance queue", priority: "medium", requester: "R. Danforth", assignee: "Ana M.", category: "Hardware", customer: "Acme Corp", closure: { monthsAgo: 5, day: 8 }, openHours: 52 },
 
-  // --- Last year (pinned to the previous calendar year, not a month offset) ---
-  { id: 1019, subject: "Annual access review — dormant accounts", priority: "medium", requester: "HR Ops", assignee: "Dana Reyes", category: "Accounts", customer: "Acme Corp", closure: { prevYear: { month: 6, day: 15 } }, openHours: 96 },
-  { id: 1020, subject: "Mailbox migration wave 2 — Globex HQ", priority: "high", requester: "Priya Shah", assignee: "Owen Park", category: "Email", customer: "Globex Inc", closure: { prevYear: { month: 5, day: 21 } }, openHours: 36 },
+  // --- Earlier calendar years, pinned by year rather than by month offset, so
+  // the year picker has several populated years to offer whenever this runs.
+  // #1019 and #1020 stay at yearsAgo 1: the E2E spec steps back exactly one year
+  // and asserts it finds the first and cannot see the second (other customer).
+  { id: 1019, subject: "Annual access review — dormant accounts", priority: "medium", requester: "HR Ops", assignee: "Dana Reyes", category: "Accounts", customer: "Acme Corp", closure: { pastYear: { yearsAgo: 1, month: 6, day: 15 } }, openHours: 96 },
+  { id: 1020, subject: "Mailbox migration wave 2 — Globex HQ", priority: "high", requester: "Priya Shah", assignee: "Owen Park", category: "Email", customer: "Globex Inc", closure: { pastYear: { yearsAgo: 1, month: 5, day: 21 } }, openHours: 36 },
+  { id: 1021, subject: "Datacentre UPS battery replacement window", priority: "high", requester: "R. Danforth", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", closure: { pastYear: { yearsAgo: 2, month: 9, day: 12 } }, openHours: 60 },
+  { id: 1022, subject: "Email signature rollout — brand refresh", priority: "low", requester: "HR Ops", assignee: "Ana M.", category: "Email", customer: "Acme Corp", closure: { pastYear: { yearsAgo: 2, month: 3, day: 27 } }, openHours: 18 },
+  { id: 1023, subject: "Office move — network patching, floor 4", priority: "critical", requester: "L. Osei", assignee: "Dana Reyes", category: "Network", customer: "Acme Corp", closure: { pastYear: { yearsAgo: 3, month: 11, day: 8 } }, openHours: 240 },
+  { id: 1024, subject: "Legacy VPN client decommission", priority: "medium", requester: "J. Petrov", assignee: "Kai T.", category: "Network", customer: "Acme Corp", closure: { pastYear: { yearsAgo: 4, month: 7, day: 19 } }, openHours: 44 },
 ];
 
 /**
@@ -248,14 +255,15 @@ function closureAt(now: Date, closure: Closure): Date {
   if ("hoursAgo" in closure) {
     return new Date(now.getTime() - closure.hoursAgo * HOUR_MS);
   }
-  if ("prevYear" in closure) {
+  if ("pastYear" in closure) {
     // Always in the past, so no future clamp is needed.
     return new Date(
-      now.getFullYear() - 1,
-      closure.prevYear.month - 1,
-      closure.prevYear.day,
-      14,
-      30,
+      now.getFullYear() - closure.pastYear.yearsAgo,
+      closure.pastYear.month - 1,
+      closure.pastYear.day,
+      // Vary the hour by month so a year's rows aren't all stamped alike.
+      9 + (closure.pastYear.month % 8),
+      (closure.pastYear.day * 7) % 60,
     );
   }
   const month = now.getMonth() - closure.monthsAgo;

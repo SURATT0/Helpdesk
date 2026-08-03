@@ -245,6 +245,116 @@ describe("tickets — closed history log", () => {
   });
 });
 
+describe("tickets — closed history period picker", () => {
+  const periods = (token: string, qs = "") =>
+    request(app)
+      .get(`${API}/tickets/closed/periods${qs}`)
+      .set(bearer(token));
+
+  const yearsOf = (res: { body: { data: { start: string }[] } }) =>
+    res.body.data.map((p) => new Date(p.start).getFullYear());
+
+  it("lists only populated periods, newest first, with counts", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await periods(dana, "?granularity=year");
+    expect(res.status).toBe(200);
+
+    // The seed spans several calendar years, so there is more than one to offer —
+    // which is the whole point of the picker.
+    expect(res.body.data.length).toBeGreaterThan(1);
+    for (const p of res.body.data) expect(p.count).toBeGreaterThan(0);
+
+    // Newest first.
+    const starts = res.body.data.map((p: { start: string }) =>
+      Date.parse(p.start),
+    );
+    expect(starts).toEqual([...starts].sort((a, b) => b - a));
+  });
+
+  it("counts agree with the rows the log returns for the same window", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const list = await periods(dana, "?granularity=year");
+    const newest = list.body.data[0];
+
+    const page = await request(app)
+      .get(
+        `${API}/tickets/closed?granularity=year&anchor=${newest.start}&limit=200`,
+      )
+      .set(bearer(dana));
+    expect(page.status).toBe(200);
+    // The picker's count and the log's total are the same question asked twice;
+    // they share resolvePeriod, so a boundary bug would show up as a mismatch.
+    expect(page.body.meta.total).toBe(newest.count);
+  });
+
+  it("offers a period whose anchor lands on that exact window", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const list = await periods(dana, "?granularity=year");
+    // Pick a past year, so this also proves the anchor is not just "now".
+    const past = list.body.data[1];
+
+    const page = await request(app)
+      .get(`${API}/tickets/closed?granularity=year&anchor=${past.start}`)
+      .set(bearer(dana));
+    expect(page.body.meta.period.start).toBe(past.start);
+    expect(page.body.meta.period.end).toBe(past.end);
+    expect(page.body.meta.period.isCurrent).toBe(false);
+  });
+
+  it("buckets by month as well as by year", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const byMonth = await periods(dana, "?granularity=month");
+    const byYear = await periods(dana, "?granularity=year");
+    // Months are finer, so there are at least as many of them.
+    expect(byMonth.body.data.length).toBeGreaterThanOrEqual(
+      byYear.body.data.length,
+    );
+    expect(byMonth.body.meta.granularity).toBe("month");
+  });
+
+  it("is row-scoped: the picker never reveals another customer's history", async () => {
+    const dana = await login("dana.reyes@acme.com"); // agent, Acme
+    const sam = await login("sam.rivera@acme.com"); // platform admin
+
+    const agentTotal = (await periods(dana, "?granularity=year")).body.data
+      .reduce((n: number, p: { count: number }) => n + p.count, 0);
+    const adminTotal = (await periods(sam, "?granularity=year")).body.data
+      .reduce((n: number, p: { count: number }) => n + p.count, 0);
+
+    // The seed closes at least one Globex ticket, which the Acme agent cannot see,
+    // so the admin's counts must strictly exceed theirs.
+    expect(adminTotal).toBeGreaterThan(agentTotal);
+  });
+
+  it("returns an empty list for a requester with no closed tickets", async () => {
+    // Marcus is deliberately absent from the seeded closure history.
+    const marcus = await login("marcus.chen@acme.com");
+    const res = await periods(marcus, "?granularity=year");
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+    expect(yearsOf(res)).toEqual([]);
+  });
+
+  it("reports the cap rather than silently clipping", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await periods(dana, "?granularity=year");
+    expect(res.body.meta.limit).toBeGreaterThan(0);
+    // The seed is far short of the cap, so nothing should be clipped here — the
+    // flag exists so a long archive cannot read as complete.
+    expect(res.body.meta.truncated).toBe(false);
+    expect(res.body.meta.returned).toBe(res.body.data.length);
+  });
+
+  it("rejects an unknown granularity with 400", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await periods(dana, "?granularity=decade").expect(400);
+  });
+
+  it("requires authentication", async () => {
+    await request(app).get(`${API}/tickets/closed/periods`).expect(401);
+  });
+});
+
 describe("tickets — assignee identity and filter", () => {
   it("exposes assigneeId alongside the display name", async () => {
     const dana = await login("dana.reyes@acme.com");

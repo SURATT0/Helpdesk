@@ -23,6 +23,9 @@ router.post(
 // `/:id` routes so the literal path is never read as an id. No extra permission:
 // it is a ticket read, so repository row scoping is the gate — a requester sees
 // their own closed tickets, staff see their customer's.
+// Declared ahead of "/closed" so the more specific path wins regardless of how
+// Express orders same-prefix routes.
+router.get("/closed/periods", asyncHandler(ticketController.closedPeriods));
 router.get("/closed", asyncHandler(ticketController.closedHistory));
 // Hand one person's queue to another (agent on leave / departed). Declared ahead
 // of the `/:id` routes so the literal path is never read as an id, and gated on

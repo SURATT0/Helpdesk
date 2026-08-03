@@ -7,12 +7,13 @@ import {
 } from "@tanstack/react-query";
 import type { Priority, TicketStatus } from "@/lib/domain";
 import { useAuth } from "@/features/auth/context";
-import type { Comment } from "./schemas";
+import type { Comment, Granularity } from "./schemas";
 import {
   createComment,
   createTicket,
   fetchCategories,
   fetchClosedHistory,
+  fetchClosedPeriods,
   fetchComments,
   fetchReads,
   fetchTicket,
@@ -41,6 +42,8 @@ export const ticketKeys = {
   history: (id: number) => ["tickets", "history", id] as const,
   closed: (filter: ClosedHistoryFilter) =>
     ["tickets", "closed", filter] as const,
+  closedPeriods: (granularity: Granularity) =>
+    ["tickets", "closed", "periods", granularity] as const,
 };
 
 export function useTickets(filter: TicketFilter = {}) {
@@ -60,6 +63,23 @@ export function useClosedHistory(filter: ClosedHistoryFilter) {
     queryKey: ticketKeys.closed(filter),
     queryFn: () => fetchClosedHistory(filter),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Which periods the picker can offer. Cached longer than a page of rows: the set
+ * of populated periods only changes when a ticket is closed, which is rare next to
+ * how often someone steps through windows.
+ */
+export function useClosedPeriods(
+  granularity: Granularity,
+  opts: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: ticketKeys.closedPeriods(granularity),
+    queryFn: () => fetchClosedPeriods(granularity),
+    enabled: opts.enabled ?? true,
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -127,6 +127,38 @@ test("last year's closures are listed, scoped, and open on click", async ({
   await expect(page).toHaveURL(/\/tickets\/1019/);
 });
 
+test("the period picker jumps straight to a past year", async ({ page }) => {
+  await login(page);
+  await page.goto("/history");
+
+  await granularity(page, "Year").click();
+  await expect(periodLabel(page)).toHaveText(/^\d{4}/);
+
+  // The label is the picker. Opening it lists only the years that hold closures,
+  // so every entry leads somewhere — and it doubles as "which years do we have?".
+  await periodLabel(page).click();
+  const list = page.getByRole("listbox");
+  await expect(list).toBeVisible();
+
+  // The list is fetched when opened, so wait for the first entry to render before
+  // counting — otherwise this races the request and counts zero.
+  const options = list.getByRole("option");
+  await expect(options.first()).toBeVisible();
+  // The seed spans several calendar years, which is the point of the picker.
+  expect(await options.count()).toBeGreaterThan(1);
+
+  // Jump to the OLDEST offered year — one click, however far back it is. Stepping
+  // there with the arrow would take as many clicks as there are years.
+  const oldest = options.last();
+  const oldestYear = (await oldest.innerText()).trim().split(/\s+/)[0];
+  await oldest.click();
+
+  await expect(list).toBeHidden();
+  await expect(periodLabel(page)).toHaveText(new RegExp(`^${oldestYear}`));
+  // Landing on a populated period means rows, never the empty state.
+  await expect(page.getByText("No tickets were closed in this period")).toBeHidden();
+});
+
 test("a requester with no closed tickets sees the empty state", async ({
   page,
 }) => {

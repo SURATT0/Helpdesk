@@ -17,6 +17,17 @@ import { resolvePeriod, type Granularity, type Period } from "./history.period";
 import { formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
 import { ACTIVE_STATUSES } from "./ticket.validators";
 
+/**
+ * Ceiling on how many periods the picker lists. Years and months are naturally
+ * few, but weeks grow without bound over a long-lived archive, and a dropdown of
+ * hundreds of entries is not a picker. Not a silent truncation — the response
+ * reports whether it clipped, so the client can say the list is partial.
+ */
+export const PERIOD_LIST_LIMIT = 60;
+
+/** One populated period in the picker: the window plus how many it holds. */
+export type ClosedPeriod = { start: Date; end: Date; count: number };
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REOPEN_WINDOW_MS = 30 * DAY_MS;
 const AUTO_CLOSE_MS = 72 * 60 * 60 * 1000;
@@ -87,6 +98,40 @@ export type ImportResult = {
 export const ticketService = {
   list(filter: TicketFilter, user: AuthUser): Promise<Ticket[]> {
     return ticketRepository.findMany(filter, user);
+  },
+
+  /**
+   * Which periods actually hold closed tickets, newest first, with a count each —
+   * what the history log's period picker lists.
+   *
+   * Only populated periods are returned, so the picker never offers a window that
+   * would come back empty, and the list stays short without needing a date range
+   * from the caller. Buckets are derived with `resolvePeriod`, the same function
+   * that resolves the window being viewed, so a period in the picker and the
+   * window it jumps to can never disagree about where a month starts.
+   */
+  async closedPeriods(
+    granularity: Granularity,
+    user: AuthUser,
+  ): Promise<{ periods: ClosedPeriod[]; truncated: boolean }> {
+    const values = await ticketRepository.findClosedAtValues(user);
+
+    const buckets = new Map<number, ClosedPeriod>();
+    for (const closedAt of values) {
+      const { start, end } = resolvePeriod(granularity, closedAt);
+      const key = start.getTime();
+      const existing = buckets.get(key);
+      if (existing) existing.count++;
+      else buckets.set(key, { start, end, count: 1 });
+    }
+
+    const all = [...buckets.values()].sort(
+      (a, b) => b.start.getTime() - a.start.getTime(),
+    );
+    return {
+      periods: all.slice(0, PERIOD_LIST_LIMIT),
+      truncated: all.length > PERIOD_LIST_LIMIT,
+    };
   },
 
   /**

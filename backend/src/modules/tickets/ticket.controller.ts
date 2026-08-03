@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
 import { Unauthorized } from "../../shared/errors";
-import { ticketService } from "./ticket.service";
+import { PERIOD_LIST_LIMIT, ticketService } from "./ticket.service";
 import {
   closedHistoryQuery,
+  closedPeriodsQuery,
   createTicketBody,
   importTicketsBody,
   listTicketsQuery,
@@ -26,6 +27,33 @@ export const ticketController = {
     const query = listTicketsQuery.parse(req.query);
     const data = await ticketService.list(query, currentUser(req));
     res.json({ data, meta: { total: data.length } });
+  },
+
+  /**
+   * The periods that hold closed tickets, for the history log's picker. Each
+   * carries its own window so the client labels it with the same formatter it
+   * uses for the window on screen, and `truncated` says plainly whether the list
+   * was clipped rather than letting a partial list read as complete.
+   */
+  async closedPeriods(req: Request, res: Response) {
+    const { granularity } = closedPeriodsQuery.parse(req.query);
+    const { periods, truncated } = await ticketService.closedPeriods(
+      granularity,
+      currentUser(req),
+    );
+    res.json({
+      data: periods.map((p) => ({
+        start: p.start.toISOString(),
+        end: p.end.toISOString(),
+        count: p.count,
+      })),
+      meta: {
+        granularity,
+        returned: periods.length,
+        limit: PERIOD_LIST_LIMIT,
+        truncated,
+      },
+    });
   },
 
   /**
