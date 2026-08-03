@@ -4,6 +4,8 @@ import {
   derivePriority,
   normalizeInbound,
   parseTicketRef,
+  ensureTicketRef,
+  ticketRef,
 } from "./email.parsers";
 
 describe("parseEmailAddress", () => {
@@ -134,6 +136,46 @@ describe("normalizeInbound", () => {
         headers: { "in-reply-to": "<prev@mail>" },
       }).inReplyTo,
     ).toBe("<prev@mail>");
+  });
+});
+
+describe("ensureTicketRef", () => {
+  it("formats the tag consistently", () => {
+    expect(ticketRef(9)).toBe("[#9]");
+  });
+
+  it("stamps a ref onto a subject that has none", () => {
+    expect(ensureTicketRef("Re: Printer is down", 42)).toBe(
+      "[#42] Re: Printer is down",
+    );
+  });
+
+  it("does not duplicate a ref that is already correct", () => {
+    expect(ensureTicketRef("[#42] Re: Printer is down", 42)).toBe(
+      "[#42] Re: Printer is down",
+    );
+  });
+
+  // A forwarded old thread must not hijack the ticket it quotes: the ref we
+  // stamp goes first, so parseTicketRef reads ours.
+  it("adds the right ref when the subject quotes a different ticket", () => {
+    const subject = ensureTicketRef("[#7] old thread", 42);
+    expect(subject).toBe("[#42] [#7] old thread");
+    expect(parseTicketRef(subject).ticketId).toBe(42);
+  });
+
+  // The round trip is the contract: whatever goes out must come back readable,
+  // or the reply opens a duplicate ticket instead of threading.
+  it("round-trips through parseTicketRef", () => {
+    const subject = ensureTicketRef("Cannot print", 1234);
+    expect(parseTicketRef(subject)).toEqual({
+      ticketId: 1234,
+      subject: "Cannot print",
+    });
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(ensureTicketRef("   spaced out   ", 3)).toBe("[#3] spaced out");
   });
 });
 

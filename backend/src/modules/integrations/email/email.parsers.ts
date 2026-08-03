@@ -45,6 +45,27 @@ export function derivePriority(subject: string): {
  * localised "Re:"/"Fwd:"/"RE[2]:" prefixes ahead of it. Returns the ticket id
  * and the subject with that tag removed.
  */
+/** Format the reference tag for a ticket id — the one place it is constructed. */
+export function ticketRef(ticketId: number): string {
+  return `[#${ticketId}]`;
+}
+
+/**
+ * Guarantee a subject carries its ticket reference, without duplicating one that
+ * is already correct (a long `Re: Re:` chain must not accrete tags).
+ *
+ * The tag is what `parseTicketRef` reads on the way back in, so any outbound mail
+ * that omits it produces a reply which cannot be threaded — it opens a duplicate
+ * ticket instead. Stamping it here rather than at each call site means a
+ * caller-supplied subject can't quietly break threading.
+ */
+export function ensureTicketRef(subject: string, ticketId: number): string {
+  const trimmed = subject.trim();
+  const found = trimmed.match(/\[#(\d{1,10})\]/);
+  if (found && Number(found[1]) === ticketId) return trimmed;
+  return `${ticketRef(ticketId)} ${trimmed}`.trim();
+}
+
 export function parseTicketRef(subject: string): {
   ticketId: number | null;
   subject: string;

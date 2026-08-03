@@ -26,6 +26,11 @@ export default defineConfig({
       // would carry customerId null, which no agent or manager can ever see.
       // A seeded customer, so the created user lands somewhere real.
       EMAIL_DEFAULT_CUSTOMER: "Acme Corp",
+      // The help desk identity used as From and Reply-To on outbound mail, for
+      // both agent replies and notification emails. Set here so those paths are
+      // exercised with a real address instead of falling back; SMTP_HOST stays
+      // unset, so delivery still goes to the "log" transport.
+      SMTP_FROM: "Deskly Support <helpdesk@deskly.test>",
     },
     fileParallelism: false, // one shared DB — run files serially
     hookTimeout: 30_000,

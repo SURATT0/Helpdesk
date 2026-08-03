@@ -3,6 +3,7 @@ import { env, API_PREFIX, validateEnv } from "./config/env";
 import { logger } from "./shared/logger";
 import { bus } from "./shared/events";
 import { ticketService } from "./modules/tickets/ticket.service";
+import { notificationService } from "./modules/notifications/notification.service";
 
 // Fail fast on a misconfigured environment (missing DB URL, weak/default auth
 // secrets in production) before we ever bind a port and serve traffic.
@@ -71,4 +72,23 @@ if (env.slaAlerts) {
       .catch((err) => logger.error({ err }, "SLA alert sweep failed"));
   sweep();
   setInterval(sweep, 15 * 60 * 1000).unref();
+}
+
+// Background sweep: email the notifications not yet delivered. Every 60s, which
+// is near-real-time for a help desk without turning into a hot loop; the sweep is
+// a single indexed query when there is nothing to do.
+if (env.notificationEmails) {
+  const sweep = () =>
+    notificationService
+      .sweepEmail()
+      .then(({ sent, skipped, failed }) => {
+        if (sent + failed > 0) {
+          logger.info({ sent, skipped, failed }, "notification email sweep");
+        }
+      })
+      .catch((err) =>
+        logger.error({ err }, "notification email sweep failed"),
+      );
+  sweep();
+  setInterval(sweep, 60 * 1000).unref();
 }
