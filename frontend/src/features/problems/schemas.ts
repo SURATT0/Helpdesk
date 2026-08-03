@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 /** Mirrors the backend ProblemStatus enum exactly. */
-export const problemStatusSchema = z.enum([
+export const PROBLEM_STATUSES = [
   "investigating",
   "known_error",
   "resolved",
   "closed",
-]);
+] as const;
+
+export const problemStatusSchema = z.enum(PROBLEM_STATUSES);
 
 export const problemSchema = z.object({
   id: z.number(),
@@ -16,6 +18,16 @@ export const problemSchema = z.object({
   rootCause: z.string().nullable(),
   /** The interim fix agents need while the root cause is still open. */
   workaround: z.string().nullable(),
+  /** Stored KB article id, whether or not it still resolves. */
+  kbArticleId: z.string().nullable(),
+  /**
+   * The same article resolved server-side. An id present with a null reference
+   * means the article was removed — a stale link, which the UI says out loud
+   * rather than hiding.
+   */
+  kbArticle: z
+    .object({ id: z.string(), title: z.string(), category: z.string() })
+    .nullable(),
   createdBy: z.object({ id: z.number(), name: z.string() }).nullable(),
   /** How many incidents are linked — the "how widespread is this" signal. */
   ticketCount: z.number(),

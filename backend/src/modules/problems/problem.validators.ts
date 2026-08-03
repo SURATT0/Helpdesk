@@ -9,6 +9,34 @@ export const listProblemsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
 });
 
+/**
+ * PATCH /problems/:id — edit the investigation itself.
+ *
+ * Every field is optional, and `null` is meaningful for the nullable ones: it
+ * clears the field. `.strict()` so a typo'd key is a 400 rather than a silently
+ * ignored edit the user believes was saved.
+ */
+export const updateProblemSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    description: z.string().trim().max(5000).nullable().optional(),
+    rootCause: z.string().trim().max(5000).nullable().optional(),
+    workaround: z.string().trim().max(5000).nullable().optional(),
+    status: problemStatusSchema.optional(),
+    /**
+     * KB article documenting this known error, e.g. "KB-042". `null` unlinks.
+     * Shape only here — the service checks the id actually exists, since there
+     * is no table to hang a foreign key on.
+     */
+    kbArticleId: z.string().trim().min(1).max(40).nullable().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "Provide at least one field to update",
+  });
+
+export type UpdateProblemInput = z.infer<typeof updateProblemSchema>;
+
 /** POST /tickets/:id/problem — either link an existing problem or create one. */
 export const linkOrConvertSchema = z
   .object({

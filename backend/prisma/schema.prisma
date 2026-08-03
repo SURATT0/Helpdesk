@@ -412,6 +412,15 @@ model Problem {
   status      ProblemStatus @default(investigating)
   rootCause   String?       @map("root_cause")
   workaround  String?
+  // The knowledge-base article documenting this known error, e.g. "KB-042".
+  //
+  // A SOFT reference on purpose: the KB has no domain table (it is a static,
+  // versioned dataset served by the kb module — see kb.data.ts), so there is no
+  // FK to enforce. The API validates the id against that dataset on write, and
+  // resolves it on read, returning null when an article has since been removed —
+  // so a stale link degrades to "not found" instead of a broken page. Widening
+  // this to a real relation later is a type change, not a data migration.
+  kbArticleId String?       @map("kb_article_id")
   customerId  Int?          @map("customer_id") // tenant; inherited from the source ticket
   customer    Customer?     @relation(fields: [customerId], references: [id])
   createdById Int?          @map("created_by_id")
