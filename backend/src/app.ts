@@ -29,6 +29,7 @@ import { dashboardRoutes } from "./modules/dashboard/dashboard.routes";
 import { reportsRoutes } from "./modules/reports/reports.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { kbRoutes } from "./modules/kb/kb.routes";
+import { auditRoutes } from "./modules/audit/audit.routes";
 import { integrationRoutes } from "./modules/integrations/integration.routes";
 import { emailWebhookRoutes } from "./modules/integrations/email/email.routes";
 import { healthRoutes } from "./modules/health/health.routes";
@@ -99,6 +100,7 @@ export function createApp() {
   app.use(`${API_PREFIX}/dashboard`, requireAuth, dashboardRoutes);
   app.use(`${API_PREFIX}/reports`, requireAuth, reportsRoutes);
   app.use(`${API_PREFIX}/kb`, requireAuth, kbRoutes);
+app.use(`${API_PREFIX}/audit`, requireAuth, auditRoutes);
   app.use(`${API_PREFIX}/integrations`, requireAuth, integrationRoutes);
 
   app.use(notFound);

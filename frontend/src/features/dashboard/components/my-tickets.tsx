@@ -15,9 +15,18 @@ export function MyTickets() {
   const { t } = useI18n();
   const { data, isLoading, isError, refetch } = useTickets();
 
-  // Tickets assigned to the signed-in agent.
+  // Work in flight assigned to the signed-in agent. Terminal states are excluded
+  // deliberately: the list is ordered by SLA due date, so closed tickets — whose
+  // due dates are the oldest of all — would otherwise crowd out every live
+  // ticket. Closed work has its own home in the ticket history log.
   const mine = (data?.tickets ?? [])
-    .filter((t) => user != null && t.assignee === user.name)
+    .filter(
+      (t) =>
+        user != null &&
+        t.assignee === user.name &&
+        t.status !== "closed" &&
+        t.status !== "resolved",
+    )
     .slice(0, 4);
 
   return (

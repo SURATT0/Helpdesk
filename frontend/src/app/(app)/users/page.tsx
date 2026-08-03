@@ -1,6 +1,7 @@
 "use client";
 
-import { Info } from "lucide-react";
+import * as React from "react";
+import { Info, Users as UsersIcon } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
@@ -9,9 +10,10 @@ import { useAuth } from "@/features/auth/context";
 import { useProjects } from "@/features/projects/queries";
 import { useUpdateUser, useUsers } from "@/features/users/queries";
 import { AvailabilityToggle } from "@/features/users/components/availability-toggle";
+import { HandoverQueueModal } from "@/features/users/components/handover-queue-modal";
 import { ProjectSelect } from "@/features/users/components/project-select";
 import { useI18n } from "@/features/i18n/context";
-import type { UserRole } from "@/features/users/schemas";
+import type { User, UserRole } from "@/features/users/schemas";
 import { cn } from "@/lib/utils";
 
 const ROLE_STYLE: Record<UserRole, { fg: string; bg: string }> = {
@@ -22,7 +24,7 @@ const ROLE_STYLE: Record<UserRole, { fg: string; bg: string }> = {
 };
 
 const COLS =
-  "grid-cols-[1.2fr_1.5fr_110px_140px_170px_120px_120px]";
+  "grid-cols-[1.2fr_1.5fr_110px_140px_170px_120px_120px_130px]";
 
 const formatDate = (iso: string, lang: string) =>
   new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-US", {
@@ -40,6 +42,10 @@ export default function UsersPage() {
   // Mirrors the server's user:write grant. The API is the real gate; this only
   // avoids rendering controls that would be refused.
   const canEdit = me?.role === "admin" || me?.role === "manager";
+  // Handing over a whole queue needs ticket:assign — managers and admins only,
+  // unlike single-ticket assignment which any agent may do.
+  const canHandover = canEdit;
+  const [handoverFor, setHandoverFor] = React.useState<User | null>(null);
   // Projects are only needed for the editable picker, and requesters/agents
   // cannot write anyway — so don't fetch them for a read-only view.
   const { data: projectData } = useProjects({ enabled: canEdit });
@@ -70,6 +76,7 @@ export default function UsersPage() {
             <span>{t("users.col.project")}</span>
             <span>{t("users.col.routing")}</span>
             <span>{t("users.col.joined")}</span>
+            <span>{t("users.col.queue")}</span>
           </div>
 
           {isLoading ? <LoadingRow label={t("users.loading")} /> : null}
@@ -146,6 +153,22 @@ export default function UsersPage() {
                 <span className="text-[12.5px] text-faint">
                   {formatDate(u.createdAt, lang)}
                 </span>
+
+                <span>
+                  {/* Requesters raise tickets, they never hold a queue. */}
+                  {canHandover && u.role !== "requester" ? (
+                    <button
+                      type="button"
+                      onClick={() => setHandoverFor(u)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2 py-1 text-[11.5px] font-semibold text-[#475569] hover:bg-app"
+                    >
+                      <UsersIcon size={12} strokeWidth={2} />
+                      {t("users.handover")}
+                    </button>
+                  ) : (
+                    <span className="text-[12.5px] text-faint">—</span>
+                  )}
+                </span>
               </div>
             );
           })}
@@ -153,6 +176,14 @@ export default function UsersPage() {
           </div>
         </div>
       </main>
+
+      {handoverFor ? (
+        <HandoverQueueModal
+          from={handoverFor}
+          candidates={users}
+          onClose={() => setHandoverFor(null)}
+        />
+      ) : null}
     </>
   );
 }

@@ -3,6 +3,7 @@ import { tokenStore } from "@/features/auth/token-store";
 import type { Priority, TicketStatus } from "@/lib/domain";
 import {
   categoryListSchema,
+  closedHistorySchema,
   commentEnvelopeSchema,
   commentListSchema,
   commentSchema,
@@ -14,7 +15,9 @@ import {
   ticketEnvelopeSchema,
   ticketListSchema,
   type Category,
+  type ClosedHistoryPage,
   type Comment,
+  type Granularity,
   type HistoryEntry,
   type ImportResult,
   type ReadMarker,
@@ -47,6 +50,31 @@ export async function fetchTickets(
   const body = await apiRequest(`/tickets${suffix}`);
   const parsed = ticketListSchema.parse(body);
   return { tickets: parsed.data, total: parsed.meta.total };
+}
+
+export type ClosedHistoryFilter = {
+  granularity: Granularity;
+  /**
+   * Any instant inside the wanted period, as an ISO string. Omitted on first
+   * load, which the server reads as "the period containing now"; paging passes
+   * back the `prevAnchor`/`nextAnchor` from the previous response.
+   */
+  anchor?: string;
+  limit: number;
+  offset: number;
+};
+
+/** One page of the closed-ticket history log for a single calendar period. */
+export async function fetchClosedHistory(
+  filter: ClosedHistoryFilter,
+): Promise<ClosedHistoryPage> {
+  const qs = new URLSearchParams();
+  qs.set("granularity", filter.granularity);
+  if (filter.anchor) qs.set("anchor", filter.anchor);
+  qs.set("limit", String(filter.limit));
+  qs.set("offset", String(filter.offset));
+  const body = await apiRequest(`/tickets/closed?${qs}`);
+  return closedHistorySchema.parse(body);
 }
 
 /**

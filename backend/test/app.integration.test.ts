@@ -108,6 +108,208 @@ describe("tickets — RBAC row scoping (multi-tenant)", () => {
   });
 });
 
+describe("tickets — closed history log", () => {
+  /**
+   * The seed closes nothing (1031 ships as `resolved`), so each case arranges
+   * its own closures. Timestamps are built with the LOCAL date constructor
+   * because period bounds are server-local by design — UTC literals would make
+   * these assertions pass only in UTC.
+   */
+  const now = new Date();
+  const inThisMonth = new Date(now.getFullYear(), now.getMonth(), 15, 12);
+  const inLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15, 12);
+
+  const close = (id: number, closedAt: Date) =>
+    prisma.ticket.update({
+      where: { id },
+      data: { status: "closed", closedAt },
+    });
+
+  const idsOf = (res: { body: { data: { id: number }[] } }) =>
+    res.body.data.map((t) => t.id);
+
+  const get = (token: string, qs = "") =>
+    request(app).get(`${API}/tickets/closed${qs}`).set(bearer(token));
+
+  it("returns tickets closed in the current period and excludes older ones", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=month");
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toContain(1031);
+    expect(idsOf(res)).not.toContain(1029);
+    expect(res.body.meta.total).toBeGreaterThanOrEqual(1);
+    expect(res.body.meta.period.granularity).toBe("month");
+    expect(res.body.meta.period.isCurrent).toBe(true);
+  });
+
+  it("steps to the previous period with the anchor it was handed", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const current = await get(dana, "?granularity=month");
+    const older = await get(
+      dana,
+      `?granularity=month&anchor=${current.body.meta.period.prevAnchor}`,
+    );
+
+    expect(older.status).toBe(200);
+    expect(idsOf(older)).toContain(1029);
+    expect(idsOf(older)).not.toContain(1031);
+    expect(older.body.meta.period.isCurrent).toBe(false);
+  });
+
+  it("widens to the year, holding both months", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inLastMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=year");
+    // Guard: in January the previous month falls in the previous YEAR, so only
+    // assert the pair together when both sit inside one calendar year.
+    if (inLastMonth.getFullYear() === inThisMonth.getFullYear()) {
+      expect(idsOf(res)).toEqual(expect.arrayContaining([1031, 1029]));
+    } else {
+      expect(idsOf(res)).toContain(1031);
+      expect(idsOf(res)).not.toContain(1029);
+    }
+  });
+
+  it("excludes a reopened ticket that still carries its old closedAt", async () => {
+    // `closedAt` is never cleared — the 30-day reopen check reads it back — so
+    // the status is what keeps a reopened ticket out of the log.
+    await close(1031, inThisMonth);
+    await prisma.ticket.update({ where: { id: 1031 }, data: { status: "open" } });
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await get(dana, "?granularity=month");
+    expect(idsOf(res)).not.toContain(1031);
+  });
+
+  it("scopes the log per role, exactly like the live ticket list", async () => {
+    await close(1031, inThisMonth); // Acme, requested by A. Lindqvist
+    await close(2001, inThisMonth); // Globex — another customer
+
+    const dana = await login("dana.reyes@acme.com"); // agent, Acme
+    const asAgent = idsOf(await get(dana, "?granularity=month"));
+    expect(asAgent).toContain(1031);
+    expect(asAgent).not.toContain(2001); // other customer, hidden
+
+    const lindqvist = await login("a.lindqvist@acme.com"); // requester, owns 1031
+    const asOwner = idsOf(await get(lindqvist, "?granularity=month"));
+    expect(asOwner).toContain(1031);
+    expect(asOwner).not.toContain(2001);
+
+    // Marcus is deliberately absent from the seeded closure history, so his log
+    // is genuinely empty rather than merely missing 1031.
+    const marcus = await login("marcus.chen@acme.com"); // requester, owns neither
+    expect(idsOf(await get(marcus, "?granularity=month"))).toEqual([]);
+
+    const sam = await login("sam.rivera@acme.com"); // platform admin
+    expect(idsOf(await get(sam, "?granularity=month"))).toEqual(
+      expect.arrayContaining([1031, 2001]),
+    );
+  });
+
+  it("paginates within the period", async () => {
+    await close(1031, inThisMonth);
+    await close(1029, inThisMonth);
+
+    const dana = await login("dana.reyes@acme.com");
+    const page = await get(dana, "?granularity=month&limit=1&offset=0");
+    expect(page.body.data).toHaveLength(1);
+    expect(page.body.meta.total).toBeGreaterThanOrEqual(2);
+    expect(page.body.meta.returned).toBe(1);
+
+    const next = await get(dana, "?granularity=month&limit=1&offset=1");
+    expect(idsOf(next)).not.toEqual(idsOf(page));
+  });
+
+  it("rejects an unknown granularity with 400", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await get(dana, "?granularity=decade").expect(400);
+  });
+
+  it("requires authentication", async () => {
+    await request(app).get(`${API}/tickets/closed`).expect(401);
+  });
+
+  it("does not shadow the /tickets/:id route", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(`${API}/tickets/1042`).set(bearer(dana)).expect(200);
+  });
+});
+
+describe("tickets — assignee identity and filter", () => {
+  it("exposes assigneeId alongside the display name", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app).get(`${API}/tickets/1042`).set(bearer(dana));
+    expect(res.status).toBe(200);
+
+    const danaRow = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(res.body.data.assignee).toBe("Dana Reyes");
+    // The client filters and groups on the id, since names are not unique.
+    expect(res.body.data.assigneeId).toBe(danaRow.id);
+  });
+
+  it("reports assigneeId as null for an unassigned ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app).get(`${API}/tickets/1044`).set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(res.body.data.assignee).toBeNull();
+    expect(res.body.data.assigneeId).toBeNull();
+  });
+
+  it("filters the list to one agent's queue", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const danaRow = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=${danaRow.id}`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids).toContain(1042); // Dana's
+    expect(ids).not.toContain(1029); // Kai's
+    for (const row of res.body.data as Array<{ assigneeId: number }>) {
+      expect(row.assigneeId).toBe(danaRow.id);
+    }
+  });
+
+  it("filters the list to the unassigned queue", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=none`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids).toContain(1044); // Acme, unassigned
+    for (const row of res.body.data as Array<{ assigneeId: number | null }>) {
+      expect(row.assigneeId).toBeNull();
+    }
+  });
+
+  // The assignee filter is AND-ed with row scope, never a way around it.
+  it("cannot reach another customer's tickets through the filter", async () => {
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    const owen = await prisma.user.findUniqueOrThrow({
+      where: { email: "owen.park@acme.com" }, // Globex agent
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?assigneeId=${owen.id}`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+});
+
 describe("tickets — status transitions", () => {
   it("allows a legal transition and appends a history row", async () => {
     const dana = await login("dana.reyes@acme.com");
@@ -209,6 +411,211 @@ describe("tickets — auto-close (resolved > 72h)", () => {
     expect(closed).toBe(0);
     const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1031 } });
     expect(t.status).toBe("resolved");
+  });
+});
+
+describe("tickets — SLA alert sweep", () => {
+  const HOUR = 60 * 60 * 1000;
+  const now = new Date();
+  const inHours = (h: number) => new Date(now.getTime() + h * HOUR);
+
+  /** Park every seeded ticket's clock far in the future so tests start quiet. */
+  async function quietAllClocks() {
+    await prisma.ticket.updateMany({ data: { dueAt: inHours(500) } });
+  }
+
+  const slaNotifications = (ticketId: number) =>
+    prisma.notification.findMany({
+      where: {
+        ticketId,
+        type: { in: ["ticket.sla_warning", "ticket.sla_breach"] },
+      },
+      orderBy: { id: "asc" },
+    });
+
+  beforeEach(quietAllClocks);
+
+  it("warns the assignee when the clock enters the warn window", async () => {
+    // 1042: Acme, in_progress, assigned to Dana.
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned).toBe(1);
+    expect(res.breached).toBe(0);
+
+    const notes = await slaNotifications(1042);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_warning");
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(notes[0].userId).toBe(dana.id);
+    expect(notes[0].message).toContain("#1042");
+  });
+
+  it("reports a breach once the clock is past due", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+    const notes = await slaNotifications(1042);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_breach");
+  });
+
+  // The sweep runs every 15 minutes over the same at-risk rows.
+  it("is idempotent across runs", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+    const first = await ticketService.sweepSlaAlerts(now);
+    expect(first.warned).toBe(1);
+
+    const second = await ticketService.sweepSlaAlerts(new Date(now.getTime() + 60_000));
+    expect(second.warned).toBe(0);
+    expect(await slaNotifications(1042)).toHaveLength(1);
+  });
+
+  // Being warned must not swallow the breach that follows.
+  it("still raises a breach after having warned", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    // Time passes; the same ticket is now overdue.
+    const later = new Date(now.getTime() + 2 * HOUR);
+    const res = await ticketService.sweepSlaAlerts(later);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.type)).toEqual([
+      "ticket.sla_warning",
+      "ticket.sla_breach",
+    ]);
+  });
+
+  it("ignores a paused (pending) ticket — the clock is stopped", async () => {
+    // 1039 is seeded pending.
+    await prisma.ticket.update({
+      where: { id: 1039 },
+      data: { dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned + res.breached).toBe(0);
+    expect(await slaNotifications(1039)).toHaveLength(0);
+  });
+
+  it("ignores resolved and closed tickets", async () => {
+    await prisma.ticket.update({
+      where: { id: 1031 }, // seeded resolved
+      data: { dueAt: inHours(-5) },
+    });
+    await prisma.ticket.update({
+      where: { id: 1035 },
+      data: { status: "closed", closedAt: now, dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned + res.breached).toBe(0);
+  });
+
+  // An unassigned ticket is exactly where a breach goes unnoticed, so it falls
+  // to that customer's managers rather than nobody.
+  it("falls back to the customer's managers when unassigned", async () => {
+    await prisma.ticket.update({
+      where: { id: 1044 }, // Acme, new, assignee null
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1044);
+    const morgan = await prisma.user.findUniqueOrThrow({
+      where: { email: "morgan.lee@acme.com" }, // Acme manager
+    });
+    expect(notes.map((n) => n.userId)).toContain(morgan.id);
+
+    // Not the other customer's manager, and not the requester.
+    const nadia = await prisma.user.findUniqueOrThrow({
+      where: { email: "nadia.kofi@acme.com" }, // Globex manager
+    });
+    expect(notes.map((n) => n.userId)).not.toContain(nadia.id);
+    const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1044 } });
+    expect(notes.map((n) => n.userId)).not.toContain(t.requesterId);
+  });
+
+  it("counts tickets, not notification rows, when several managers are told", async () => {
+    await prisma.ticket.update({
+      where: { id: 1044 },
+      data: { dueAt: inHours(-1) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    // One ticket breached, however many managers received a row for it.
+    expect(res.breached).toBe(1);
+    expect((await slaNotifications(1044)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("never notifies the requester", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" }, // requester of 1042
+    });
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.userId)).not.toContain(marcus.id);
+  });
+
+  it("notifies the new assignee after a reassignment", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(2) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const ana = await prisma.user.findUniqueOrThrow({
+      where: { email: "ana.m@acme.com" },
+    });
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { assigneeId: ana.id },
+    });
+
+    const res = await ticketService.sweepSlaAlerts(new Date(now.getTime() + 60_000));
+    expect(res.warned).toBe(1);
+    const notes = await slaNotifications(1042);
+    expect(notes.map((n) => n.userId)).toContain(ana.id);
+  });
+
+  it("does nothing when every clock is comfortable", async () => {
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res).toEqual({ warned: 0, breached: 0 });
+  });
+
+  it("surfaces the alert on the recipient's notification feed", async () => {
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .get(`${API}/notifications`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const types: string[] = res.body.data.map((n: { type: string }) => n.type);
+    expect(types).toContain("ticket.sla_breach");
+    expect(res.body.meta.unread).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -1212,6 +1619,188 @@ describe("comments — read receipts", () => {
       .get(`${API}/tickets/1039/comments/reads`)
       .set(bearer(marcus))
       .expect(404);
+  });
+});
+
+// audit_logs starts empty after resetDb (the seed writes no audit rows), so each
+// test controls exactly what ends up in the trail.
+describe("audit trail read", () => {
+  const ENDPOINT = `${API}/audit`;
+
+  const entityIds = (res: { body: { data: Array<{ entityId: number }> } }) =>
+    res.body.data.map((e) => e.entityId);
+
+  /** Produce one Acme audit row and one Globex audit row. */
+  async function makeCrossCustomerActivity() {
+    const dana = await login("dana.reyes@acme.com"); // Acme agent
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+
+    const owen = await login("owen.park@acme.com"); // Globex agent
+    await request(app)
+      .patch(`${API}/tickets/2001/priority`)
+      .set(bearer(owen))
+      .send({ priority: "low" })
+      .expect(200);
+  }
+
+  it("lets an admin read every customer's entries", async () => {
+    await makeCrossCustomerActivity();
+    const admin = await login("sam.rivera@acme.com"); // platform admin, no customer
+    const res = await request(app).get(ENDPOINT).set(bearer(admin));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).toContain(2001);
+  });
+
+  // The tenant boundary: audit_logs has no customer_id of its own, so scope is
+  // derived from the actor. A manager must not see another customer's activity.
+  it("confines a manager to their own customer's entries", async () => {
+    await makeCrossCustomerActivity();
+    const morgan = await login("morgan.lee@acme.com"); // Acme manager
+    const res = await request(app).get(ENDPOINT).set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).not.toContain(2001);
+  });
+
+  it("shows the other side of the boundary to the other customer's manager", async () => {
+    await makeCrossCustomerActivity();
+    const nadia = await login("nadia.kofi@acme.com"); // Globex manager
+    const res = await request(app).get(ENDPOINT).set(bearer(nadia));
+    expect(entityIds(res)).toContain(2001);
+    expect(entityIds(res)).not.toContain(1042);
+  });
+
+  it("forbids an agent (403) — the trail is management work", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app).get(ENDPOINT).set(bearer(dana)).expect(403);
+  });
+
+  it("forbids a requester (403)", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    await request(app).get(ENDPOINT).set(bearer(marcus)).expect(403);
+  });
+
+  it("requires authentication (401)", async () => {
+    await request(app).get(ENDPOINT).expect(401);
+  });
+
+  it("filters by action prefix so a whole family matches", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+    await request(app)
+      .post(`${API}/tickets/1042/comments`)
+      .set(bearer(dana))
+      .send({ body: "note" })
+      .expect(201);
+
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .get(`${ENDPOINT}?action=ticket`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    const actions: string[] = res.body.data.map(
+      (e: { action: string }) => e.action,
+    );
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.every((a) => a.startsWith("ticket."))).toBe(true);
+  });
+
+  // Filters are AND-ed with the scope clause, so no filter can widen visibility.
+  it("cannot widen scope through a filter", async () => {
+    await makeCrossCustomerActivity();
+    const morgan = await login("morgan.lee@acme.com"); // Acme
+    const res = await request(app)
+      .get(`${ENDPOINT}?entity=ticket&entityId=2001`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it("paginates with a scoped total in meta", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const priority of ["low", "medium", "high"]) {
+      await request(app)
+        .patch(`${API}/tickets/1042/priority`)
+        .set(bearer(dana))
+        .send({ priority })
+        .expect(200);
+    }
+
+    const morgan = await login("morgan.lee@acme.com");
+    const page = await request(app)
+      .get(`${ENDPOINT}?limit=2&offset=0`)
+      .set(bearer(morgan));
+    expect(page.status).toBe(200);
+    expect(page.body.data).toHaveLength(2);
+    expect(page.body.meta.total).toBeGreaterThanOrEqual(3);
+    expect(page.body.meta.limit).toBe(2);
+
+    const next = await request(app)
+      .get(`${ENDPOINT}?limit=2&offset=2`)
+      .set(bearer(morgan));
+    const firstIds: number[] = page.body.data.map((e: { id: number }) => e.id);
+    const nextIds: number[] = next.body.data.map((e: { id: number }) => e.id);
+    expect(nextIds.some((id) => firstIds.includes(id))).toBe(false);
+  });
+
+  it("returns newest first", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const priority of ["low", "high"]) {
+      await request(app)
+        .patch(`${API}/tickets/1042/priority`)
+        .set(bearer(dana))
+        .send({ priority })
+        .expect(200);
+    }
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app).get(ENDPOINT).set(bearer(morgan));
+    const ids: number[] = res.body.data.map((e: { id: number }) => e.id);
+    expect(ids).toEqual([...ids].sort((a, b) => b - a));
+  });
+
+  it("rejects an out-of-range limit (400)", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    await request(app)
+      .get(`${ENDPOINT}?limit=500`)
+      .set(bearer(morgan))
+      .expect(400);
+  });
+
+  it("lists the distinct action names in scope", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .patch(`${API}/tickets/1042/priority`)
+      .set(bearer(dana))
+      .send({ priority: "critical" })
+      .expect(200);
+
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .get(`${ENDPOINT}/actions`)
+      .set(bearer(morgan));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toContain("ticket.priority_change");
+  });
+
+  // The trail is append-only by construction: no write route is registered.
+  it("has no write surface — POST and DELETE are not routed", async () => {
+    const admin = await login("sam.rivera@acme.com"); // platform admin, no customer
+    const post = await request(app)
+      .post(ENDPOINT)
+      .set(bearer(admin))
+      .send({ action: "forged.entry", entity: "ticket" });
+    expect(post.status).toBe(404);
+    const del = await request(app).delete(`${ENDPOINT}/1`).set(bearer(admin));
+    expect(del.status).toBe(404);
   });
 });
 

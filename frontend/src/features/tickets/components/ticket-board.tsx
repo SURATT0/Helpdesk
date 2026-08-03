@@ -23,19 +23,14 @@ const COLUMNS: TicketStatus[] = [
 export function TicketBoard() {
   const router = useRouter();
   const { t } = useI18n();
-  const { query, statuses, priorities, assigneeMe } = useSearch();
-  const { user } = useAuth();
+  const { query, statuses, priorities, assignees } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
 
   if (isLoading) return <LoadingRow />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const tickets = (data?.tickets ?? []).filter((x) =>
-    matchesFilters(
-      x,
-      { query, statuses, priorities, assigneeMe },
-      user?.name ?? null,
-    ),
+    matchesFilters(x, { query, statuses, priorities, assignees }),
   );
 
   return (

@@ -11,12 +11,24 @@ import {
   NotFound,
   ReopenWindowExpired,
 } from "../../shared/errors";
+import { notificationRepository } from "../notifications/notification.repository";
 import { mayReceiveAssignment } from "./ticket.scope";
+import { resolvePeriod, type Granularity, type Period } from "./history.period";
+import { formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
 import { ACTIVE_STATUSES } from "./ticket.validators";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REOPEN_WINDOW_MS = 30 * DAY_MS;
 const AUTO_CLOSE_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * Notification `type` per SLA alert kind. Distinct types are what make the
+ * sweep's dedupe work per-stage: being warned does not suppress the later breach.
+ */
+export const SLA_ALERT_TYPE = {
+  warning: "ticket.sla_warning",
+  breach: "ticket.sla_breach",
+} as const;
 import {
   ticketRepository,
   type CreateTicketInput,
@@ -75,6 +87,37 @@ export type ImportResult = {
 export const ticketService = {
   list(filter: TicketFilter, user: AuthUser): Promise<Ticket[]> {
     return ticketRepository.findMany(filter, user);
+  },
+
+  /**
+   * The closed-ticket history log for one calendar period. Resolves the window
+   * here rather than accepting raw `from`/`to` from the client so that "this
+   * month" means one thing across the app, and echoes the resolved period back
+   * so the client can label it and drive prev/next without repeating the maths.
+   */
+  async closedHistory(
+    input: {
+      granularity: Granularity;
+      anchor?: Date;
+      limit: number;
+      offset: number;
+    },
+    user: AuthUser,
+  ): Promise<{ items: Ticket[]; total: number; period: Period }> {
+    const period = resolvePeriod(
+      input.granularity,
+      input.anchor ?? new Date(),
+    );
+    const { items, total } = await ticketRepository.findClosedInPeriod(
+      {
+        start: period.start,
+        end: period.end,
+        limit: input.limit,
+        offset: input.offset,
+      },
+      user,
+    );
+    return { items, total, period };
   },
 
   create(
@@ -300,5 +343,93 @@ export const ticketService = {
       await ticketRepository.updateStatus(id, "closed");
     }
     return ids.length;
+  },
+
+  /**
+   * Notify staff about SLA clocks that are close to expiring or already expired.
+   *
+   * Until now the SLA existed only as a colour computed on read (`deriveSla`), so
+   * a breach was something you noticed if you happened to be looking at the right
+   * list. This turns it into a push.
+   *
+   * Runs as a system action with no actor. Recipients are the assignee, or — when
+   * nobody owns the ticket yet, which is exactly when a breach is most likely to
+   * go unnoticed — the managers of that ticket's customer. Requesters are never
+   * notified: the SLA is an internal commitment, not a promise made to them.
+   *
+   * Idempotent across runs: the sweep re-sees the same tickets every 15 minutes,
+   * so each `(ticket, recipient, kind)` is notified at most once. `warning` and
+   * `breach` are separate kinds, so a ticket that was warned about still produces
+   * a breach alert when it crosses the line.
+   */
+  async sweepSlaAlerts(
+    now: Date = new Date(),
+  ): Promise<{ warned: number; breached: number }> {
+    const horizon = new Date(now.getTime() + SLA_WARN_MS);
+    const atRisk = await ticketRepository.findSlaRisk(horizon);
+    if (atRisk.length === 0) return { warned: 0, breached: 0 };
+
+    const existing = await notificationRepository.findExistingKeys(
+      Object.values(SLA_ALERT_TYPE),
+      atRisk.map((t) => t.id),
+    );
+
+    // One lookup per distinct customer, not per ticket.
+    const managersByCustomer = new Map<number, number[]>();
+    const managersFor = async (customerId: number | null) => {
+      if (customerId == null) return [];
+      const cached = managersByCustomer.get(customerId);
+      if (cached) return cached;
+      const ids = await ticketRepository.findManagerIds(customerId);
+      managersByCustomer.set(customerId, ids);
+      return ids;
+    };
+
+    const entries: Array<{
+      userId: number;
+      type: string;
+      ticketId: number;
+      message: string;
+    }> = [];
+    let warned = 0;
+    let breached = 0;
+
+    for (const ticket of atRisk) {
+      const kind = slaAlertKind(ticket.dueAt, now);
+      if (!kind) continue;
+      const type = SLA_ALERT_TYPE[kind];
+
+      const recipients =
+        ticket.assigneeId != null
+          ? [ticket.assigneeId]
+          : await managersFor(ticket.customerId);
+
+      let notifiedForThisTicket = false;
+      for (const userId of new Set(recipients)) {
+        const key = `${ticket.id}:${userId}:${type}`;
+        if (existing.has(key)) continue;
+        entries.push({
+          userId,
+          type,
+          ticketId: ticket.id,
+          message:
+            kind === "breach"
+              ? `Ticket #${ticket.id} has breached its SLA`
+              : `Ticket #${ticket.id} breaches SLA in ${formatRemaining(
+                  ticket.dueAt!.getTime() - now.getTime(),
+                )}`,
+        });
+        notifiedForThisTicket = true;
+      }
+      // Count tickets alerted on, not notification rows — a ticket with three
+      // manager recipients is one breach, not three.
+      if (notifiedForThisTicket) {
+        if (kind === "breach") breached++;
+        else warned++;
+      }
+    }
+
+    await notificationRepository.createMany(entries);
+    return { warned, breached };
   },
 };
