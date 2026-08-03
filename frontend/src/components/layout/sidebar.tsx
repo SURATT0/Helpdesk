@@ -40,7 +40,14 @@ const NAV: Array<{
   // scoping already narrows it — a requester sees their own closed tickets.
   { href: "/history", key: "nav.history", icon: Archive },
   { href: "/users", key: "nav.users", icon: Users },
-  { href: "/projects", key: "nav.projects", icon: FolderKanban },
+  // Mirrors the server's project:read grant (manager + admin), like the audit
+  // entry below. Routing projects are management structure, not desk work.
+  {
+    href: "/projects",
+    key: "nav.projects",
+    icon: FolderKanban,
+    roles: ["admin", "manager"],
+  },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
   // Mirrors the server's audit:read grant (manager + admin).

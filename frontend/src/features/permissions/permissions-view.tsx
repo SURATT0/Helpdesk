@@ -23,6 +23,8 @@ const CAPABILITIES: { key: string; roles: Role[] }[] = [
   { key: "cap.import", roles: ["agent", "manager", "admin"] },
   { key: "cap.viewUsers", roles: ["agent", "manager", "admin"] },
   { key: "cap.manageUsers", roles: ["manager", "admin"] },
+  // Routing projects sit at manager level and up, read and write together.
+  { key: "cap.routingProjects", roles: ["manager", "admin"] },
 ];
 
 // Row-level scope enforced in the repository WHERE clause.

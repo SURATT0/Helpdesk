@@ -43,6 +43,7 @@ const en: Dict = {
   "cap.import": "Import tickets & sync sources",
   "cap.viewUsers": "View user directory",
   "cap.manageUsers": "Manage users & roles",
+  "cap.routingProjects": "View & manage routing projects",
   "perm.userScopeNote":
     "Managers view and manage users only within their own customer; admins manage everyone across all customers.",
   "scope.requester": "Only tickets you opened",
@@ -489,6 +490,9 @@ const en: Dict = {
   "projects.empty": "No projects yet",
   "projects.explainer":
     "New tickets from a project's members go to its caseworker — or to the backup when the caseworker is away. Projects decide who work is assigned to, never who can see it.",
+  "projects.forbidden": "You don't have access to routing projects",
+  "projects.forbiddenNote":
+    "Projects decide who a customer's incoming tickets are assigned to, so they're available to managers and admins. Ask an administrator if you need access.",
   "projects.new": "New project",
   "projects.create": "Create",
   "projects.saving": "Saving…",
@@ -565,6 +569,7 @@ const th: Dict = {
   "cap.import": "นำเข้าตั๋ว & ซิงก์แหล่งข้อมูล",
   "cap.viewUsers": "ดูรายชื่อผู้ใช้",
   "cap.manageUsers": "จัดการผู้ใช้ & บทบาท",
+  "cap.routingProjects": "ดูและจัดการโปรเจกต์สำหรับจ่ายงาน",
   "perm.userScopeNote":
     "ผู้จัดการดูและจัดการผู้ใช้เฉพาะในลูกค้าของตัวเอง; ผู้ดูแลระบบจัดการได้ทุกคนทุกลูกค้า",
   "scope.requester": "เฉพาะตั๋วที่คุณเปิด",
@@ -1012,6 +1017,9 @@ const th: Dict = {
   "projects.empty": "ยังไม่มีโปรเจกต์",
   "projects.explainer":
     "ตั๋วใหม่จากสมาชิกของโปรเจกต์จะไปที่ผู้ดูแล — หรือไปที่ผู้ดูแลสำรองเมื่อผู้ดูแลไม่สะดวก โปรเจกต์กำหนดว่างานถูก assign ให้ใคร ไม่ได้กำหนดว่าใครมองเห็นได้",
+  "projects.forbidden": "คุณไม่มีสิทธิ์เข้าถึงโปรเจกต์สำหรับจ่ายงาน",
+  "projects.forbiddenNote":
+    "โปรเจกต์กำหนดว่าตั๋วที่เข้ามาของลูกค้าจะถูก assign ให้ใคร จึงเปิดให้ผู้จัดการและผู้ดูแลระบบ หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
   "projects.new": "เพิ่มโปรเจกต์",
   "projects.create": "สร้าง",
   "projects.saving": "กำลังบันทึก…",

@@ -5,12 +5,26 @@ import { projectController } from "./project.controller";
 
 const router = Router();
 
-// requireAuth is applied at the mount point. Reads rely on repository row
-// scoping (any staff member may see their customer's projects, since routing
-// targets are useful context); deciding who owns a project is management work,
-// so writes need project:write — managers and admins only.
-router.get("/", asyncHandler(projectController.list));
-router.get("/:id", asyncHandler(projectController.get));
+// requireAuth is applied at the mount point. Routing projects are management
+// structure — who owns a customer's incoming tickets and who covers when they are
+// away — so the whole module sits at manager level and up: project:read to see it,
+// project:write to change it. Row scoping in the repository still narrows reads to
+// the caller's own customer on top of that, so a manager sees only their tenant.
+//
+// Reads were previously ungated, on the reasoning that routing targets are useful
+// context for any agent. That was reversed deliberately: an agent could see the
+// owners but never change them, so the page could only raise a question it had no
+// way to answer.
+router.get(
+  "/",
+  requirePermission("project:read"),
+  asyncHandler(projectController.list),
+);
+router.get(
+  "/:id",
+  requirePermission("project:read"),
+  asyncHandler(projectController.get),
+);
 router.post(
   "/",
   requirePermission("project:write"),
