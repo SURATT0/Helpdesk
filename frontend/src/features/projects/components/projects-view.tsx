@@ -29,47 +29,36 @@ function routesTo(project: Project): {
   return { name: null, viaBackup: false };
 }
 
+/**
+ * One owner slot. Always editable: reading and changing projects are the same
+ * grant (project:read and project:write are both held from manager up), and the
+ * page itself refuses anyone without it — so there is no viewer who could reach
+ * this cell but not act on it. If those grants are ever split, this needs a
+ * read-only rendering again.
+ */
 function OwnerCell({
   owner,
-  canEdit,
   ariaLabel,
   users,
   saving,
   onChange,
 }: {
   owner: ProjectOwner;
-  canEdit: boolean;
   ariaLabel: string;
   users: ReturnType<typeof useUsers>["data"];
   saving: boolean;
   onChange: (id: number | null) => void;
 }) {
-  const { t } = useI18n();
-
-  if (canEdit) {
-    return (
-      <div className="pr-3">
-        <OwnerSelect
-          value={owner?.id ?? null}
-          users={users ?? []}
-          disabled={saving}
-          ariaLabel={ariaLabel}
-          onChange={onChange}
-        />
-      </div>
-    );
-  }
-
-  if (!owner) return <span className="text-[12.5px] text-faint">—</span>;
   return (
-    <span className="flex items-center gap-1.5 text-[12.5px] text-[#475569]">
-      <span className="truncate">{owner.name}</span>
-      {!owner.available ? (
-        <span className="flex-none rounded-full bg-status-pending-bg px-1.5 py-[1px] text-[10.5px] font-semibold text-status-pending-fg">
-          {t("projects.away")}
-        </span>
-      ) : null}
-    </span>
+    <div className="pr-3">
+      <OwnerSelect
+        value={owner?.id ?? null}
+        users={users ?? []}
+        disabled={saving}
+        ariaLabel={ariaLabel}
+        onChange={onChange}
+      />
+    </div>
   );
 }
 
@@ -85,9 +74,6 @@ export function ProjectsView() {
   const update = useUpdateProject();
 
   const projects = data?.projects ?? [];
-  // Reading and writing are held together from manager up, so anyone who can see
-  // this page can also act on it.
-  const canEdit = canRead;
   const savingId = update.isPending ? update.variables?.id : undefined;
 
   if (!canRead) {
@@ -118,7 +104,7 @@ export function ProjectsView() {
             <Info size={14} className="mt-[2px] flex-none text-faint" />
             {t("projects.explainer")}
           </p>
-          {canEdit ? <NewProjectRow /> : null}
+          <NewProjectRow />
         </div>
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
@@ -175,7 +161,6 @@ export function ProjectsView() {
 
                     <OwnerCell
                       owner={p.owner}
-                      canEdit={canEdit}
                       ariaLabel={t("projects.col.owner")}
                       users={users}
                       saving={savingId === p.id}
@@ -186,7 +171,6 @@ export function ProjectsView() {
 
                     <OwnerCell
                       owner={p.backupOwner}
-                      canEdit={canEdit}
                       ariaLabel={t("projects.col.backup")}
                       users={users}
                       saving={savingId === p.id}
