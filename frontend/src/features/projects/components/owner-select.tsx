@@ -11,6 +11,14 @@ import { cn } from "@/lib/utils";
  * tickets their own row scope cannot see), so offering them would be an error the
  * user can only discover by trying. "Unassigned" maps to null, which clears the
  * slot rather than leaving it untouched.
+ *
+ * Deliberately plain names, with no "away" annotation. This picker answers "who is
+ * responsible", a standing decision; whether that person happens to be away today
+ * is their own state, set on the users page, and it changes far more often than
+ * project ownership does. Mixing the two here invited reshuffling owners over a
+ * temporary absence, which is what the backup slot already exists to handle. The
+ * consequence of an absence is still stated per row, where it belongs: the routing
+ * line under the project name names whoever the next ticket actually lands on.
  */
 export function OwnerSelect({
   value,
@@ -45,9 +53,7 @@ export function OwnerSelect({
       <option value="">{t("projects.unassigned")}</option>
       {assignable.map((u) => (
         <option key={u.id} value={u.id}>
-          {u.availableForAssignment
-            ? u.name
-            : `${u.name} — ${t("projects.away")}`}
+          {u.name}
         </option>
       ))}
     </select>
