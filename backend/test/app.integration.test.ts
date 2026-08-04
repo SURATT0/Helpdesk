@@ -927,6 +927,93 @@ describe("tickets — create", () => {
   });
 });
 
+// Deleting a ticket is the escape hatch for a row that should never have existed,
+// so it is super-admin only AND still bound by row scope. Soft: the row and its
+// history stay, but no read returns it — including the platform-wide super admin's,
+// which is the one reach that sees everything else.
+describe("tickets — delete (super admin only, soft)", () => {
+  async function anAcmeTicket(): Promise<number> {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets`)
+      .set(bearer(dana))
+      .send({
+        subject: "Raised to be deleted",
+        description: "x",
+        categoryId: await categoryId("Hardware"),
+        priority: "low",
+      });
+    expect(res.status).toBe(201);
+    return res.body.data.id as number;
+  }
+
+  it("refuses an admin with 403 — the button is not the gate", async () => {
+    const id = await anAcmeTicket();
+    const dana = await login("dana.reyes@acme.com"); // admin
+    const res = await request(app).delete(`${API}/tickets/${id}`).set(bearer(dana));
+    expect(res.status).toBe(403);
+
+    // Still readable: nothing was half-done.
+    const after = await request(app).get(`${API}/tickets/${id}`).set(bearer(dana));
+    expect(after.status).toBe(200);
+  });
+
+  it("refuses a plain user with 403", async () => {
+    const id = await anAcmeTicket();
+    const marcus = await login("marcus.chen@acme.com"); // user
+    const res = await request(app).delete(`${API}/tickets/${id}`).set(bearer(marcus));
+    expect(res.status).toBe(403);
+  });
+
+  it("lets a super admin delete, and the ticket then reads as not found for everyone", async () => {
+    const id = await anAcmeTicket();
+    const morgan = await login("morgan.lee@acme.com"); // super_admin, Acme
+    const del = await request(app).delete(`${API}/tickets/${id}`).set(bearer(morgan));
+    expect(del.status).toBe(204);
+
+    // Gone for the deleter, for the admin working the case, and for the
+    // platform-wide super admin whose reach otherwise covers every customer.
+    for (const email of [
+      "morgan.lee@acme.com",
+      "dana.reyes@acme.com",
+      "sam.rivera@acme.com",
+    ]) {
+      const token = await login(email);
+      const get = await request(app).get(`${API}/tickets/${id}`).set(bearer(token));
+      expect(get.status).toBe(404);
+      const list = await request(app)
+        .get(`${API}/tickets?limit=200`)
+        .set(bearer(token));
+      expect(
+        (list.body.data.items ?? list.body.data).some(
+          (t: { id: number }) => t.id === id,
+        ),
+      ).toBe(false);
+    }
+
+    // Soft: the row is still on disk, with its status history intact, and the
+    // deletion itself is recorded — the only trace left once the ticket is unreadable.
+    const row = await prisma.ticket.findUnique({ where: { id } });
+    expect(row?.deletedAt).toBeInstanceOf(Date);
+    expect(await prisma.ticketStatusHistory.count({ where: { ticketId: id } })).toBeGreaterThan(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { entity: "ticket", entityId: id, action: "ticket.delete" },
+      }),
+    ).toBe(1);
+  });
+
+  it("does not let a customer-bound super admin reach another tenant's ticket", async () => {
+    const id = await anAcmeTicket(); // Acme
+    const nadia = await login("nadia.kofi@acme.com"); // super_admin, customer 2
+    const res = await request(app).delete(`${API}/tickets/${id}`).set(bearer(nadia));
+    expect(res.status).toBe(404); // out of scope reads as absent, not forbidden
+
+    const row = await prisma.ticket.findUnique({ where: { id } });
+    expect(row?.deletedAt).toBeNull();
+  });
+});
+
 describe("tickets — customer isolation (unassigned ticket)", () => {
   it("shows an unassigned ticket to any agent in its customer, but not to other customers", async () => {
     const category = await prisma.category.create({

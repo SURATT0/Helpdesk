@@ -388,6 +388,34 @@ export const ticketRepository = {
     return row ? toTicketDto(row) : null;
   },
 
+  /**
+   * Stamp `deletedAt`, which takes the ticket out of every read (ticketScopeWhere
+   * filters on it). Nothing is removed: the comments, attachments and status
+   * history stay, so the row can be brought back by clearing the column.
+   *
+   * The audit row is written in the same transaction as the stamp, like every
+   * other mutation here — and it is the only place the deletion is visible
+   * afterwards, since the ticket itself is no longer readable.
+   */
+  async softDelete(id: number, actorId: number): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.ticket.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      await auditRepository.record(
+        {
+          userId: actorId,
+          action: "ticket.delete",
+          entity: "ticket",
+          entityId: id,
+          meta: { soft: true },
+        },
+        tx,
+      );
+    });
+  },
+
   async create(input: CreateTicketInput): Promise<Ticket> {
     const actorId = input.actorId ?? input.requesterId;
     return prisma.$transaction(async (tx) => {

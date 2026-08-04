@@ -11,6 +11,7 @@ import type { Comment, Granularity } from "./schemas";
 import {
   createComment,
   createTicket,
+  deleteTicket,
   fetchCategories,
   fetchClosedHistory,
   fetchClosedPeriods,
@@ -118,6 +119,30 @@ export function useUpdateTicketStatus() {
     mutationFn: (vars: { id: number; status: TicketStatus }) =>
       updateTicketStatus(vars.id, vars.status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ticketKeys.all }),
+  });
+}
+
+/**
+ * Soft-delete a ticket. Invalidates every ticket query rather than just this one:
+ * the row leaves the list, the dashboard counts and the closed-history log at the
+ * same time.
+ *
+ * `onDeleted` (normally "go back to the list") belongs HERE rather than in a
+ * per-call `mutate(id, { onSuccess })`: invalidating makes the detail query 404,
+ * which swaps the page for its error state and unmounts the button — and React
+ * Query deliberately drops mutate-level callbacks when the caller unmounts, so a
+ * redirect passed that way never fires. Mutation-level callbacks always run.
+ * It is invoked before the invalidation so we leave the page before the refetch
+ * turns it into "couldn't load ticket".
+ */
+export function useDeleteTicket(onDeleted?: () => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteTicket(id),
+    onSuccess: () => {
+      onDeleted?.();
+      qc.invalidateQueries({ queryKey: ticketKeys.all });
+    },
   });
 }
 

@@ -98,6 +98,12 @@ export const ticketController = {
     res.status(201).json({ data: ticket });
   },
 
+  async remove(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    await ticketService.remove(id, currentUser(req));
+    res.status(204).send();
+  },
+
   async importTickets(req: Request, res: Response) {
     const { rows } = importTicketsBody.parse(req.body);
     const result = await ticketService.importMany(rows, currentUser(req));
