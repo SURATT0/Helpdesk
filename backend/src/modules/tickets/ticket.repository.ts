@@ -402,6 +402,19 @@ export const ticketRepository = {
         select: { customerId: true },
       });
 
+      // Refuse rather than file the ticket outside every tenant. users.customerId is
+      // nullable on purpose (null = platform staff, what isPlatformWide keys on), but
+      // tickets.customerId is not: ticketScopeWhere matches staff on customerId
+      // equality, so a tenant-less ticket is invisible to every customer-bound admin
+      // and only a platform-wide super_admin would ever find it. Same stance the email
+      // intake takes when it cannot name a tenant for an unknown sender.
+      if (requester?.customerId == null) {
+        throw BadRequest(
+          "The requester belongs to no customer, so there is no tenant to file this ticket under. " +
+            "Platform staff should raise it on behalf of a user inside the customer it concerns.",
+        );
+      }
+
       // Auto-assignment. If the requester belongs to a project, the ticket goes
       // to that project's caseworker — its owner, or the backup when the owner is
       // unavailable. Read inside this transaction so the routing decision sees
@@ -423,7 +436,7 @@ export const ticketRepository = {
           status: "new",
           priority: input.priority,
           requesterId: input.requesterId,
-          customerId: requester?.customerId ?? null,
+          customerId: requester.customerId,
           assigneeId,
           categoryId: input.categoryId,
           dueAt: computeDueAt(input.priority, now),

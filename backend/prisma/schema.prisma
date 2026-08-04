@@ -221,8 +221,14 @@ model Ticket {
   assignee       User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
   categoryId     Int                   @map("category_id")
   category       Category              @relation(fields: [categoryId], references: [id])
-  customerId     Int?                  @map("customer_id") // tenant boundary (= requester's customer)
-  customer       Customer?             @relation(fields: [customerId], references: [id])
+  // Tenant boundary (= the requester's customer). Required, unlike users.customerId:
+  // a user with no customer is platform staff, but a TICKET with no customer is
+  // unreachable — ticketScopeWhere matches staff on customerId equality, so a null
+  // hides the row from every customer-bound admin. Enforced here rather than by
+  // convention in the create path, which let 12 such rows through (see
+  // 20260804044000_backfill_ticket_customer_from_requester).
+  customerId     Int                   @map("customer_id")
+  customer       Customer              @relation(fields: [customerId], references: [id])
   dueAt          DateTime?             @map("due_at") // computed from SLA policy at creation
   resolvedAt     DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
   closedAt       DateTime?             @map("closed_at")
