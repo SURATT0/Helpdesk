@@ -6,6 +6,7 @@ import { createApp } from "../src/app";
 import { env } from "../src/config/env";
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { notificationService } from "../src/modules/notifications/notification.service";
+import { authService } from "../src/modules/auth/auth.service";
 import { prisma, resetDb } from "./db";
 
 const app = createApp();
@@ -70,6 +71,52 @@ describe("auth", () => {
   it("blocks a protected route without a token", async () => {
     const res = await request(app).get(`${API}/tickets`);
     expect(res.status).toBe(401);
+  });
+
+  // The sweep bounds the refresh_tokens table for accounts that never log in
+  // again — the login-time cleanup only ever reaches the user logging in. What
+  // matters is WHICH rows it takes: a revoked token that has not expired yet must
+  // survive, because reuse-detection needs it to recognise a replay.
+  it("sweep deletes expired refresh tokens but keeps revoked-but-unexpired ones", async () => {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const hour = 60 * 60 * 1000;
+    const rows = [
+      { name: "expired-live", expiresAt: new Date(Date.now() - hour), revokedAt: null },
+      { name: "expired-revoked", expiresAt: new Date(Date.now() - hour), revokedAt: new Date() },
+      { name: "current-live", expiresAt: new Date(Date.now() + hour), revokedAt: null },
+      { name: "current-revoked", expiresAt: new Date(Date.now() + hour), revokedAt: new Date() },
+    ];
+    for (const r of rows) {
+      await prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          familyId: `sweep-${r.name}`,
+          tokenHash: `sweep-hash-${r.name}`,
+          expiresAt: r.expiresAt,
+          revokedAt: r.revokedAt,
+        },
+      });
+    }
+
+    const deleted = await authService.sweepExpiredSessions();
+    expect(deleted).toBeGreaterThanOrEqual(2); // both expired rows, whatever else the suite left
+
+    const survivors = await prisma.refreshToken.findMany({
+      where: { familyId: { startsWith: "sweep-" } },
+      select: { familyId: true },
+    });
+    expect(survivors.map((s) => s.familyId).sort()).toEqual([
+      "sweep-current-live",
+      "sweep-current-revoked", // kept on purpose: still inside its validity window
+    ]);
+
+    // And nothing expired is left anywhere, which is the point of the sweep.
+    const stillExpired = await prisma.refreshToken.count({
+      where: { expiresAt: { lt: new Date() } },
+    });
+    expect(stillExpired).toBe(0);
   });
 });
 

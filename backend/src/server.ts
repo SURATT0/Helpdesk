@@ -4,6 +4,7 @@ import { logger } from "./shared/logger";
 import { bus } from "./shared/events";
 import { ticketService } from "./modules/tickets/ticket.service";
 import { notificationService } from "./modules/notifications/notification.service";
+import { authService } from "./modules/auth/auth.service";
 
 // Fail fast on a misconfigured environment (missing DB URL, weak/default auth
 // secrets in production) before we ever bind a port and serve traffic.
@@ -91,4 +92,21 @@ if (env.notificationEmails) {
       );
   sweep();
   setInterval(sweep, 60 * 1000).unref();
+}
+
+// Background sweep: delete expired refresh tokens (run on boot + hourly). Hourly
+// is generous for rows that already expired — nothing about correctness depends on
+// the cadence, only how large the table gets between passes. The login path also
+// clears the caller's own expired rows, but only for whoever comes back; this is
+// what reaches the sessions of accounts that never log in again.
+if (env.sessionSweep) {
+  const sweep = () =>
+    authService
+      .sweepExpiredSessions()
+      .then((deleted) => {
+        if (deleted > 0) logger.info({ deleted }, "deleted expired refresh tokens");
+      })
+      .catch((err) => logger.error({ err }, "session sweep failed"));
+  sweep();
+  setInterval(sweep, 60 * 60 * 1000).unref();
 }
