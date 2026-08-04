@@ -26,6 +26,22 @@ test("List/Board toggle switches to the kanban view", async ({ page }) => {
   await expect(page.getByText("In Progress").first()).toBeVisible();
 });
 
+// Raising a ticket belongs on the tickets page. The button is the only entry
+// point to the create-ticket modal, so this also pins where a ticket can be
+// raised from at all — not just where the button is drawn.
+test("New ticket lives on the tickets page only", async ({ page }) => {
+  await login(page);
+  const button = page.getByRole("button", { name: "New ticket" });
+
+  await page.goto("/tickets");
+  await expect(button).toBeVisible();
+
+  for (const path of ["/dashboard", "/permissions", "/history"]) {
+    await page.goto(path);
+    await expect(button).toBeHidden();
+  }
+});
+
 test("create-ticket modal shows live KB deflection from the subject", async ({
   page,
 }) => {

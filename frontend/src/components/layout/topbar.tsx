@@ -13,11 +13,19 @@ export function Topbar({
   title,
   titleKey,
   showSearch = true,
+  showNewTicket = false,
   right,
 }: {
   title?: string;
   titleKey?: string;
   showSearch?: boolean;
+  /**
+   * Raising a ticket belongs on the tickets page, so this is opt-in — the
+   * opposite default to `showSearch`, which pages opt out of. The button is the
+   * only entry point to the create-ticket modal, so whichever page sets this is
+   * the only place a ticket can be raised from.
+   */
+  showNewTicket?: boolean;
   right?: React.ReactNode;
 }) {
   const { open } = useCreateTicket();
@@ -64,14 +72,16 @@ export function Topbar({
         {right}
         <LanguageToggle />
         <NotificationsBell />
-        <button
-          type="button"
-          onClick={open}
-          className="flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-hover"
-        >
-          <Plus size={14} strokeWidth={2.4} />
-          {t("topbar.newTicket")}
-        </button>
+        {showNewTicket ? (
+          <button
+            type="button"
+            onClick={open}
+            className="flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-hover"
+          >
+            <Plus size={14} strokeWidth={2.4} />
+            {t("topbar.newTicket")}
+          </button>
+        ) : null}
       </div>
     </header>
   );
