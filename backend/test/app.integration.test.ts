@@ -853,6 +853,31 @@ describe("tickets — create", () => {
       .send({ subject: "hi", description: "x", categoryId: await categoryId("Hardware") });
     expect(res.status).toBe(400);
   });
+
+  // A ticket with no customer is unreachable, not merely untidy: ticketScopeWhere
+  // matches staff on customerId equality, so it would be invisible to every
+  // customer-bound admin. The platform-wide super_admin is the one principal whose
+  // own customerId is null, so they are the only caller who can reach this path.
+  it("refuses a requester with no customer (400), rather than filing outside every tenant", async () => {
+    const sam = await login("sam.rivera@acme.com"); // super_admin, customerId null
+    const res = await request(app)
+      .post(`${API}/tickets`)
+      .set(bearer(sam))
+      .send({
+        subject: "Raised by platform staff with no tenant",
+        description: "Should be refused, not filed with a null customer.",
+        categoryId: await categoryId("Hardware"),
+        priority: "low",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/no tenant to file this ticket under/i);
+
+    // And nothing was written: no tenant-less ticket exists after the attempt.
+    const stranded = await prisma.$queryRaw<
+      { count: bigint }[]
+    >`SELECT count(*)::bigint AS count FROM tickets WHERE customer_id IS NULL`;
+    expect(Number(stranded[0].count)).toBe(0);
+  });
 });
 
 describe("tickets — customer isolation (unassigned ticket)", () => {
