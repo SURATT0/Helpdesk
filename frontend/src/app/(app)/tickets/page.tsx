@@ -29,6 +29,7 @@ export default function TicketsPage() {
       <Topbar
         titleKey="nav.tickets"
         showSearch={false}
+        showNewTicket
         right={
           <div className="flex items-center gap-2.5">
             {canImport ? (
