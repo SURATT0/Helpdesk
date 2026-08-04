@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { AuthUser } from "../../shared/auth";
+import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import type { Role } from "../../shared/domain";
 
 /**
@@ -9,16 +9,16 @@ import type { Role } from "../../shared/domain";
  * and can never drift apart.
  *
  * Multi-tenant: the customer is the isolation boundary.
- *   admin (customerId null) → every ticket, all customers;
- *   agent / manager → every ticket of their own customer (all departments);
- *   requester → only their own tickets.
- * A non-admin staff user without a customer sees nothing but their own tickets
- * (defensive — shouldn't happen for seeded staff).
+ *   platform-wide (super_admin with no customer) → every ticket, all customers;
+ *   staff pinned to a customer → every ticket of that customer, all departments;
+ *   user → only their own tickets.
+ * Staff without a customer see nothing but their own tickets (defensive — it
+ * shouldn't happen for seeded staff, and must not read as platform-wide).
  */
 export function ticketScopeWhere(user: AuthUser): Prisma.TicketWhereInput {
-  if (user.role === "admin") return {};
-  if (user.role === "requester") return { requesterId: user.id };
-  // agent + manager: their whole customer, across every department.
+  if (isPlatformWide(user)) return {};
+  if (user.role === "user") return { requesterId: user.id };
+  // admin + a customer-bound super_admin: their whole customer, every department.
   if (user.customerId == null) return { requesterId: user.id };
   return { customerId: user.customerId };
 }
@@ -37,19 +37,19 @@ export type AssignmentCandidate = {
  * *tickets* move is decided by `ticketScopeWhere` in the repository; this decides
  * only who is allowed to receive them, which that clause cannot express.
  *
- *   requester candidate → never; requesters raise tickets, they don't hold queues
- *   admin actor         → any staff member, any customer
- *   scoped actor        → only staff inside their own customer
+ *   user candidate       → never; users raise tickets, they don't hold queues
+ *   platform-wide actor  → any staff member, any customer
+ *   customer-bound actor → only staff inside their own customer
  *
- * A customer-less non-admin actor can grant nothing, mirroring how
+ * A customer-less actor who is not platform-wide can grant nothing, mirroring how
  * `ticketScopeWhere` grants that same user nothing beyond their own tickets.
  */
 export function mayReceiveAssignment(
   actor: AuthUser,
   candidate: AssignmentCandidate,
 ): boolean {
-  if (candidate.role === "requester") return false;
-  if (actor.role === "admin") return true;
+  if (candidate.role === "user") return false;
+  if (isPlatformWide(actor)) return true;
   if (actor.customerId == null) return false;
   return candidate.customerId === actor.customerId;
 }

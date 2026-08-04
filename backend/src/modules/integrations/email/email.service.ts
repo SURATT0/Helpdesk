@@ -60,7 +60,7 @@ export const emailService = {
     } else if (env.integrations.email.createUnknownRequester) {
       // An unknown sender has to be filed under a tenant explicitly. Without one
       // the requester, and then the ticket, would carry customerId null — which
-      // no agent or manager can ever see (ticketScopeWhere matches staff on
+      // no customer-bound staff can ever see (ticketScopeWhere matches staff on
       // customerId equality). Refusing is loud; filing it invisibly is silent.
       const configured = env.integrations.email.defaultCustomer;
       const customerId = configured

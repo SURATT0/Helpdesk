@@ -132,7 +132,7 @@ export function AuditView() {
 
   // Mirrors the server's audit:read grant. The API is the real gate; this only
   // avoids firing a request that would be refused.
-  const canRead = user?.role === "admin" || user?.role === "manager";
+  const canRead = user?.role === "super_admin";
 
   const filter = React.useMemo(
     () => ({ action: action || undefined, limit: PAGE_SIZE, offset }),

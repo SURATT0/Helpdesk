@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { Ticket } from "../schemas";
 
 // Mutable mock state (hoisted so the vi.mock factories can close over it).
-const h = vi.hoisted(() => ({ mutate: vi.fn(), role: "agent" as string }));
+const h = vi.hoisted(() => ({ mutate: vi.fn(), role: "admin" as string }));
 
 vi.mock("@/features/auth/context", () => ({
   useAuth: () => ({
@@ -26,7 +26,7 @@ const ticket = { id: 1042, status: "open" } as unknown as Ticket;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.role = "agent";
+  h.role = "admin";
 });
 
 describe("StatusMenu", () => {
@@ -45,7 +45,7 @@ describe("StatusMenu", () => {
   });
 
   it("shows a plain badge (no menu) for a requester", () => {
-    h.role = "requester";
+    h.role = "user";
     render(<StatusMenu ticket={ticket} />);
     expect(screen.getByText("Open")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();

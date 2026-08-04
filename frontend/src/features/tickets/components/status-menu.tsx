@@ -9,7 +9,7 @@ import { useI18n } from "@/features/i18n/context";
 import { useUpdateTicketStatus } from "../queries";
 import type { Ticket } from "../schemas";
 
-const WRITE_ROLES = ["admin", "manager", "agent"];
+const WRITE_ROLES = ["super_admin", "admin"];
 
 /**
  * Status control for the properties rail. Requesters (no write permission) see

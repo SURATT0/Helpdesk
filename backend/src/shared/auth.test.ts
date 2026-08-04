@@ -15,11 +15,11 @@ const user = (role: Role): AuthUser => ({
 
 describe("permissionsFor", () => {
   it("admin holds the wildcard", () => {
-    expect(permissionsFor("admin")).toEqual(["*"]);
+    expect(permissionsFor("super_admin")).toEqual(["*"]);
   });
 
   it("agent reads/writes/creates tickets + reads the directory, but not user:write", () => {
-    const p = permissionsFor("agent");
+    const p = permissionsFor("admin");
     expect(p).toContain("ticket:write");
     expect(p).toContain("ticket:create");
     expect(p).toContain("user:read");
@@ -27,23 +27,23 @@ describe("permissionsFor", () => {
   });
 
   it("requester can only read + create tickets", () => {
-    expect(permissionsFor("requester")).toEqual(["ticket:read", "ticket:create"]);
+    expect(permissionsFor("user")).toEqual(["ticket:read", "ticket:create"]);
   });
 });
 
 describe("hasPermission", () => {
   it("admin passes any check via *", () => {
-    expect(hasPermission(user("admin"), "user:write")).toBe(true);
-    expect(hasPermission(user("admin"), "anything:at:all")).toBe(true);
+    expect(hasPermission(user("super_admin"), "user:write")).toBe(true);
+    expect(hasPermission(user("super_admin"), "anything:at:all")).toBe(true);
   });
 
   it("agent has ticket:write but not user:write", () => {
-    expect(hasPermission(user("agent"), "ticket:write")).toBe(true);
-    expect(hasPermission(user("agent"), "user:write")).toBe(false);
+    expect(hasPermission(user("admin"), "ticket:write")).toBe(true);
+    expect(hasPermission(user("admin"), "user:write")).toBe(false);
   });
 
   it("requester cannot write tickets but can create them", () => {
-    expect(hasPermission(user("requester"), "ticket:write")).toBe(false);
-    expect(hasPermission(user("requester"), "ticket:create")).toBe(true);
+    expect(hasPermission(user("user"), "ticket:write")).toBe(false);
+    expect(hasPermission(user("user"), "ticket:create")).toBe(true);
   });
 });

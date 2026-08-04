@@ -39,25 +39,25 @@ const USERS: {
   customer?: string;
   available?: boolean;
 }[] = [
-  { name: "Sam Rivera", role: "admin" }, // platform admin → all customers
+  { name: "Sam Rivera", role: "super_admin" }, // platform-wide: no customer of their own → every customer
   // --- Acme Corp ---
-  { name: "Morgan Lee", role: "manager", team: "IT Support", customer: "Acme Corp" },
-  { name: "Dana Reyes", role: "agent", team: "IT Support", customer: "Acme Corp" },
+  { name: "Morgan Lee", role: "super_admin", team: "IT Support", customer: "Acme Corp" },
+  { name: "Dana Reyes", role: "admin", team: "IT Support", customer: "Acme Corp" },
   // Away — demonstrates project routing falling through to the backup owner.
-  { name: "Kai T.", role: "agent", team: "Field Services", customer: "Acme Corp", available: false },
-  { name: "Ana M.", role: "agent", team: "IT Support", customer: "Acme Corp" },
-  { name: "Marcus Chen", role: "requester", customer: "Acme Corp" },
-  { name: "T. Alvarez", role: "requester", customer: "Acme Corp" },
-  { name: "S. Okafor", role: "requester", customer: "Acme Corp" },
-  { name: "J. Petrov", role: "requester", customer: "Acme Corp" },
-  { name: "A. Lindqvist", role: "requester", customer: "Acme Corp" },
-  { name: "R. Danforth", role: "requester", customer: "Acme Corp" },
-  { name: "HR Ops", role: "requester", customer: "Acme Corp" },
-  { name: "L. Osei", role: "requester", customer: "Acme Corp" },
+  { name: "Kai T.", role: "admin", team: "Field Services", customer: "Acme Corp", available: false },
+  { name: "Ana M.", role: "admin", team: "IT Support", customer: "Acme Corp" },
+  { name: "Marcus Chen", role: "user", customer: "Acme Corp" },
+  { name: "T. Alvarez", role: "user", customer: "Acme Corp" },
+  { name: "S. Okafor", role: "user", customer: "Acme Corp" },
+  { name: "J. Petrov", role: "user", customer: "Acme Corp" },
+  { name: "A. Lindqvist", role: "user", customer: "Acme Corp" },
+  { name: "R. Danforth", role: "user", customer: "Acme Corp" },
+  { name: "HR Ops", role: "user", customer: "Acme Corp" },
+  { name: "L. Osei", role: "user", customer: "Acme Corp" },
   // --- Globex Inc ---
-  { name: "Nadia Kofi", role: "manager", team: "Globex Support", customer: "Globex Inc" },
-  { name: "Owen Park", role: "agent", team: "Globex Support", customer: "Globex Inc" },
-  { name: "Priya Shah", role: "requester", customer: "Globex Inc" },
+  { name: "Nadia Kofi", role: "super_admin", team: "Globex Support", customer: "Globex Inc" },
+  { name: "Owen Park", role: "admin", team: "Globex Support", customer: "Globex Inc" },
+  { name: "Priya Shah", role: "user", customer: "Globex Inc" },
 ];
 
 // Asset registry demo rows. `owner` is a seeded user name; `customer` is the

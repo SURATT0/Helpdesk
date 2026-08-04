@@ -360,14 +360,19 @@ export const ticketRepository = {
   },
 
   /**
-   * Manager ids for a customer — the fallback recipients for an unassigned
-   * ticket's SLA alert, since there is no assignee to tell. Platform admins are
-   * excluded on purpose: they span every customer and would drown in noise.
+   * The super admins belonging to one customer — the fallback recipients for an
+   * unassigned ticket's SLA alert, since there is no assignee to tell.
+   *
+   * Requiring a `customerId` is what keeps platform-wide super admins out: they
+   * span every customer and would drown in every tenant's noise. That is also why
+   * a null argument returns nobody rather than everybody.
    */
-  async findManagerIds(customerId: number | null): Promise<number[]> {
+  async findCustomerSuperAdminIds(
+    customerId: number | null,
+  ): Promise<number[]> {
     if (customerId == null) return [];
     const rows = await prisma.user.findMany({
-      where: { role: "manager", customerId },
+      where: { role: "super_admin", customerId },
       select: { id: true },
     });
     return rows.map((r) => r.id);

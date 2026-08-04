@@ -68,7 +68,7 @@ export function ProjectsView() {
   // Mirrors the server's project:read grant. The API is the real gate; this keeps
   // a direct visit from firing a request that would only come back 403, and shows
   // something better than an error for it.
-  const canRead = user?.role === "admin" || user?.role === "manager";
+  const canRead = user?.role === "super_admin";
   const { data, isLoading, isError, refetch } = useProjects({ enabled: canRead });
   const { data: users } = useUsers({ enabled: canRead });
   const update = useUpdateProject();

@@ -1,4 +1,5 @@
 import type { Role } from "@prisma/client";
+import { isPlatformWide } from "../../../shared/auth";
 
 /** The ticket a mailed reply claims, reduced to what the decision needs. */
 export type ReplyTargetFacts = {
@@ -23,14 +24,14 @@ export type ReplySenderFacts = {
  * type it into a subject line — so finding the ticket is NOT authorization. This
  * is the gate.
  *
- *   participant → requester, assignee, or a listed affected user;
- *   admin       → any ticket, any customer;
- *   other staff → only inside their own customer.
+ *   participant   → requester, assignee, or a listed affected user;
+ *   platform-wide → any ticket, any customer;
+ *   other staff   → only inside their own customer.
  *
- * Deliberately keyed on `role === "admin"` for the cross-tenant case rather than
- * `customerId == null`, so it agrees with `ticketScopeWhere`: a customer-less
- * agent or manager is granted nothing there, and must not be granted every
- * tenant's threads here.
+ * Cross-tenant reach goes through `isPlatformWide`, which requires the top role
+ * AND no tenant of its own, so this agrees with `ticketScopeWhere`: staff who
+ * happen to have no customer are granted nothing there, and must not be granted
+ * every tenant's threads here.
  *
  * A sender who fails this check is not an error — the caller opens a new ticket
  * instead, so no mail is dropped and no stranger reaches an existing thread.
@@ -46,7 +47,7 @@ export function senderMayReply(
   ) {
     return true;
   }
-  if (sender.role === "admin") return true;
-  if (sender.role === "requester") return false;
+  if (isPlatformWide(sender)) return true;
+  if (sender.role === "user") return false;
   return sender.customerId != null && sender.customerId === ticket.customerId;
 }

@@ -18,7 +18,7 @@ const STATUSES: TicketStatus[] = [
   "closed",
 ];
 const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];
-const ASSIGNABLE_ROLES = ["admin", "manager", "agent"];
+const ASSIGNABLE_ROLES = ["super_admin", "admin"];
 
 function Menu({
   label,

@@ -946,8 +946,8 @@ describe("users — directory & role management (RBAC)", () => {
     await request(app).get(`${API}/users`).set(bearer(marcus)).expect(403);
   });
 
-  it("only an admin can change a role", async () => {
-    const dana = await login("dana.reyes@acme.com"); // agent
+  it("only a super admin can change a role", async () => {
+    const dana = await login("dana.reyes@acme.com"); // admin — works cases, not people
     const marcus = await prisma.user.findUniqueOrThrow({
       where: { email: "marcus.chen@acme.com" },
     });
@@ -955,31 +955,38 @@ describe("users — directory & role management (RBAC)", () => {
     await request(app)
       .patch(`${API}/users/${marcus.id}`)
       .set(bearer(dana))
-      .send({ role: "agent" })
+      .send({ role: "admin" })
       .expect(403);
 
-    // Promote a user to admin, then the write succeeds.
+    // Promote someone to super_admin, then the write succeeds. They keep their
+    // customerId, so this is a customer-bound super admin — enough to set roles
+    // inside their own tenant.
     await prisma.user.update({
       where: { email: "ana.m@acme.com" },
-      data: { role: "admin" },
+      data: { role: "super_admin" },
     });
     const ana = await login("ana.m@acme.com");
     const res = await request(app)
       .patch(`${API}/users/${marcus.id}`)
       .set(bearer(ana))
-      .send({ role: "manager" });
+      .send({ role: "admin" });
     expect(res.status).toBe(200);
-    expect(res.body.data.role).toBe("manager");
+    expect(res.body.data.role).toBe("admin");
   });
 });
 
-describe("users — customer-scoped management (manager)", () => {
+/**
+ * A super admin who belongs to a customer manages that customer only. Reach is
+ * carried by customerId, not by the role name — which is what lets one role serve
+ * both a platform owner and a single customer's manager.
+ */
+describe("users — customer-bound super admin", () => {
   async function userId(email: string): Promise<number> {
     return (await prisma.user.findUniqueOrThrow({ where: { email } })).id;
   }
 
-  it("scopes a manager's directory to their own customer", async () => {
-    const morgan = await login("morgan.lee@acme.com"); // manager, Acme
+  it("scopes their directory to their own customer", async () => {
+    const morgan = await login("morgan.lee@acme.com"); // super_admin, Acme
     const res = await request(app).get(`${API}/users`).set(bearer(morgan));
     expect(res.status).toBe(200);
     const names: string[] = res.body.data.map((u: { name: string }) => u.name);
@@ -987,38 +994,51 @@ describe("users — customer-scoped management (manager)", () => {
     expect(names).not.toContain("Owen Park"); // Globex — other customer
   });
 
-  it("lets a manager edit a user in their customer", async () => {
+  it("edits a user in their own customer", async () => {
     const morgan = await login("morgan.lee@acme.com");
     const kaiId = await userId("kai.t@acme.com"); // Acme
     const res = await request(app)
       .patch(`${API}/users/${kaiId}`)
       .set(bearer(morgan))
-      .send({ role: "agent" });
+      .send({ role: "admin" });
     expect(res.status).toBe(200);
   });
 
-  it("404s a manager editing a user in another customer", async () => {
+  it("404s on a user in another customer rather than leaking them", async () => {
     const morgan = await login("morgan.lee@acme.com");
     const owenId = await userId("owen.park@acme.com"); // Globex
     await request(app)
       .patch(`${API}/users/${owenId}`)
       .set(bearer(morgan))
-      .send({ role: "agent" })
+      .send({ role: "admin" })
       .expect(404);
   });
 
-  it("forbids a manager from granting the admin role", async () => {
+  // The escalation guard, and the whole reason granting keys on reach rather than
+  // role: without it a customer's own super admin could promote past their tenant.
+  it("cannot grant the super admin role", async () => {
     const morgan = await login("morgan.lee@acme.com");
     const kaiId = await userId("kai.t@acme.com");
     await request(app)
       .patch(`${API}/users/${kaiId}`)
       .set(bearer(morgan))
-      .send({ role: "admin" })
+      .send({ role: "super_admin" })
       .expect(403);
   });
 
-  it("lets an admin see + manage users across customers", async () => {
-    const sam = await login("sam.rivera@acme.com"); // admin, no customer
+  it("lets a platform super admin grant the super admin role", async () => {
+    // The counterpart to the guard above: no customer of their own, so allowed.
+    const sam = await login("sam.rivera@acme.com");
+    const kaiId = await userId("kai.t@acme.com");
+    await request(app)
+      .patch(`${API}/users/${kaiId}`)
+      .set(bearer(sam))
+      .send({ role: "super_admin" })
+      .expect(200);
+  });
+
+  it("lets a platform super admin see + manage users across customers", async () => {
+    const sam = await login("sam.rivera@acme.com"); // super_admin, no customer
     const list = await request(app).get(`${API}/users`).set(bearer(sam));
     const names: string[] = list.body.data.map((u: { name: string }) => u.name);
     expect(names).toContain("Dana Reyes"); // Acme
@@ -1027,7 +1047,7 @@ describe("users — customer-scoped management (manager)", () => {
     await request(app)
       .patch(`${API}/users/${owenId}`)
       .set(bearer(sam))
-      .send({ role: "agent" })
+      .send({ role: "admin" })
       .expect(200);
   });
 });
@@ -1341,7 +1361,7 @@ describe("email-to-ticket webhook", () => {
     const user = await prisma.user.findFirstOrThrow({
       where: { email: "newcomer@partner.example" },
     });
-    expect(user.role).toBe("requester");
+    expect(user.role).toBe("user");
     expect(user.passwordHash).toBeNull();
   });
 

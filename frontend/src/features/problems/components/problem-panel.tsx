@@ -41,7 +41,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
   // link read-only — it explains why their ticket is waiting on something bigger.
   const canWrite =
     user != null &&
-    (user.role === "agent" || user.role === "manager" || user.role === "admin");
+    user.role !== "user";
 
   const { data: full } = useProblem(ticket.problem?.id, {
     enabled: ticket.problem != null,

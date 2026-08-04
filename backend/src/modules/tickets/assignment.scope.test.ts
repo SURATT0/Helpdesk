@@ -7,7 +7,7 @@ const actor = (over: Partial<AuthUser> = {}): AuthUser =>
     id: 1,
     email: "manager@acme.com",
     name: "M",
-    role: "manager",
+    role: "super_admin",
     customerId: 7,
     permissions: [],
     ...over,
@@ -17,14 +17,14 @@ const candidate = (
   over: Partial<AssignmentCandidate> = {},
 ): AssignmentCandidate => ({
   id: 2,
-  role: "agent",
+  role: "admin",
   customerId: 7,
   ...over,
 });
 
 describe("mayReceiveAssignment", () => {
   it("lets a manager hand tickets to staff in their own customer", () => {
-    for (const role of ["agent", "manager"] as const) {
+    for (const role of ["admin", "super_admin"] as const) {
       expect(actorMay(actor(), candidate({ role }))).toBe(true);
     }
   });
@@ -32,9 +32,9 @@ describe("mayReceiveAssignment", () => {
   it("refuses to make a requester an assignee", () => {
     // Requesters raise tickets; giving one a queue would put a ticket in the
     // hands of someone whose own row scope cannot even see it.
-    expect(actorMay(actor(), candidate({ role: "requester" }))).toBe(false);
+    expect(actorMay(actor(), candidate({ role: "user" }))).toBe(false);
     expect(
-      actorMay(actor({ role: "admin", customerId: null }), candidate({ role: "requester" })),
+      actorMay(actor({ role: "super_admin", customerId: null }), candidate({ role: "user" })),
     ).toBe(false);
   });
 
@@ -44,16 +44,17 @@ describe("mayReceiveAssignment", () => {
 
   it("lets a platform admin assign across customers", () => {
     expect(
-      actorMay(actor({ role: "admin", customerId: null }), candidate({ customerId: 8 })),
+      actorMay(actor({ role: "super_admin", customerId: null }), candidate({ customerId: 8 })),
     ).toBe(true);
   });
 
-  it("grants a customer-less non-admin actor nothing", () => {
+  it("grants a customer-less actor below the top role nothing", () => {
     // Mirrors ticketScopeWhere, which gives this same user only their own
-    // tickets rather than a whole tenant.
-    for (const role of ["manager", "agent"] as const) {
-      expect(actorMay(actor({ role, customerId: null }), candidate())).toBe(false);
-    }
+    // tickets rather than a whole tenant. A customer-less super_admin is excluded
+    // here because it is platform-wide on purpose.
+    expect(actorMay(actor({ role: "admin", customerId: null }), candidate())).toBe(
+      false,
+    );
   });
 
   it("refuses a customer-less staff target for a scoped actor", () => {

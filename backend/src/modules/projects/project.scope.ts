@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { AuthUser } from "../../shared/auth";
+import { isPlatformWide, type AuthUser } from "../../shared/auth";
 
 /**
  * Row-level project visibility, mirroring `ticketScopeWhere` and the user
@@ -11,7 +11,7 @@ import type { AuthUser } from "../../shared/auth";
  * ticket routed through one is still visible to every agent of its customer.
  */
 export function projectScopeWhere(actor: AuthUser): Prisma.ProjectWhereInput {
-  if (actor.role === "admin") return {};
+  if (isPlatformWide(actor)) return {};
   if (actor.customerId == null) return { id: -1 };
   return { customerId: actor.customerId };
 }
@@ -29,6 +29,6 @@ export function resolveProjectCustomerId(
   requested: number | undefined,
 ): number | null {
   if (actor.customerId != null) return actor.customerId;
-  if (actor.role === "admin" && requested != null) return requested;
+  if (isPlatformWide(actor) && requested != null) return requested;
   return null;
 }

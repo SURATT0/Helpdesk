@@ -25,7 +25,7 @@ import {
   useUpdateTicketStatus,
 } from "../queries";
 
-const WRITE_ROLES = ["admin", "manager", "agent"];
+const WRITE_ROLES = ["super_admin", "admin"];
 
 const localeOf = (lang: string) => (lang === "th" ? "th-TH" : "en-US");
 
@@ -296,7 +296,7 @@ export function TicketDetailView({ id }: { id: number }) {
       authorId: undefined as number | undefined,
       author: ticket.requester,
       tone: "red" as const,
-      roleKey: "requester",
+      roleKey: "user",
       time: formatTime(ticket.createdAt, lang),
       body: ticket.description,
       internal: false,
@@ -314,7 +314,7 @@ export function TicketDetailView({ id }: { id: number }) {
       time: formatTime(c.createdAt, lang),
       body: c.body,
       internal: c.internal,
-      fromAgent: c.author.role !== "requester",
+      fromAgent: c.author.role !== "user",
       sendStatus: c.sendStatus,
       clientId: c.clientId,
     })),

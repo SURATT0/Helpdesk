@@ -7,7 +7,7 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
     id: 1,
     email: "x@acme.com",
     name: "X",
-    role: "manager",
+    role: "super_admin",
     customerId: 7,
     permissions: [],
     ...over,
@@ -15,19 +15,29 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
 
 describe("projectScopeWhere", () => {
   it("gives a platform admin an unfiltered clause", () => {
-    expect(projectScopeWhere(user({ role: "admin", customerId: null }))).toEqual(
+    expect(projectScopeWhere(user({ role: "super_admin", customerId: null }))).toEqual(
       {},
     );
   });
 
   it("confines everyone else to their own customer", () => {
-    for (const role of ["manager", "agent", "requester"] as const) {
+    for (const role of ["super_admin", "admin", "user"] as const) {
       expect(projectScopeWhere(user({ role }))).toEqual({ customerId: 7 });
     }
   });
 
-  it("matches nothing for a non-admin with no customer", () => {
-    expect(projectScopeWhere(user({ customerId: null }))).toEqual({ id: -1 });
+  it("matches nothing for a customer-less principal below the top role", () => {
+    // The factory defaults to super_admin, which with no customer is platform-wide
+    // by design — so the sentinel case has to name a role that is not.
+    expect(projectScopeWhere(user({ role: "admin", customerId: null }))).toEqual({
+      id: -1,
+    });
+  });
+
+  it("gives a platform-wide principal every customer's projects", () => {
+    expect(
+      projectScopeWhere(user({ role: "super_admin", customerId: null })),
+    ).toEqual({});
   });
 });
 
@@ -41,7 +51,7 @@ describe("resolveProjectCustomerId", () => {
 
   it("lets a platform admin name the customer", () => {
     expect(
-      resolveProjectCustomerId(user({ role: "admin", customerId: null }), 99),
+      resolveProjectCustomerId(user({ role: "super_admin", customerId: null }), 99),
     ).toBe(99);
   });
 
@@ -50,15 +60,15 @@ describe("resolveProjectCustomerId", () => {
     // default to, and guessing one would file the project in the wrong tenant.
     expect(
       resolveProjectCustomerId(
-        user({ role: "admin", customerId: null }),
+        user({ role: "super_admin", customerId: null }),
         undefined,
       ),
     ).toBeNull();
   });
 
-  it("gives a customer-less non-admin nothing to create in", () => {
+  it("gives a customer-less principal below the top role nothing to create in", () => {
     expect(
-      resolveProjectCustomerId(user({ role: "manager", customerId: null }), 99),
+      resolveProjectCustomerId(user({ role: "admin", customerId: null }), 99),
     ).toBeNull();
   });
 });

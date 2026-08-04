@@ -13,10 +13,35 @@ export type AuthUser = {
   /** Team + department are retained for routing/display. */
   teamId: number | null;
   department: string | null;
-  /** Tenant boundary for row-level scoping. null = platform-wide (admin). */
+  /**
+   * Tenant boundary for row-level scoping. A value pins the principal to that one
+   * customer; null means they have no tenant of their own, which grants
+   * platform-wide reach only in combination with the top role — see
+   * `isPlatformWide`.
+   */
   customerId: number | null;
   permissions: string[];
 };
+
+/**
+ * May this principal see across every customer?
+ *
+ * The single source of truth for cross-tenant reach, deliberately one function
+ * rather than a condition repeated in each scope builder: this is the predicate
+ * that separates tenants, and five copies of it are five chances for one to drift.
+ *
+ * Reach needs BOTH halves. The top role alone is not enough — a super_admin who
+ * belongs to a customer (what used to be a manager) is confined to it. No tenant
+ * alone is not enough either — a customer-less admin is not thereby promoted to
+ * every tenant; the scope builders fall back to showing them only their own
+ * tickets, which is how a customer-less agent was always treated.
+ */
+export function isPlatformWide(user: {
+  role: Role;
+  customerId: number | null;
+}): boolean {
+  return user.role === "super_admin" && user.customerId == null;
+}
 
 /**
  * Coarse permission grants per role. `*` = all (admin). Reads are gated by
@@ -24,44 +49,35 @@ export type AuthUser = {
  * scope allows), so `ticket:read` is granted broadly; writes are permissioned.
  */
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
-  admin: ["*"],
-  manager: [
-    "ticket:read",
-    "ticket:write",
-    "ticket:create",
-    "ticket:import",
-    "ticket:assign",
-    "report:read",
-    "user:read",
-    // Read the audit trail. Management/compliance work, not desk work — agents
-    // are deliberately excluded. Which rows a manager sees is scoped to their
-    // own customer in the audit repository.
-    "audit:read",
-    // Manage users — but only within their own department (scoped in the
-    // user repository); admins manage everyone.
-    "user:write",
-    "asset:write",
-    "problem:write",
-    // Routing projects are management structure, not desk work: who owns a
-    // customer's incoming tickets, and who covers when they are away. Read and
-    // write are both held from manager up, so the two never disagree — an agent
-    // that could read the list but never act on it only invited the question of
-    // why the page was there.
-    "project:read",
-    "project:write",
-  ],
-  agent: [
+  // Everything an admin can do, plus managing the admins themselves. `*` rather
+  // than an enumerated list because this is the top of the hierarchy: a new
+  // permission should reach it without an edit here, and forgetting to add one
+  // would silently leave the top role unable to administer something.
+  //
+  // Note this DOES widen what a former manager may do — granting roles included.
+  // That follows from merging manager into this role: two ranks became one, so
+  // they hold one rank's powers. Reach is the axis that still separates them, and
+  // it lives on customerId, not here.
+  super_admin: ["*"],
+  // Exactly what the old agent role held — this tier is the rename, not a
+  // promotion. Assigning a single ticket already rides on ticket:write; handing
+  // over a whole queue (ticket:assign), reading reports, the audit trail, user
+  // management and routing projects all stay above this line, as they were.
+  admin: [
     "ticket:read",
     "ticket:write",
     "ticket:create",
     "ticket:import",
     "user:read",
-    // Agents maintain the asset registry and raise/link problems — both are
-    // day-to-day desk work, not administration.
+    // Assets and problems are day-to-day desk work: an admin maintains the
+    // registry and raises or links problems while working cases.
     "asset:write",
     "problem:write",
   ],
-  requester: ["ticket:read", "ticket:create"],
+  // Deliberately narrow: raise a ticket, follow it, read the knowledge base.
+  // Reading the KB needs no permission — it is open to any authenticated user —
+  // so there is nothing to grant for it here.
+  user: ["ticket:read", "ticket:create"],
 };
 
 export function permissionsFor(role: Role): string[] {

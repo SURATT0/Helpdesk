@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { Role } from "../../shared/domain";
-import type { AuthUser } from "../../shared/auth";
+import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { BadRequest } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
@@ -8,11 +8,11 @@ import { auditRepository } from "../audit/audit.repository";
 /**
  * Row-level scope for the user directory (multi-tenant): admins see/manage
  * everyone across all customers; everyone else is limited to members of their
- * own customer (across all departments). A non-admin with no customer matches
- * nothing (defensive).
+ * own customer (across all departments). Staff with no customer who are not
+ * platform-wide match nothing (defensive).
  */
 function scopeWhere(actor: AuthUser): Prisma.UserWhereInput {
-  if (actor.role === "admin") return {};
+  if (isPlatformWide(actor)) return {};
   if (actor.customerId == null) return { id: -1 };
   return { customerId: actor.customerId };
 }
@@ -125,7 +125,7 @@ export const userRepository = {
           where: {
             AND: [
               { id: data.projectId },
-              actor.role === "admin"
+              isPlatformWide(actor)
                 ? {}
                 : { customerId: actor.customerId ?? -1 },
             ],

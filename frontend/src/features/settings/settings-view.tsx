@@ -18,7 +18,7 @@ import { IntegrationsPanel } from "@/features/integrations/components/integratio
 import type { Lang } from "@/features/i18n/dictionary";
 
 // Roles that may connect/sync external sources (mirrors backend `ticket:import`).
-const CAN_INTEGRATE = new Set(["admin", "manager", "agent"]);
+const CAN_INTEGRATE = new Set(["super_admin", "admin"]);
 
 function Section({
   title,

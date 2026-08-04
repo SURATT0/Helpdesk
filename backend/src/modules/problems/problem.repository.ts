@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { AuthUser } from "../../shared/auth";
+import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { kbService } from "../kb/kb.service";
@@ -10,12 +10,12 @@ import type { ProblemStatus } from "./problem.types";
 import type { UpdateProblemInput } from "./problem.validators";
 
 /**
- * Row-level problem visibility, mirroring `ticketScopeWhere`: admins see every
- * customer, everyone else only their own. A non-admin without a customer matches
- * nothing (defensive).
+ * Row-level problem visibility, mirroring `ticketScopeWhere`: a platform-wide
+ * principal sees every customer, everyone else only their own. Staff without a
+ * customer who are not platform-wide match nothing (defensive).
  */
 export function problemScopeWhere(user: AuthUser): Prisma.ProblemWhereInput {
-  if (user.role === "admin") return {};
+  if (isPlatformWide(user)) return {};
   if (user.customerId == null) return { id: -1 };
   return { customerId: user.customerId };
 }

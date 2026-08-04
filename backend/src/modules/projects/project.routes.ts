@@ -7,7 +7,7 @@ const router = Router();
 
 // requireAuth is applied at the mount point. Routing projects are management
 // structure — who owns a customer's incoming tickets and who covers when they are
-// away — so the whole module sits at manager level and up: project:read to see it,
+// away — so the whole module sits at super_admin level: project:read to see it,
 // project:write to change it. Row scoping in the repository still narrows reads to
 // the caller's own customer on top of that, so a manager sees only their tenant.
 //
