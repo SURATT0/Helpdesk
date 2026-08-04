@@ -55,6 +55,10 @@ export const env = {
   // due time. Set SLA_ALERTS=false to disable (the SLA badge on reads is
   // unaffected — this only controls the push).
   slaAlerts: process.env.SLA_ALERTS !== "false",
+  // Background sweep that deletes expired refresh tokens. Set SESSION_SWEEP=false
+  // to disable — sessions still expire on their own either way (refresh checks
+  // expiresAt); all this controls is whether the dead rows are cleared out.
+  sessionSweep: process.env.SESSION_SWEEP !== "false",
   // Background sweep that emails notifications. Set NOTIFICATION_EMAILS=false to
   // keep notifications in-app only. With no SMTP_HOST configured the mail
   // adapter is the "log" transport, so nothing leaves the box either way.

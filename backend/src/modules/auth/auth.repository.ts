@@ -48,10 +48,25 @@ export const authRepository = {
    * Delete a user's expired refresh tokens to keep the table bounded. Only
    * past-expiry rows are removed — a revoked-but-unexpired token is retained so
    * reuse-detection can still catch a replay within its validity window.
+   *
+   * Runs on login, so it only ever tidies up after someone who came back. The
+   * account that never logs in again is `deleteExpiredEverywhere`'s job.
    */
   deleteExpired(userId: number) {
     return prisma.refreshToken.deleteMany({
       where: { userId, expiresAt: { lt: new Date() } },
+    });
+  },
+
+  /**
+   * Same deletion, table-wide: for the sweep, which is the only path that reaches
+   * rows belonging to users who never return. Same `expiresAt` cutoff and the same
+   * reason for it — a revoked-but-unexpired token must survive so a replay inside
+   * its validity window is still caught.
+   */
+  deleteExpiredEverywhere() {
+    return prisma.refreshToken.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
     });
   },
 };

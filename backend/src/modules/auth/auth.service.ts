@@ -123,4 +123,18 @@ export const authService = {
     if (!user) throw Unauthorized("Session expired");
     return toPublicUser(user);
   },
+
+  /**
+   * Delete every past-expiry refresh token, table-wide. Returns the number removed.
+   *
+   * The login-time cleanup above cannot bound this table on its own: it only ever
+   * touches the user doing the logging in, so rows belonging to accounts that stop
+   * signing in — a departed employee, a test fixture, a service account used once —
+   * stay forever. Expired rows grant nothing (refresh checks `expiresAt`), so this
+   * is housekeeping rather than a security fix; what it protects is the table.
+   */
+  async sweepExpiredSessions(): Promise<number> {
+    const { count } = await authRepository.deleteExpiredEverywhere();
+    return count;
+  },
 };
