@@ -64,6 +64,10 @@ export type ClosedHistoryFilter = {
   anchor?: string;
   limit: number;
   offset: number;
+  /** Narrow the period. Both used to be table columns; they filter better than they read. */
+  priority?: Priority;
+  /** Free text over subject + requester name. */
+  q?: string;
 };
 
 /**
@@ -89,6 +93,8 @@ export async function fetchClosedHistory(
   if (filter.anchor) qs.set("anchor", filter.anchor);
   qs.set("limit", String(filter.limit));
   qs.set("offset", String(filter.offset));
+  if (filter.priority) qs.set("priority", filter.priority);
+  if (filter.q) qs.set("q", filter.q);
   const body = await apiRequest(`/tickets/closed?${qs}`);
   return closedHistorySchema.parse(body);
 }

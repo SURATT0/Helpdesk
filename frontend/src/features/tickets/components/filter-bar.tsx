@@ -133,10 +133,6 @@ export function FilterBar() {
     [assignable],
   );
 
-  // "Assigned to me" is a shortcut into the same set, not separate state — so
-  // picking yourself from the dropdown lights the button up too.
-  const meSelected = user != null && assignees.has(user.id);
-
   return (
     <div className="flex flex-wrap items-center gap-2 px-6 py-4">
       <div className="flex w-[260px] items-center gap-2 rounded-md border border-line bg-white px-3 py-[7px] text-[13px] focus-within:border-brand">
@@ -192,26 +188,6 @@ export function FilterBar() {
             )
           }
         />
-      ) : null}
-
-      {user != null ? (
-        <button
-          type="button"
-          onClick={() => toggleAssignee(user.id)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12.5px]",
-            meSelected
-              ? "border-[#b4dcc3] bg-[#e4f2ea] font-semibold text-brand-hover"
-              : "border-dashed border-[#cbd5e1] font-medium text-muted hover:border-[#94a3b8]",
-          )}
-        >
-          {meSelected ? (
-            <Check size={12} strokeWidth={3} />
-          ) : (
-            <span className="leading-none">＋</span>
-          )}
-          {t("filter.assigneeMe")}
-        </button>
       ) : null}
 
       {activeCount > 0 ? (

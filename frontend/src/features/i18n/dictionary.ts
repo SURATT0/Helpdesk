@@ -110,7 +110,6 @@ const en: Dict = {
   "filter.search": "Search subject, #id, requester…",
   "filter.status": "Status",
   "filter.priority": "Priority",
-  "filter.assigneeMe": "Assigned to me",
   "filter.assignee": "Assignee",
   "filter.unassigned": "Unassigned",
   "filter.you": "you",
@@ -174,8 +173,13 @@ const en: Dict = {
   "audit.forbiddenNote":
     "The activity log is available to super admins. Ask an administrator if you need access.",
 
-  "closedLog.explainer":
-    "Closed tickets, kept as a permanent log — tickets are closed, never deleted. Pick a week, month, or year, then step through the periods or choose one from the list to jump straight to it. You see the same tickets you can see anywhere else in Deskly.",
+  // One line. How to use the period controls is what the controls are for, and
+  // the visibility rule is a footnote — it lives in the (i) tooltip below.
+  "closedLog.explainer": "Closed tickets, kept permanently. Nothing here is ever deleted.",
+  "closedLog.scopeNote":
+    "You see the same tickets you can see anywhere else in Deskly.",
+  "closedLog.searchPlaceholder": "Search subject or requester…",
+  "closedLog.anyPriority": "Any priority",
   "closedLog.granularity.week": "Week",
   "closedLog.granularity.month": "Month",
   "closedLog.granularity.year": "Year",
@@ -188,9 +192,7 @@ const en: Dict = {
   "closedLog.col.id": "Ticket",
   "closedLog.col.subject": "Subject",
   "closedLog.col.priority": "Priority",
-  "closedLog.col.requester": "Requester",
   "closedLog.col.assignee": "Handled by",
-  "closedLog.col.closedAt": "Closed",
   "closedLog.col.duration": "Open for",
   "closedLog.unassigned": "Unassigned",
   "closedLog.loading": "Loading history…",
@@ -642,7 +644,6 @@ const th: Dict = {
   "filter.search": "ค้นหาเรื่อง, #id, ผู้แจ้ง…",
   "filter.status": "สถานะ",
   "filter.priority": "ความสำคัญ",
-  "filter.assigneeMe": "มอบหมายให้ฉัน",
   "filter.assignee": "ผู้รับผิดชอบ",
   "filter.unassigned": "ยังไม่มีผู้รับผิดชอบ",
   "filter.you": "คุณ",
@@ -706,8 +707,10 @@ const th: Dict = {
   "audit.forbiddenNote":
     "ประวัติการใช้งานเปิดให้ผู้ดูแลระบบสูงสุด หากต้องการเข้าถึงกรุณาติดต่อผู้ดูแลระบบ",
 
-  "closedLog.explainer":
-    "ตั๋วงานที่ปิดแล้วจะถูกเก็บเป็นประวัติถาวร — ตั๋วงานถูกปิด ไม่ถูกลบ เลือกดูเป็นรายสัปดาห์ รายเดือน หรือรายปี แล้วเลื่อนดูช่วงก่อนหน้า หรือกดเลือกช่วงจากรายการเพื่อข้ามไปเลยก็ได้ คุณจะเห็นเฉพาะตั๋วงานที่คุณมีสิทธิ์เห็นเช่นเดียวกับหน้าอื่น",
+  "closedLog.explainer": "บันทึกถาวรของ ticket ที่ปิดแล้ว — ไม่มีการลบข้อมูล",
+  "closedLog.scopeNote": "คุณเห็นเฉพาะ ticket ที่คุณมีสิทธิ์เห็นเช่นเดียวกับหน้าอื่น",
+  "closedLog.searchPlaceholder": "ค้นหาหัวข้อหรือผู้แจ้ง…",
+  "closedLog.anyPriority": "ทุกความสำคัญ",
   "closedLog.granularity.week": "รายสัปดาห์",
   "closedLog.granularity.month": "รายเดือน",
   "closedLog.granularity.year": "รายปี",
@@ -720,9 +723,7 @@ const th: Dict = {
   "closedLog.col.id": "ตั๋วงาน",
   "closedLog.col.subject": "หัวข้อ",
   "closedLog.col.priority": "ความสำคัญ",
-  "closedLog.col.requester": "ผู้แจ้ง",
   "closedLog.col.assignee": "ผู้รับผิดชอบ",
-  "closedLog.col.closedAt": "ปิดเมื่อ",
   "closedLog.col.duration": "ใช้เวลา",
   "closedLog.unassigned": "ไม่มีผู้รับผิดชอบ",
   "closedLog.loading": "กำลังโหลดประวัติตั๋วงาน…",

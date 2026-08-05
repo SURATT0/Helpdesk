@@ -44,13 +44,17 @@ test("the sidebar links to the log, which opens on the current month", async ({
   await expect(page).toHaveURL(/\/history/);
 
   await expect(
-    page.getByText("Closed tickets, kept as a permanent log"),
+    page.getByText("Closed tickets, kept permanently"),
   ).toBeVisible();
   await expect(page.getByText(/closed in this period$/)).toBeVisible();
 
   // Columns unique to this page (so no strict-mode clash with status badges).
   await expect(page.getByText("Handled by")).toBeVisible();
   await expect(page.getByText("Open for")).toBeVisible();
+  // Priority and requester are filters now, not columns.
+  await expect(page.getByRole("columnheader", { name: "Priority" })).toBeHidden();
+  await expect(page.getByLabel("Priority")).toBeVisible(); // the filter
+  await expect(page.getByPlaceholder("Search subject or requester…")).toBeVisible();
 
   // Month is the default granularity: the label names a month and a year.
   await expect(periodLabel(page)).toHaveText(/[A-Za-z]{3,}\s+\d{4}/);
@@ -86,8 +90,12 @@ test("each granularity labels its window in its own shape", async ({ page }) => 
   await expect(periodLabel(page)).toHaveText(/^\d{4}$/);
 
   await granularity(page, "Week").click();
-  // A week is a range, so it carries a dash between two dates.
-  await expect(periodLabel(page)).toHaveText(/–/);
+  // A week is a range, so it carries a dash between two dates — and it must NAME
+  // the month it starts in. Dropping it there produced "3 – Aug 9, 2026", which
+  // reads as a range starting on a day with no month at all.
+  await expect(periodLabel(page)).toHaveText(
+    /^[A-Za-z]{3,}\s+\d{1,2}\s+–\s+([A-Za-z]{3,}\s+)?\d{1,2},\s+\d{4}$/,
+  );
 
   await granularity(page, "Month").click();
   await expect(periodLabel(page)).toHaveText(/[A-Za-z]{3,}\s+\d{4}/);
@@ -159,6 +167,37 @@ test("the period picker jumps straight to a past year", async ({ page }) => {
   await expect(page.getByText("No tickets were closed in this period")).toBeHidden();
 });
 
+test("the search narrows the period, and rows are grouped by closing day", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/history");
+  await granularity(page, "Year").click();
+  // Wait for the year-shaped label before counting: until the refetch lands the
+  // rows still belong to the previous (month) window.
+  await expect(periodLabel(page)).toHaveText(/^\d{4}$/);
+
+  const rows = page.getByRole("link", { name: /#\d+/ });
+  await expect(rows.first()).toBeVisible();
+  const before = await rows.count();
+  expect(before).toBeGreaterThan(1);
+
+  // Rows carry no date of their own any more: the day is a heading above each
+  // group, which is what let the date column go.
+  await expect(
+    page.getByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s/).first(),
+  ).toBeVisible();
+
+  // Searching by subject narrows the same period rather than leaving it.
+  const label = await periodLabel(page).innerText();
+  await page.getByPlaceholder("Search subject or requester…").fill("access");
+  await expect(rows).not.toHaveCount(before);
+  await expect(periodLabel(page)).toHaveText(label);
+  for (const name of await rows.allInnerTexts()) {
+    expect(name.toLowerCase()).toContain("access");
+  }
+});
+
 test("a requester with no closed tickets sees the empty state", async ({
   page,
 }) => {
@@ -183,6 +222,9 @@ test("the log is translated", async ({ page }) => {
   await expect(page.getByRole("button", { name: "รายสัปดาห์" })).toBeVisible();
   await expect(page.getByRole("button", { name: "รายเดือน" })).toBeVisible();
   await expect(page.getByRole("button", { name: "รายปี" })).toBeVisible();
-  await expect(page.getByText("ผู้รับผิดชอบ")).toBeVisible();
+  // exact: the column header is "ผู้รับผิดชอบ", but an unassigned row reads
+  // "ไม่มีผู้รับผิดชอบ" and contains it — a substring match resolves to both and
+  // trips strict mode as soon as any closed ticket in view has no assignee.
+  await expect(page.getByText("ผู้รับผิดชอบ", { exact: true })).toBeVisible();
   await expect(page.getByText(/ใบ ในช่วงนี้$/)).toBeVisible();
 });

@@ -217,13 +217,40 @@ export const ticketRepository = {
    * keeps it out of the log until it is genuinely closed again.
    */
   async findClosedInPeriod(
-    window: { start: Date; end: Date; limit: number; offset: number },
+    window: {
+      start: Date;
+      end: Date;
+      limit: number;
+      offset: number;
+      /** Narrow the period, for the log's filter row. Both optional. */
+      priority?: Priority;
+      /** Free text over subject and requester name — what "I half-remember it" needs. */
+      q?: string;
+    },
     user: AuthUser,
   ): Promise<{ items: Ticket[]; total: number }> {
     const where: Prisma.TicketWhereInput = {
       AND: [
         ticketScopeWhere(user),
         { status: "closed", closedAt: { gte: window.start, lt: window.end } },
+        ...(window.priority ? [{ priority: window.priority }] : []),
+        // Requester matched by NAME rather than by id: a picker would need the
+        // user directory, which `user:read` gates — so a requester browsing their
+        // own closed tickets could not use their own filter.
+        ...(window.q
+          ? [
+              {
+                OR: [
+                  { subject: { contains: window.q, mode: "insensitive" as const } },
+                  {
+                    requester: {
+                      name: { contains: window.q, mode: "insensitive" as const },
+                    },
+                  },
+                ],
+              },
+            ]
+          : []),
       ],
     };
 
