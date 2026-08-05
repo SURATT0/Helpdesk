@@ -16,6 +16,16 @@ import type { Role } from "../../shared/domain";
  * shouldn't happen for seeded staff, and must not read as platform-wide).
  */
 export function ticketScopeWhere(user: AuthUser): Prisma.TicketWhereInput {
+  // Deleted tickets are invisible to EVERYONE, platform-wide reach included —
+  // deliberately folded in here rather than added at each call site, because this
+  // clause is what the repository, the dashboard aggregates and the closed-ticket
+  // history all share. A deletion that only hid the row from lists would still
+  // show up in a count somewhere.
+  return { deletedAt: null, ...reachWhere(user) };
+}
+
+/** Which tickets this user's reach covers, before the deleted-row filter. */
+function reachWhere(user: AuthUser): Prisma.TicketWhereInput {
   if (isPlatformWide(user)) return {};
   if (user.role === "user") return { requesterId: user.id };
   // admin + a customer-bound super_admin: their whole customer, every department.

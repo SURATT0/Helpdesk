@@ -244,6 +244,21 @@ export const ticketService = {
   },
 
   /**
+   * Soft-delete a ticket. The route already restricts this to `ticket:delete`
+   * (super_admin only); the row-scope check here is the second half — a customer's
+   * own super admin must not reach another tenant's ticket, which `get` enforces by
+   * 404ing anything outside their scope.
+   *
+   * Closing is still the normal end of a ticket's life. This exists for the row
+   * that should never have been raised, so it is deliberately not offered as a
+   * status transition.
+   */
+  async remove(id: number, user: AuthUser): Promise<void> {
+    await this.get(id, user); // authorize via row scope (404 if out of scope)
+    await ticketRepository.softDelete(id, user.id);
+  },
+
+  /**
    * Replace the ticket's affected users. Deliberately NOT derived from the
    * session: the affected party is whoever the agent selects, which is often
    * not the logged-in user and not the requester either.

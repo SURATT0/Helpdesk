@@ -232,6 +232,11 @@ model Ticket {
   dueAt          DateTime?             @map("due_at") // computed from SLA policy at creation
   resolvedAt     DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
   closedAt       DateTime?             @map("closed_at")
+  // Soft delete, super-admin only. The normal end of a ticket's life is `closed`,
+  // which keeps it in the history log; this is the escape hatch for a row that
+  // should never have existed (spam, a mis-filed import). The row and its history
+  // stay on disk — `ticketScopeWhere` filters it out of every read.
+  deletedAt      DateTime?             @map("deleted_at")
   // Problem this incident is linked to (many tickets → one problem). Optional.
   problemId      Int?                  @map("problem_id")
   problem        Problem?              @relation(fields: [problemId], references: [id])
@@ -253,6 +258,9 @@ model Ticket {
   @@index([problemId])
   // The closed-ticket history log filters on a closedAt range and orders by it.
   @@index([closedAt])
+  // Every read pairs the tenant filter with `deletedAt IS NULL` (ticketScopeWhere),
+  // so the two travel together rather than as two separate indexes.
+  @@index([customerId, deletedAt])
   @@map("tickets")
 }
 

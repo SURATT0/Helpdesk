@@ -42,6 +42,46 @@ test("routing projects are hidden from an agent, in the nav and on the page", as
   ).toBeVisible();
 });
 
+/**
+ * Deleting a ticket sits at the top tier — closing is the normal end of a ticket's
+ * life. This covers who SEES the button; who the API lets through is covered by the
+ * backend suite (an admin gets a 403 even if they call it directly), and that split
+ * is deliberate: this spec must not delete rows out of the shared demo data.
+ */
+// One login per test: signing in again mid-test races the login page's redirect
+// for an already-authenticated session, which is why these are two tests.
+async function openFirstTicket(page: import("@playwright/test").Page) {
+  await page.goto("/tickets");
+  await page.getByText(/^#\d+$/).first().click();
+  // Asserted by URL rather than by a status-dependent action button — the newest
+  // tickets in the list are closed, so "Mark resolved" isn't offered on them.
+  await expect(page).toHaveURL(/\/tickets\/\d+/);
+}
+
+test("delete ticket is hidden from an admin", async ({ page }) => {
+  await loginAs(page, "dana.reyes@acme.com"); // admin — works cases, cannot delete
+  await openFirstTicket(page);
+  await expect(page.getByRole("button", { name: "Delete ticket" })).toBeHidden();
+});
+
+test("delete ticket is offered to a super admin, behind a confirm", async ({
+  page,
+}) => {
+  await loginAs(page, "morgan.lee@acme.com"); // super_admin
+  await openFirstTicket(page);
+
+  const deleteButton = page.getByRole("button", { name: "Delete ticket" });
+  await expect(deleteButton).toBeVisible();
+
+  // The destructive step is never the first click: confirm, then cancel, and the
+  // ticket is still there. Deleting for real is covered by the backend suite, so
+  // this spec leaves the shared demo data intact.
+  await deleteButton.click();
+  await expect(page.getByText("Delete this ticket?")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(deleteButton).toBeVisible();
+});
+
 test("a manager reaches routing projects from the nav", async ({ page }) => {
   await loginAs(page, "morgan.lee@acme.com"); // manager, Acme
   await page.goto("/dashboard");
