@@ -183,6 +183,9 @@ test("the log is translated", async ({ page }) => {
   await expect(page.getByRole("button", { name: "รายสัปดาห์" })).toBeVisible();
   await expect(page.getByRole("button", { name: "รายเดือน" })).toBeVisible();
   await expect(page.getByRole("button", { name: "รายปี" })).toBeVisible();
-  await expect(page.getByText("ผู้รับผิดชอบ")).toBeVisible();
+  // exact: the column header is "ผู้รับผิดชอบ", but an unassigned row reads
+  // "ไม่มีผู้รับผิดชอบ" and contains it — a substring match resolves to both and
+  // trips strict mode as soon as any closed ticket in view has no assignee.
+  await expect(page.getByText("ผู้รับผิดชอบ", { exact: true })).toBeVisible();
   await expect(page.getByText(/ใบ ในช่วงนี้$/)).toBeVisible();
 });
