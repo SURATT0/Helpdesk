@@ -38,6 +38,12 @@ export const env = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? DEV_DEFAULT_REFRESH_SECRET,
   accessTtlSec: Number(process.env.ACCESS_TTL_SEC ?? 15 * 60), // 15 min
   refreshTtlSec: Number(process.env.REFRESH_TTL_SEC ?? 7 * 24 * 60 * 60), // 7 d
+  // Leeway for replaying the token a rotation just superseded. Two page loads (or
+  // two tabs) that both refresh with the same cookie are a race, not a theft: the
+  // second arrives moments after the first rotated. Inside this window the retry
+  // is served; outside it, a replay is still treated as compromise and revokes the
+  // family. Set REFRESH_REUSE_LEEWAY_SEC=0 to restore the strict behaviour.
+  refreshReuseLeewaySec: Number(process.env.REFRESH_REUSE_LEEWAY_SEC ?? 10),
   // Whether the refresh cookie gets the `Secure` flag. Decoupled from NODE_ENV
   // because a browser drops `Secure` cookies received over plain HTTP — so a
   // prod-mode stack served without TLS (e.g. docker-compose) must set this
