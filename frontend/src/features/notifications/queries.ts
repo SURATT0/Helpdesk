@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { runStream } from "@/lib/sse";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -27,25 +28,16 @@ export function useNotifications() {
 export function useNotificationStream() {
   const qc = useQueryClient();
   React.useEffect(() => {
-    let stopped = false;
     const controller = new AbortController();
-    (async () => {
-      while (!stopped) {
-        try {
-          await streamNotifications(controller.signal, () =>
-            qc.invalidateQueries({ queryKey: notificationKeys.all }),
-          );
-        } catch {
-          if (stopped) return;
-        }
-        if (stopped) return;
-        await new Promise((r) => setTimeout(r, 2000)); // backoff, then reconnect
-      }
-    })();
-    return () => {
-      stopped = true;
-      controller.abort();
-    };
+    void runStream({
+      label: "notification stream",
+      signal: controller.signal,
+      connect: (signal) =>
+        streamNotifications(signal, () =>
+          qc.invalidateQueries({ queryKey: notificationKeys.all }),
+        ),
+    });
+    return () => controller.abort();
   }, [qc]);
 }
 
