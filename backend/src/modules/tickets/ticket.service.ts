@@ -146,6 +146,8 @@ export const ticketService = {
       anchor?: Date;
       limit: number;
       offset: number;
+      priority?: Priority;
+      q?: string;
     },
     user: AuthUser,
   ): Promise<{ items: Ticket[]; total: number; period: Period }> {
@@ -159,6 +161,8 @@ export const ticketService = {
         end: period.end,
         limit: input.limit,
         offset: input.offset,
+        priority: input.priority,
+        q: input.q,
       },
       user,
     );

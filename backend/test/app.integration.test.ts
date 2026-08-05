@@ -1014,6 +1014,92 @@ describe("tickets — delete (super admin only, soft)", () => {
   });
 });
 
+// Priority and requester left the history table and became filters, so they have
+// to narrow the period on the server — the client no longer renders either as a
+// column to filter by eye.
+describe("tickets — closed history filters", () => {
+  const closed = (token: string, qs = "") =>
+    request(app).get(`${API}/tickets/closed?granularity=year${qs}`).set(bearer(token));
+
+  it("narrows by priority, and combines with the period", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const all = await closed(dana);
+    expect(all.status).toBe(200);
+    const priorities = new Set<string>(
+      all.body.data.map((t: { priority: string }) => t.priority),
+    );
+    expect(priorities.size).toBeGreaterThan(1); // otherwise the filter proves nothing
+
+    // Taken from the data rather than hardcoded: which priorities the seed closes
+    // in the current year is not something this test should depend on.
+    const [pick] = [...priorities];
+    const narrowed = await closed(dana, `&priority=${pick}`);
+    expect(narrowed.status).toBe(200);
+    expect(narrowed.body.data.length).toBeGreaterThan(0);
+    expect(
+      narrowed.body.data.every((t: { priority: string }) => t.priority === pick),
+    ).toBe(true);
+    expect(narrowed.body.meta.total).toBeLessThan(all.body.meta.total);
+  });
+
+  it("searches subject and requester name, case-insensitively", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const all = await closed(dana);
+    const sample = all.body.data[0] as { subject: string; requester: string };
+
+    // A word from the subject finds it.
+    const word = sample.subject.split(/\s+/).find((w: string) => w.length > 4);
+    const bySubject = await closed(dana, `&q=${encodeURIComponent(word!.toUpperCase())}`);
+    expect(bySubject.status).toBe(200);
+    expect(
+      bySubject.body.data.some((t: { id: number }) => t.id === (sample as unknown as { id: number }).id),
+    ).toBe(true);
+
+    // So does the requester's name, which is the other half of "I half-remember it".
+    const byRequester = await closed(
+      dana,
+      `&q=${encodeURIComponent(sample.requester.split(" ")[0].toLowerCase())}`,
+    );
+    expect(byRequester.status).toBe(200);
+    expect(byRequester.body.data.length).toBeGreaterThan(0);
+    expect(
+      byRequester.body.data.every(
+        (t: { subject: string; requester: string }) =>
+          t.requester.toLowerCase().includes(sample.requester.split(" ")[0].toLowerCase()) ||
+          t.subject.toLowerCase().includes(sample.requester.split(" ")[0].toLowerCase()),
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps row scope while filtering — a filter cannot widen what you see", async () => {
+    // #1020 is a Globex closure pinned to the PREVIOUS year by the seed, so both
+    // sides query that year rather than the current one.
+    const lastYear = new Date(
+      Date.UTC(new Date().getUTCFullYear() - 1, 5, 21),
+    ).toISOString();
+    const q = `&anchor=${encodeURIComponent(lastYear)}&q=${encodeURIComponent("Mailbox migration")}`;
+
+    // Searching for it by name must not reach across the tenant boundary.
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    const hidden = await closed(dana, q);
+    expect(hidden.status).toBe(200);
+    expect(hidden.body.data).toHaveLength(0);
+
+    const owen = await login("owen.park@acme.com"); // Globex staff
+    const theirs = await closed(owen, q);
+    expect(theirs.status).toBe(200);
+    expect(theirs.body.data.length).toBeGreaterThan(0);
+  });
+
+  it("ignores a blank search rather than matching nothing", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const all = await closed(dana);
+    const blank = await closed(dana, "&q=%20%20");
+    expect(blank.status).toBe(200);
+    expect(blank.body.meta.total).toBe(all.body.meta.total);
+  });
+});
+
 describe("tickets — customer isolation (unassigned ticket)", () => {
   it("shows an unassigned ticket to any agent in its customer, but not to other customers", async () => {
     const category = await prisma.category.create({

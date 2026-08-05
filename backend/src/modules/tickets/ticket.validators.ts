@@ -51,6 +51,17 @@ export const closedHistoryQuery = z.object({
   anchor: z.coerce.date().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+  // Filters for the log's own row. Priority and requester used to be table
+  // columns; they narrow the period better than they read as data.
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  // Free text over subject + requester name. Trimmed, and an empty string is
+  // dropped so "cleared the box" is not a filter that matches nothing.
+  q: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
 });
 
 /** Statuses a reassignment touches by default: the work still in flight. */
