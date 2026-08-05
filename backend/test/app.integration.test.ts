@@ -1144,23 +1144,62 @@ describe("tickets — customer isolation (unassigned ticket)", () => {
 describe("auth — refresh rotation & reuse detection", () => {
   const creds = { email: "dana.reyes@acme.com", password: "password123" };
 
-  it("rotates the refresh token and revokes the family on reuse", async () => {
-    const login = await request(app)
-      .post(`${API}/auth/login`)
-      .send(creds)
-      .expect(200);
-    const rt1 = refreshCookie(login);
+  /** Push every revoked token further into the past than the reuse leeway. */
+  async function ageOutRevocations() {
+    const past = new Date(Date.now() - (env.refreshReuseLeewaySec + 60) * 1000);
+    await prisma.refreshToken.updateMany({
+      where: { revokedAt: { not: null } },
+      data: { revokedAt: past },
+    });
+  }
 
+  it("rotates the refresh token on every use", async () => {
+    const login = await request(app).post(`${API}/auth/login`).send(creds).expect(200);
+    const rt1 = refreshCookie(login);
+    const refreshed = await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", rt1)
+      .expect(200);
+    expect(refreshCookie(refreshed)).not.toBe(rt1);
+  });
+
+  // The race this exists for: two page loads whose access tokens expired together
+  // both refresh with the same cookie, and the second lands just after the first
+  // rotated it. That is a retry, not a theft — serving it is what stops an innocent
+  // user (and the E2E suite under load) being logged out mid-navigation.
+  it("serves a replay inside the leeway and leaves the family alive", async () => {
+    const login = await request(app).post(`${API}/auth/login`).send(creds).expect(200);
+    const rt1 = refreshCookie(login);
     const refreshed = await request(app)
       .post(`${API}/auth/refresh`)
       .set("Cookie", rt1)
       .expect(200);
     const rt2 = refreshCookie(refreshed);
-    expect(rt2).not.toBe(rt1);
 
-    // Replaying the rotated (now revoked) token is treated as reuse → 401 and
-    // nukes the whole family, so the freshly-minted rt2 is invalidated too.
+    // The straggler, replaying the token the rotation just superseded.
+    const retry = await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", rt1)
+      .expect(200);
+    expect(refreshCookie(retry)).not.toBe(rt1);
+
+    // And the family is untouched: the successor from the first rotation still works.
+    await request(app).post(`${API}/auth/refresh`).set("Cookie", rt2).expect(200);
+  });
+
+  it("treats a replay after the leeway as compromise and revokes the family", async () => {
+    const login = await request(app).post(`${API}/auth/login`).send(creds).expect(200);
+    const rt1 = refreshCookie(login);
+    const refreshed = await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", rt1)
+      .expect(200);
+    const rt2 = refreshCookie(refreshed);
+
+    await ageOutRevocations(); // the replay is no longer a plausible race
+
     await request(app).post(`${API}/auth/refresh`).set("Cookie", rt1).expect(401);
+    // Reuse detection still burns the whole family, so the live successor dies too.
     await request(app).post(`${API}/auth/refresh`).set("Cookie", rt2).expect(401);
   });
 
@@ -1176,6 +1215,26 @@ describe("auth — refresh rotation & reuse detection", () => {
     const rt = refreshCookie(login);
     await request(app).post(`${API}/auth/logout`).set("Cookie", rt).expect(200);
     await request(app).post(`${API}/auth/refresh`).set("Cookie", rt).expect(401);
+  });
+
+  // The leeway must not become a way back in after signing out. Logout revokes
+  // every token in the family and mints no successor, so nothing is live to make
+  // the replay look like a rotation race — even one arriving immediately.
+  it("does not let the leeway revive a session that was logged out", async () => {
+    const login = await request(app).post(`${API}/auth/login`).send(creds).expect(200);
+    const rt1 = refreshCookie(login);
+    const refreshed = await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", rt1)
+      .expect(200);
+    const rt2 = refreshCookie(refreshed);
+
+    await request(app).post(`${API}/auth/logout`).set("Cookie", rt2).expect(200);
+
+    // Both the rotated token and the logged-out one, replayed well inside the
+    // leeway. Neither may work.
+    await request(app).post(`${API}/auth/refresh`).set("Cookie", rt1).expect(401);
+    await request(app).post(`${API}/auth/refresh`).set("Cookie", rt2).expect(401);
   });
 });
 

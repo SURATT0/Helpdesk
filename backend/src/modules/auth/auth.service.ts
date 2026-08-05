@@ -99,8 +99,28 @@ export const authService = {
     if (!row) throw Unauthorized("Invalid session");
 
     if (row.revokedAt) {
-      // An already-rotated (revoked) token was replayed → compromise the whole
-      // family and force a fresh login.
+      // An already-revoked token came back. Usually that IS theft — but not always:
+      // two page loads (or two tabs) whose access tokens expired together both
+      // refresh with the same cookie, and the second arrives milliseconds after the
+      // first rotated it. Treating that as compromise logs an innocent user out and
+      // kills the family, which is what made the E2E suite flaky under load.
+      //
+      // So a replay is served ONLY when both hold:
+      //   - it lands inside the leeway after the rotation, and
+      //   - the family still has a live token, i.e. a successor was minted.
+      // The second condition is what keeps logout final: logout revokes every token
+      // in the family, leaving none live, so a replay after it is still refused.
+      const revokedMsAgo = Date.now() - row.revokedAt.getTime();
+      const withinLeeway =
+        env.refreshReuseLeewaySec > 0 &&
+        revokedMsAgo <= env.refreshReuseLeewaySec * 1000;
+
+      if (withinLeeway && (await authRepository.hasLiveToken(row.familyId))) {
+        // A racing retry, not a replay attack: mint into the same family and leave
+        // reuse detection armed for anything outside the window.
+        return mintSession(row.user, row.familyId);
+      }
+
       await authRepository.revokeFamily(row.familyId);
       throw Unauthorized("Session reuse detected");
     }

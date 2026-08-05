@@ -36,6 +36,21 @@ export const authRepository = {
     });
   },
 
+  /**
+   * Does this family still hold a usable token?
+   *
+   * Tells a rotation apart from a logout when an already-revoked token is replayed:
+   * rotating mints a successor, so the family still has one live token, while
+   * logout revokes them all. Without this check a replay inside the reuse leeway
+   * would revive a session the user had deliberately ended.
+   */
+  async hasLiveToken(familyId: string): Promise<boolean> {
+    const live = await prisma.refreshToken.count({
+      where: { familyId, revokedAt: null, expiresAt: { gt: new Date() } },
+    });
+    return live > 0;
+  },
+
   /** Revoke every still-live token in a family (logout / reuse detection). */
   revokeFamily(familyId: string) {
     return prisma.refreshToken.updateMany({
