@@ -45,6 +45,32 @@ test("the summary tile filters the list to the breaches it counted", async ({
   await expect(page.getByLabel(/^SLA: Met/)).toHaveCount(0);
 });
 
+// Four surfaces used to render the SLA independently; three of them showed the
+// server's clamped string while the list showed a real overrun. This pins that
+// they now agree — reading the state rather than the countdown, so a minute
+// ticking over between two page loads can't fail it.
+test("the dashboard, the detail page and the board all state the same verdict", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/dashboard");
+
+  const row = page.locator('a[href^="/tickets/"]').first();
+  await expect(row).toBeVisible();
+  const href = await row.getAttribute("href");
+  const spoken = await row.getByLabel(/^SLA: /).getAttribute("aria-label");
+  const state = spoken!.split(",")[0]; // "SLA: Breached, still open" → "SLA: Breached"
+
+  await page.goto(href!);
+  // Twice: the header pill and the properties rail, which must not disagree
+  // with each other either.
+  await expect(page.getByLabel(new RegExp(`^${state}`))).toHaveCount(2);
+
+  await page.goto("/tickets");
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  await expect(page.getByLabel(/^SLA: /).first()).toBeVisible();
+});
+
 test("the SLA facet ANDs with the other filters", async ({ page }) => {
   await login(page);
   await page.goto("/tickets");

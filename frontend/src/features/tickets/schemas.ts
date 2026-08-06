@@ -11,14 +11,6 @@ export const ticketStatusSchema = z.enum([
 
 export const prioritySchema = z.enum(["low", "medium", "high", "critical"]);
 
-export const slaStateSchema = z.enum([
-  "danger",
-  "warn",
-  "ok",
-  "paused",
-  "met",
-]);
-
 export const ticketSchema = z.object({
   id: z.number(),
   subject: z.string(),
@@ -31,14 +23,13 @@ export const ticketSchema = z.object({
   /** Filtering keys on this, not the display name — names are not unique. */
   assigneeId: z.number().nullable(),
   category: z.string(),
-  slaDue: z.string(),
-  slaState: slaStateSchema,
   /**
-   * The SLA target and the actual finish time. The API has always returned both;
-   * they were absent here, and zod strips unknown keys, so the client could only
-   * ever show the server's pre-formatted `slaDue` snapshot — which clamps an
-   * overrun to "0h 0m". With the timestamps the list judges the clock itself
-   * (see ./sla) and can say how far past due a ticket actually is.
+   * The SLA target and the actual finish time — the only SLA fields the client
+   * takes. The server also sends `slaDue`/`slaState`, a pre-rendered snapshot
+   * that clamps an overrun to "0h 0m" and collapses three different situations
+   * into one `danger`; every surface now judges these two timestamps instead
+   * (see ./sla), so the snapshot is deliberately left unparsed rather than kept
+   * around for something to render again by accident.
    */
   dueAt: z.string().nullable(),
   resolvedAt: z.string().nullable(),
@@ -215,7 +206,6 @@ export type Ticket = z.infer<typeof ticketSchema>;
 export type ReplyResult = z.infer<typeof replyResultSchema>;
 export type ImportRowResult = z.infer<typeof importRowResultSchema>;
 export type ImportResult = z.infer<typeof importResultSchema>;
-export type SlaState = z.infer<typeof slaStateSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
 

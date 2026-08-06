@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, Clock, Trash2 } from "lucide-react";
+import { ArrowDown, Trash2 } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
@@ -14,7 +14,9 @@ import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
-import { slaColor, toneForName } from "../data";
+import { SlaBadge } from "./sla-badge";
+import { useAssessSla } from "../use-sla";
+import { toneForName } from "../data";
 import { markRead } from "../api";
 import type { Comment, CommentSendStatus } from "../schemas";
 import {
@@ -233,6 +235,7 @@ export function TicketDetailView({ id }: { id: number }) {
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
   const { typingNames, reads } = useCommentStream(id); // live comments/typing/reads
+  const assess = useAssessSla();
 
   // Resend a message that failed to post: drop the failed entry, then re-send
   // (which creates a fresh optimistic entry).
@@ -451,15 +454,11 @@ export function TicketDetailView({ id }: { id: number }) {
               {formatOpened(ticket.createdAt, lang)} {t("detail.by")}{" "}
               <strong className="text-ink">{ticket.requester}</strong>
             </span>
-            <span
-              className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 font-mono text-[12px] font-semibold"
-              style={{
-                color: slaColor[ticket.slaState],
-                borderColor: `${slaColor[ticket.slaState]}55`,
-              }}
-            >
-              <Clock size={12} strokeWidth={2} />
-              SLA {ticket.slaDue}
+            {/* The badge names its own state; "SLA" is what says which clock
+                that state belongs to, which the header has no other label for. */}
+            <span className="ml-auto inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5">
+              <span className="text-[11.5px] font-semibold text-muted">SLA</span>
+              <SlaBadge sla={assess(ticket)} />
             </span>
           </div>
         </header>
