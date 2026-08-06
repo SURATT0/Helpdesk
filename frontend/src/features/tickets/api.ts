@@ -4,7 +4,6 @@ import type { Priority, TicketStatus } from "@/lib/domain";
 import {
   categoryListSchema,
   closedHistorySchema,
-  closedPeriodsSchema,
   commentEnvelopeSchema,
   commentListSchema,
   commentSchema,
@@ -17,7 +16,6 @@ import {
   ticketListSchema,
   type Category,
   type ClosedHistoryPage,
-  type ClosedPeriodsPage,
   type Comment,
   type Granularity,
   type HistoryEntry,
@@ -55,36 +53,22 @@ export async function fetchTickets(
 }
 
 export type ClosedHistoryFilter = {
+  /** `all` reads the whole archive; the bucketed sizes read one window. */
   granularity: Granularity;
   /**
-   * Any instant inside the wanted period, as an ISO string. Omitted on first
-   * load, which the server reads as "the period containing now"; paging passes
-   * back the `prevAnchor`/`nextAnchor` from the previous response.
+   * Any instant inside the wanted period, as an ISO string. Ignored by the server
+   * under `all`, which has no window to anchor.
    */
   anchor?: string;
   limit: number;
   offset: number;
-  /** Narrow the period. Both used to be table columns; they filter better than they read. */
+  /** Narrow the results. Used to be a table column; it filters better than it reads. */
   priority?: Priority;
-  /** Free text over subject + requester name. */
+  /** Free text over subject, ticket id and requester name or email. */
   q?: string;
 };
 
-/**
- * The periods that actually hold closed tickets, newest first — what the picker
- * lists. Only populated periods come back, so choosing one never lands on an
- * empty window.
- */
-export async function fetchClosedPeriods(
-  granularity: Granularity,
-): Promise<ClosedPeriodsPage> {
-  const body = await apiRequest(
-    `/tickets/closed/periods?granularity=${granularity}`,
-  );
-  return closedPeriodsSchema.parse(body);
-}
-
-/** One page of the closed-ticket history log for a single calendar period. */
+/** One page of the closed-ticket history log. */
 export async function fetchClosedHistory(
   filter: ClosedHistoryFilter,
 ): Promise<ClosedHistoryPage> {

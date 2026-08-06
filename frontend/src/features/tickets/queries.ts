@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -8,14 +9,13 @@ import {
 import type { Priority, TicketStatus } from "@/lib/domain";
 import { useAuth } from "@/features/auth/context";
 import { runStream } from "@/lib/sse";
-import type { Comment, Granularity } from "./schemas";
+import type { Comment } from "./schemas";
 import {
   createComment,
   createTicket,
   deleteTicket,
   fetchCategories,
   fetchClosedHistory,
-  fetchClosedPeriods,
   fetchComments,
   fetchReads,
   fetchTicket,
@@ -44,8 +44,6 @@ export const ticketKeys = {
   history: (id: number) => ["tickets", "history", id] as const,
   closed: (filter: ClosedHistoryFilter) =>
     ["tickets", "closed", filter] as const,
-  closedPeriods: (granularity: Granularity) =>
-    ["tickets", "closed", "periods", granularity] as const,
 };
 
 export function useTickets(filter: TicketFilter = {}) {
@@ -55,33 +53,56 @@ export function useTickets(filter: TicketFilter = {}) {
   });
 }
 
+/** The server's ceiling on one page — asking for more is a 400. */
+const CLOSED_PAGE_SIZE = 200;
+
 /**
- * One page of the closed-ticket history log. `keepPreviousData` holds the rows
- * on screen while the next period or page loads, so stepping through months
- * doesn't flash an empty table — same reason the audit trail uses it.
+ * The closed log as one continuous newest-first list, paged only as far as the
+ * reader scrolls.
+ *
+ * Infinite rather than numbered pages because the log has no meaningful page
+ * boundaries — it is a timeline, and "page 3" of a timeline is not a place. An
+ * archive that fits in one page arrives whole and never fetches again, so the
+ * paging costs nothing until it is actually needed.
  */
-export function useClosedHistory(filter: ClosedHistoryFilter) {
-  return useQuery({
-    queryKey: ticketKeys.closed(filter),
-    queryFn: () => fetchClosedHistory(filter),
+export function useClosedLog(filter: { priority?: Priority; q?: string }) {
+  return useInfiniteQuery({
+    queryKey: ["tickets", "closed", "log", filter] as const,
+    queryFn: ({ pageParam }) =>
+      fetchClosedHistory({
+        granularity: "all",
+        limit: CLOSED_PAGE_SIZE,
+        offset: pageParam,
+        ...filter,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, page) => n + page.data.length, 0);
+      // `total` is the count for these filters, so this stops exactly at the end
+      // rather than probing for an empty page.
+      return loaded < last.meta.total ? loaded : undefined;
+    },
     placeholderData: keepPreviousData,
   });
 }
 
 /**
- * Which periods the picker can offer. Cached longer than a page of rows: the set
- * of populated periods only changes when a ticket is closed, which is rare next to
- * how often someone steps through windows.
+ * How big the archive is at all, ignoring whatever is currently filtered — the
+ * number the search box quotes ("Search 27 closed tickets…"). Asks for a single
+ * row because only `meta.total` is wanted, and caches longer than a page of rows:
+ * it only changes when a ticket closes.
  */
-export function useClosedPeriods(
-  granularity: Granularity,
-  opts: { enabled?: boolean } = {},
-) {
+export function useClosedTotal() {
+  const filter: ClosedHistoryFilter = {
+    granularity: "all",
+    limit: 1,
+    offset: 0,
+  };
   return useQuery({
-    queryKey: ticketKeys.closedPeriods(granularity),
-    queryFn: () => fetchClosedPeriods(granularity),
-    enabled: opts.enabled ?? true,
+    queryKey: ticketKeys.closed(filter),
+    queryFn: () => fetchClosedHistory(filter),
     staleTime: 5 * 60_000,
+    select: (page) => page.meta.total,
   });
 }
 
