@@ -4,6 +4,7 @@ import * as React from "react";
 import { Upload } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { FilterBar } from "@/features/tickets/components/filter-bar";
+import { SlaSummary } from "@/features/tickets/components/sla-summary";
 import { TicketTable } from "@/features/tickets/components/ticket-table";
 import { TicketListFooter } from "@/features/tickets/components/ticket-list-footer";
 import { TicketBoard } from "@/features/tickets/components/ticket-board";
@@ -73,6 +74,7 @@ export default function TicketsPage() {
         {view === "list" ? (
           <>
             <FilterBar />
+            <SlaSummary />
             <TicketTable />
             <TicketListFooter />
           </>

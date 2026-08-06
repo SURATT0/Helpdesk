@@ -33,6 +33,15 @@ export const ticketSchema = z.object({
   category: z.string(),
   slaDue: z.string(),
   slaState: slaStateSchema,
+  /**
+   * The SLA target and the actual finish time. The API has always returned both;
+   * they were absent here, and zod strips unknown keys, so the client could only
+   * ever show the server's pre-formatted `slaDue` snapshot — which clamps an
+   * overrun to "0h 0m". With the timestamps the list judges the clock itself
+   * (see ./sla) and can say how far past due a ticket actually is.
+   */
+  dueAt: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
   attachments: z.number(),
   /**
    * The problem this incident is linked to, if any (many tickets → one problem).

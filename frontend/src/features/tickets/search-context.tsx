@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { Priority, TicketStatus } from "@/lib/domain";
+import { judgeSla, type SlaState } from "./sla";
 
 type TicketLike = {
   subject: string;
@@ -11,6 +12,13 @@ type TicketLike = {
   priority: Priority;
   assignee: string | null;
   assigneeId: number | null;
+  /**
+   * Optional so callers that only filter on the other facets — and the tests
+   * that predate the SLA facet — don't have to supply timestamps they never use.
+   * Absent reads as "no SLA target", which is what the badge shows too.
+   */
+  dueAt?: string | null;
+  resolvedAt?: string | null;
 };
 
 /**
@@ -29,6 +37,10 @@ type SearchValue = {
   /** Empty = no assignee filter, which is NOT the same as selecting "none". */
   assignees: Set<AssigneeKey>;
   toggleAssignee: (a: AssigneeKey) => void;
+  slaStates: Set<SlaState>;
+  toggleSla: (s: SlaState) => void;
+  /** Replace the SLA selection outright — the summary tiles jump straight to one. */
+  setSlaOnly: (s: SlaState) => void;
   clearFilters: () => void;
   /** Count of active facet filters (excludes the free-text query). */
   activeCount: number;
@@ -46,6 +58,9 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     () => new Set(),
   );
   const [assignees, setAssignees] = React.useState<Set<AssigneeKey>>(
+    () => new Set(),
+  );
+  const [slaStates, setSlaStates] = React.useState<Set<SlaState>>(
     () => new Set(),
   );
 
@@ -73,10 +88,27 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const toggleSla = React.useCallback((s: SlaState) => {
+    setSlaStates((prev) => {
+      const next = new Set(prev);
+      next.has(s) ? next.delete(s) : next.add(s);
+      return next;
+    });
+  }, []);
+
+  // Clicking a summary tile means "show me these", not "add these to whatever I
+  // had" — and clicking the tile that is already showing goes back to everything.
+  const setSlaOnly = React.useCallback((s: SlaState) => {
+    setSlaStates((prev) =>
+      prev.size === 1 && prev.has(s) ? new Set() : new Set([s]),
+    );
+  }, []);
+
   const clearFilters = React.useCallback(() => {
     setStatuses(new Set());
     setPriorities(new Set());
     setAssignees(new Set());
+    setSlaStates(new Set());
   }, []);
 
   const value = React.useMemo<SearchValue>(
@@ -89,8 +121,12 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       togglePriority,
       assignees,
       toggleAssignee,
+      slaStates,
+      toggleSla,
+      setSlaOnly,
       clearFilters,
-      activeCount: statuses.size + priorities.size + assignees.size,
+      activeCount:
+        statuses.size + priorities.size + assignees.size + slaStates.size,
     }),
     [
       query,
@@ -100,6 +136,9 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       togglePriority,
       assignees,
       toggleAssignee,
+      slaStates,
+      toggleSla,
+      setSlaOnly,
       clearFilters,
     ],
   );
@@ -126,10 +165,20 @@ export function matchesQuery(t: TicketLike, query: string): boolean {
   );
 }
 
-/** Combined query + facet filter used by both the table and the board. */
+/**
+ * Combined query + facet filter used by both the table and the board.
+ *
+ * `now` is a parameter so a caller that already holds a ticking clock filters
+ * against the same instant it renders the badges with — otherwise a row could
+ * be counted as at-risk and drawn as breached in the same paint.
+ */
 export function matchesFilters(
   t: TicketLike,
-  f: Pick<SearchValue, "query" | "statuses" | "priorities" | "assignees">,
+  f: Pick<
+    SearchValue,
+    "query" | "statuses" | "priorities" | "assignees"
+  > & { slaStates?: Set<SlaState> },
+  now: number = Date.now(),
 ): boolean {
   if (!matchesQuery(t, f.query)) return false;
   if (f.statuses.size > 0 && !f.statuses.has(t.status)) return false;
@@ -138,6 +187,17 @@ export function matchesFilters(
     // An unassigned ticket only matches the explicit "none" selection.
     const key: AssigneeKey = t.assigneeId ?? "none";
     if (!f.assignees.has(key)) return false;
+  }
+  if (f.slaStates && f.slaStates.size > 0) {
+    const { state } = judgeSla(
+      {
+        dueAt: t.dueAt ?? null,
+        status: t.status,
+        resolvedAt: t.resolvedAt ?? null,
+      },
+      now,
+    );
+    if (!f.slaStates.has(state)) return false;
   }
   return true;
 }
