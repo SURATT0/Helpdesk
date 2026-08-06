@@ -253,24 +253,43 @@ for (const [label, width] of [
       expect(overflow.doc).toBeLessThanOrEqual(0);
       expect(overflow.main).toBeLessThanOrEqual(0);
 
-      // Scroll down far enough for a heading to pin, then check it sits BELOW the
-      // search bar rather than sliding under it — the bar's height is measured at
-      // runtime precisely because it wraps at these widths.
-      await page.evaluate(() => {
-        document.querySelector("main")!.scrollTop = 400;
-      });
-      const clearance = await page.evaluate(() => {
-        const main = document.querySelector("main")!;
-        const bar = main.querySelector(".sticky.top-0")!;
-        const barBottom = bar.getBoundingClientRect().bottom;
-        const pinned = [...document.querySelectorAll('[id^="closed-section-"]')]
-          .map((el) => el.getBoundingClientRect())
-          .filter((r) => r.bottom > barBottom)
-          .sort((a, b) => a.top - b.top)[0];
-        return pinned ? Math.round(pinned.top - barBottom) : null;
-      });
-      expect(clearance).not.toBeNull();
-      expect(clearance!).toBeGreaterThanOrEqual(0);
+      // The sticky section headings must come to rest exactly at the search bar's
+      // bottom edge, never under it. Asserted as the line itself rather than by
+      // measuring a heading at some scroll offset: a heading being pushed out of
+      // view by its own section legitimately slides behind the bar, so its
+      // position at an arbitrary scrollTop proves nothing either way. The offset
+      // is computed at runtime because the bar wraps to two lines at these widths.
+      const measure = () =>
+        page.evaluate(() => {
+          const main = document.querySelector("main")!;
+          const bar = main.querySelector(".sticky.top-0") as HTMLElement;
+          const heading = document.querySelector(
+            '[id^="closed-section-"]',
+          ) as HTMLElement;
+          const padding = parseFloat(getComputedStyle(main).paddingTop) || 0;
+          const scrollportTop = main.getBoundingClientRect().top + padding;
+          return {
+            // Zero when the heading's resting line is the bar's bottom edge.
+            drift:
+              Math.round(scrollportTop + parseFloat(heading.style.top)) -
+              Math.round(bar.getBoundingClientRect().bottom),
+            // What keeps an outgoing heading hidden while it passes underneath.
+            barOpaque:
+              getComputedStyle(bar).backgroundColor !== "rgba(0, 0, 0, 0)",
+            barAbove:
+              Number(getComputedStyle(bar).zIndex) >
+              Number(getComputedStyle(heading).zIndex),
+          };
+        });
+
+      // Polled: the offset is re-measured by a ResizeObserver, so switching
+      // language re-flows the bar a tick before the headings hear about it.
+      await expect
+        .poll(async () => (await measure()).drift)
+        .toBe(0);
+      const { barOpaque, barAbove } = await measure();
+      expect(barOpaque).toBe(true);
+      expect(barAbove).toBe(true);
     });
   }
 }
