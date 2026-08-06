@@ -8,7 +8,9 @@ import { STATUS_META, type TicketStatus } from "@/lib/domain";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
 import { matchesFilters, useSearch } from "../search-context";
-import { slaColor, toneForName } from "../data";
+import { toneForName } from "../data";
+import { SlaBadge } from "./sla-badge";
+import { useAssessSla } from "../use-sla";
 import { useTickets } from "../queries";
 
 const COLUMNS: TicketStatus[] = [
@@ -28,6 +30,9 @@ export function TicketBoard() {
   // silently drop the one facet the board doesn't draw a chip for.
   const { query, statuses, priorities, assignees, slaStates } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
+  // Before the early returns below — it holds a ticking clock, and a hook that
+  // only runs on some renders is not a hook.
+  const assess = useAssessSla();
 
   if (isLoading) return <LoadingRow />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
@@ -66,12 +71,7 @@ export function TicketBoard() {
                     <span className="font-mono text-[11px] font-medium text-muted">
                       #{x.id}
                     </span>
-                    <span
-                      className="font-mono text-[11px] font-medium"
-                      style={{ color: slaColor[x.slaState] }}
-                    >
-                      {x.slaDue}
-                    </span>
+                    <SlaBadge sla={assess(x)} />
                   </div>
                   <div className="mt-1 line-clamp-2 text-[13px] font-medium text-ink">
                     {x.subject}

@@ -5,7 +5,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { AttachmentsPanel } from "@/features/attachments/attachments-panel";
 import { ProblemPanel } from "@/features/problems/components/problem-panel";
 import { useI18n } from "@/features/i18n/context";
-import { slaColor } from "../data";
+import { SlaBadge } from "./sla-badge";
+import { useAssessSla } from "../use-sla";
 import { HistoryPanel } from "./history-panel";
 import { StatusMenu } from "./status-menu";
 import type { Ticket } from "../schemas";
@@ -40,6 +41,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function PropertiesRail({ ticket }: { ticket: Ticket }) {
   const { t } = useI18n();
+  const assess = useAssessSla();
   const unassigned = t("bulk.unassigned");
   return (
     <aside className="flex flex-col gap-[18px] bg-panel p-5">
@@ -74,12 +76,7 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
           <span className="text-[12px] font-semibold text-muted">
             {t("rail.resolutionDue")}
           </span>
-          <span
-            className="font-mono text-[12.5px] font-semibold"
-            style={{ color: slaColor[ticket.slaState] }}
-          >
-            {ticket.slaDue}
-          </span>
+          <SlaBadge sla={assess(ticket)} />
         </div>
       </Section>
 
