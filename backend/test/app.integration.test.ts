@@ -1098,7 +1098,168 @@ describe("tickets — closed history filters", () => {
     expect(blank.status).toBe(200);
     expect(blank.body.meta.total).toBe(all.body.meta.total);
   });
+
+  it("finds a ticket by its id, with or without the #", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const all = await closed(dana);
+    const sample = all.body.data[0] as { id: number };
+
+    for (const q of [String(sample.id), `%23${sample.id}`]) {
+      const res = await closed(dana, `&q=${q}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((t: { id: number }) => t.id)).toContain(sample.id);
+    }
+  });
+
+  it("finds a ticket by the requester's email", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const all = await closed(dana);
+    const sample = all.body.data[0] as { id: number; requesterEmail: string };
+
+    const res = await closed(
+      dana,
+      `&q=${encodeURIComponent(sample.requesterEmail.toUpperCase())}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((t: { id: number }) => t.id)).toContain(sample.id);
+  });
+
+  it("does not let an id search reach outside row scope", async () => {
+    // The id is an exact match, which is the easiest way to accidentally bypass a
+    // WHERE clause: asking for another tenant's ticket by number must find nothing.
+    const dana = await login("dana.reyes@acme.com"); // Acme
+    const res = await closed(dana, "&q=1020"); // a Globex closure
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((t: { id: number }) => t.id)).not.toContain(1020);
+  });
+
+  it("does not mistake an out-of-range number for an id", async () => {
+    // Larger than int4: matching `id` on it would make Postgres raise rather than
+    // return an empty page, so the number must only be tried against the text.
+    const dana = await login("dana.reyes@acme.com");
+    const res = await closed(dana, "&q=99999999999999");
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
 });
+
+describe("tickets — closed history over the whole archive", () => {
+  const all = (token: string, qs = "") =>
+    request(app)
+      .get(`${API}/tickets/closed?granularity=all${qs}`)
+      .set(bearer(token));
+
+  /**
+   * The point of `all`: a log that can only be read one calendar window at a time
+   * cannot be searched, because narrowing by month presupposes knowing the month.
+   */
+  it("spans periods that a single window cannot, newest first", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await all(dana, "&limit=200");
+    expect(res.status).toBe(200);
+
+    const closedAts = res.body.data.map((t: { closedAt: string }) =>
+      Date.parse(t.closedAt),
+    );
+    expect(closedAts.length).toBeGreaterThan(0);
+    expect([...closedAts].sort((a: number, b: number) => b - a)).toEqual(closedAts);
+
+    // Strictly more than the current year holds — the seed closes tickets several
+    // years back, and that is exactly what one window cannot reach.
+    const thisYear = await request(app)
+      .get(`${API}/tickets/closed?granularity=year&limit=200`)
+      .set(bearer(dana));
+    expect(res.body.meta.total).toBeGreaterThan(thisYear.body.meta.total);
+  });
+
+  it("reports no period, because there is no window to label", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await all(dana);
+    expect(res.status).toBe(200);
+    expect(res.body.meta.period).toBeNull();
+  });
+
+  it("ignores an anchor instead of quietly re-bucketing by it", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const anchored = await all(
+      dana,
+      `&limit=200&anchor=${encodeURIComponent(new Date(2000, 0, 1).toISOString())}`,
+    );
+    const plain = await all(dana, "&limit=200");
+    expect(anchored.body.meta.total).toBe(plain.body.meta.total);
+  });
+
+  it("still only shows what the viewer may see", async () => {
+    // The widest possible query is where a scope bug would surface: a requester
+    // asking for the whole archive must still get only their own closures.
+    // L. Osei rather than any requester: the seed gives them closures across
+    // several years, so a scope leak has something to leak past.
+    const requester = await login("l.osei@acme.com");
+    const res = await all(requester, "&limit=200");
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(
+      res.body.data.every(
+        (t: { requesterEmail: string }) => t.requesterEmail === "l.osei@acme.com",
+      ),
+    ).toBe(true);
+
+    const dana = await login("dana.reyes@acme.com");
+    const staff = await all(dana, "&limit=200");
+    expect(staff.body.meta.total).toBeGreaterThan(res.body.meta.total);
+  });
+
+  it("pages the archive with limit/offset", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const first = await all(dana, "&limit=2&offset=0");
+    const second = await all(dana, "&limit=2&offset=2");
+    expect(first.status).toBe(200);
+    expect(first.body.data).toHaveLength(2);
+    expect(first.body.meta.total).toBe(second.body.meta.total);
+    expect(idsIn(second)).not.toEqual(idsIn(first));
+  });
+
+  it("pages a tie in closedAt without repeating or dropping a row", async () => {
+    // Bulk closures share a timestamp — the auto-close sweep closes in batches —
+    // and `closedAt` alone leaves their order to the query plan. Without a
+    // tiebreaker two consecutive pages can show the same ticket and never show
+    // the other, which is exactly what paging the whole archive would hit.
+    const at = new Date();
+    await prisma.ticket.updateMany({
+      where: { id: { in: [1029, 1031] } },
+      data: { status: "closed", closedAt: at },
+    });
+
+    const dana = await login("dana.reyes@acme.com");
+    const first = await all(dana, "&limit=1&offset=0");
+    const second = await all(dana, "&limit=1&offset=1");
+    expect(idsIn(first)).toEqual([1031]);
+    expect(idsIn(second)).toEqual([1029]);
+  });
+
+  it("combines the archive with the filters", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const unfiltered = await all(dana, "&limit=200");
+    const sample = unfiltered.body.data.at(-1) as { id: number; subject: string };
+
+    // Deliberately the OLDEST closure: finding it proves the search left the
+    // current window, which is the whole reason this mode exists.
+    const word = sample.subject.split(/\s+/).find((w: string) => w.length > 4);
+    const found = await all(dana, `&limit=200&q=${encodeURIComponent(word!)}`);
+    expect(found.status).toBe(200);
+    expect(found.body.data.map((t: { id: number }) => t.id)).toContain(sample.id);
+    expect(found.body.meta.total).toBeLessThan(unfiltered.body.meta.total);
+  });
+
+  it("requires authentication", async () => {
+    await request(app).get(`${API}/tickets/closed?granularity=all`).expect(401);
+  });
+});
+
+/** Ids in a closed-history response, in the order the server returned them. */
+function idsIn(res: { body: { data: { id: number }[] } }): number[] {
+  return res.body.data.map((t) => t.id);
+}
 
 describe("tickets — customer isolation (unassigned ticket)", () => {
   it("shows an unassigned ticket to any agent in its customer, but not to other customers", async () => {

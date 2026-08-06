@@ -47,15 +47,23 @@ export const closedPeriodsQuery = z.object({
 });
 
 export const closedHistoryQuery = z.object({
-  granularity: z.enum(["week", "month", "year"]).default("month"),
+  /**
+   * `all` drops the calendar window entirely: every closed ticket in reach,
+   * newest first, paged by limit/offset. It exists because a log you can only
+   * read one month at a time cannot be searched — the caller has to guess which
+   * month holds the ticket before it can look for it. The bucketed
+   * granularities stay for callers that genuinely want one period.
+   */
+  granularity: z.enum(["all", "week", "month", "year"]).default("month"),
   anchor: z.coerce.date().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   // Filters for the log's own row. Priority and requester used to be table
   // columns; they narrow the period better than they read as data.
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
-  // Free text over subject + requester name. Trimmed, and an empty string is
-  // dropped so "cleared the box" is not a filter that matches nothing.
+  // Free text over subject, ticket id and requester (name or email). Trimmed,
+  // and an empty string is dropped so "cleared the box" is not a filter that
+  // matches nothing.
   q: z
     .string()
     .trim()
