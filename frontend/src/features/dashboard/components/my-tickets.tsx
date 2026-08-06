@@ -5,7 +5,8 @@ import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
-import { slaColor } from "@/features/tickets/data";
+import { SlaBadge } from "@/features/tickets/components/sla-badge";
+import { useAssessSla } from "@/features/tickets/use-sla";
 import { useTickets } from "@/features/tickets/queries";
 
 const COLS = "grid-cols-[86px_1fr_130px_96px_120px_110px]";
@@ -14,6 +15,7 @@ export function MyTickets() {
   const { user } = useAuth();
   const { t } = useI18n();
   const { data, isLoading, isError, refetch } = useTickets();
+  const assess = useAssessSla();
 
   // Work in flight assigned to the signed-in agent. Terminal states are excluded
   // deliberately: the list is ordered by SLA due date, so closed tickets — whose
@@ -79,12 +81,7 @@ export function MyTickets() {
           </span>
           <PriorityIndicator priority={t.priority} />
           <span className="text-[12.5px] text-[#475569]">{t.requester}</span>
-          <span
-            className="font-mono text-[12px] font-medium"
-            style={{ color: slaColor[t.slaState] }}
-          >
-            {t.slaDue}
-          </span>
+          <SlaBadge sla={assess(t)} />
         </Link>
       ))}
     </div>
