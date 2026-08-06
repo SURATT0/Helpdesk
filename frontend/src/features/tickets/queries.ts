@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import type { Priority, TicketStatus } from "@/lib/domain";
 import { useAuth } from "@/features/auth/context";
+import { runStream } from "@/lib/sse";
 import type { Comment, Granularity } from "./schemas";
 import {
   createComment,
@@ -275,15 +276,15 @@ export function useCommentStream(ticketId: number) {
 
   React.useEffect(() => {
     if (!Number.isFinite(ticketId)) return;
-    let stopped = false;
     const controller = new AbortController();
-    (async () => {
-      while (!stopped) {
-        try {
-          await streamComments(
-            ticketId,
-            controller.signal,
-            (comment) => {
+    void runStream({
+      label: `comment stream #${ticketId}`,
+      signal: controller.signal,
+      connect: (signal) =>
+        streamComments(
+          ticketId,
+          signal,
+          (comment) => {
               qc.setQueryData<Comment[]>(commentKeys.list(ticketId), (old) => {
                 const list = old ?? [];
                 if (list.some((c) => c.id === comment.id)) return list;
@@ -318,18 +319,9 @@ export function useCommentStream(ticketId: number) {
                 ...cur,
                 [r.userId]: Math.max(cur[r.userId] ?? 0, r.lastReadId),
               })),
-          );
-        } catch {
-          if (stopped) return;
-        }
-        if (stopped) return;
-        await new Promise((r) => setTimeout(r, 2000)); // backoff, then reconnect
-      }
-    })();
-    return () => {
-      stopped = true;
-      controller.abort();
-    };
+        ),
+    });
+    return () => controller.abort();
   }, [ticketId, qc]);
 
   const typingNames = React.useMemo(
