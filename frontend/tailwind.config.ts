@@ -38,6 +38,20 @@ const config: Config = {
           "closed-fg": "#475569",
           "closed-bg": "#f1f5f9",
         },
+        // SLA urgency. Semantic like the status palette: a breach is always the
+        // same red wherever it appears, and `risk-line` is the row stripe, which
+        // needs more weight than the badge fill to read at 3px.
+        sla: {
+          breach: "#dc2626",
+          "breach-fg": "#b91c1c",
+          "risk-fg": "#92400e",
+          "risk-bg": "#fef3c7",
+          "risk-line": "#f59e0b",
+          soon: "#b45309",
+          ok: "#475569",
+          idle: "#94a3b8",
+          met: "#16a34a",
+        },
         priority: {
           critical: "#dc2626",
           high: "#f59e0b",

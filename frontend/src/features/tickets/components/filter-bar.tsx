@@ -11,6 +11,8 @@ import type { Priority, TicketStatus } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { toneForName } from "../data";
 import { useSearch, type AssigneeKey } from "../search-context";
+import type { SlaState } from "../sla";
+import { SlaStateLabel } from "./sla-badge";
 
 const STATUSES: TicketStatus[] = [
   "new",
@@ -21,6 +23,18 @@ const STATUSES: TicketStatus[] = [
   "closed",
 ];
 const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];
+
+// Worst first, same order the SLA column sorts in. `met` and `no_sla` are left
+// out on purpose: they are the states with nothing at stake, and a facet is for
+// narrowing to work that needs doing.
+const SLA_STATES: SlaState[] = [
+  "breached_open",
+  "at_risk",
+  "due_soon",
+  "on_track",
+  "paused",
+  "breached_closed",
+];
 
 // `T` allows numbers as well as strings so the same control can list assignee
 // ids alongside the `"none"` sentinel, not just string enums.
@@ -107,6 +121,8 @@ export function FilterBar() {
     togglePriority,
     assignees,
     toggleAssignee,
+    slaStates,
+    toggleSla,
     clearFilters,
     activeCount,
   } = useSearch();
@@ -158,6 +174,13 @@ export function FilterBar() {
         selected={priorities}
         onToggle={togglePriority}
         renderOption={(p) => <PriorityIndicator priority={p} />}
+      />
+      <FacetDropdown
+        label={t("filter.sla")}
+        options={SLA_STATES}
+        selected={slaStates}
+        onToggle={toggleSla}
+        renderOption={(s) => <SlaStateLabel state={s} />}
       />
 
       {isStaff ? (

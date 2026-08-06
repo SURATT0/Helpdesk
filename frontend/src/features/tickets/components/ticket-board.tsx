@@ -23,14 +23,17 @@ const COLUMNS: TicketStatus[] = [
 export function TicketBoard() {
   const router = useRouter();
   const { t } = useI18n();
-  const { query, statuses, priorities, assignees } = useSearch();
+  // Includes the SLA facet: the board has no filter bar of its own, so a filter
+  // set in the list view must keep applying when the view is switched — not
+  // silently drop the one facet the board doesn't draw a chip for.
+  const { query, statuses, priorities, assignees, slaStates } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
 
   if (isLoading) return <LoadingRow />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const tickets = (data?.tickets ?? []).filter((x) =>
-    matchesFilters(x, { query, statuses, priorities, assignees }),
+    matchesFilters(x, { query, statuses, priorities, assignees, slaStates }),
   );
 
   return (

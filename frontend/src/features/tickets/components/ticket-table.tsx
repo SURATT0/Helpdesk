@@ -16,12 +16,25 @@ import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
 import { matchesFilters, useSearch } from "../search-context";
 import { BulkActionBar } from "./bulk-action-bar";
-import { slaColor, toneForName } from "../data";
+import { SlaBadge } from "./sla-badge";
+import { toneForName } from "../data";
+import { compareSla, type SlaAssessment, type SlaState } from "../sla";
+import { useAssessSla, useSlaNow } from "../use-sla";
 import { useTickets } from "../queries";
 import type { Ticket } from "../schemas";
 import { cn } from "@/lib/utils";
 
-const COLS = "grid-cols-[40px_82px_1fr_128px_100px_140px_130px_100px]";
+// SLA sits next to Status: the two answer "where is this?" and "how long have I
+// got?", and reading them together is the whole job of this table.
+// The SLA column is wide enough for the longest label a badge can hold
+// ("missed by 9d 20h"); anything narrower and it runs under Priority.
+const COLS = "grid-cols-[40px_82px_1fr_128px_152px_100px_140px_130px]";
+
+/** The row's left edge, coloured only when the row needs someone to act. */
+const STRIPE: Partial<Record<SlaState, string>> = {
+  breached_open: "border-l-sla-breach",
+  at_risk: "border-l-sla-risk-line",
+};
 
 function Checkbox({ checked }: { checked: boolean }) {
   return (
@@ -71,25 +84,14 @@ const PRIORITY_ORDER: Record<Ticket["priority"], number> = {
   low: 3,
 };
 
-/** SLA remaining in minutes for sorting: overdue first, paused/met last. */
-function slaMinutes(x: Ticket): number {
-  if (x.slaState === "paused" || x.slaState === "met") {
-    return Number.POSITIVE_INFINITY;
-  }
-  const s = x.slaDue.toLowerCase();
-  let mins = 0;
-  const d = s.match(/(\d+)\s*d/);
-  const h = s.match(/(\d+)\s*h/);
-  const m = s.match(/(\d+)\s*m/);
-  if (d) mins += Number(d[1]) * 1440;
-  if (h) mins += Number(h[1]) * 60;
-  if (m) mins += Number(m[1]);
-  const overdue =
-    s.includes("-") || s.includes("overdue") || s.includes("breach");
-  return overdue ? -mins : mins;
-}
-
-const COMPARATORS: Record<SortKey, (a: Ticket, b: Ticket) => number> = {
+// SLA is not here: it is compared on the assessed clock (see `compareSla`),
+// not on any field of the row. It used to be re-parsed out of the display
+// string, which put every overdue ticket — all of them rendered "0h 0m" — in
+// among the ones that still had time.
+const COMPARATORS: Record<
+  Exclude<SortKey, "slaDue">,
+  (a: Ticket, b: Ticket) => number
+> = {
   id: (a, b) => a.id - b.id,
   subject: (a, b) => a.subject.localeCompare(b.subject),
   status: (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status],
@@ -97,7 +99,6 @@ const COMPARATORS: Record<SortKey, (a: Ticket, b: Ticket) => number> = {
   assignee: (a, b) =>
     (a.assignee ?? "￿").localeCompare(b.assignee ?? "￿"),
   category: (a, b) => a.category.localeCompare(b.category),
-  slaDue: (a, b) => slaMinutes(a) - slaMinutes(b),
 };
 
 function SortHeader({
@@ -146,10 +147,20 @@ export function TicketTable() {
   const unassignedLabel = t("bulk.unassigned");
   const openRowLabel = (id: number) => t("tickets.openRow", { id });
   const selectRowLabel = (id: number) => t("tickets.selectRow", { id });
-  const { query, statuses, priorities, assignees } = useSearch();
+  const { query, statuses, priorities, assignees, slaStates } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
   const [sort, setSort] = React.useState<SortState | null>(null);
+  const assess = useAssessSla();
+  const now = useSlaNow();
+
+  // Judged once per ticket per tick, then reused by the badge, the row stripe
+  // and the sort — three readings of the same clock cannot drift apart.
+  const slaById = React.useMemo(() => {
+    const m = new Map<number, SlaAssessment>();
+    for (const x of data?.tickets ?? []) m.set(x.id, assess(x));
+    return m;
+  }, [data, assess]);
 
   function onSort(col: SortKey) {
     setSort((prev) =>
@@ -169,12 +180,32 @@ export function TicketTable() {
   }
 
   const rows = React.useMemo(() => {
-    const filters = { query, statuses, priorities, assignees };
-    const base = (data?.tickets ?? []).filter((x) => matchesFilters(x, filters));
+    const filters = { query, statuses, priorities, assignees, slaStates };
+    const base = (data?.tickets ?? []).filter((x) =>
+      matchesFilters(x, filters, now),
+    );
     if (!sort) return base;
     const dir = sort.dir === "asc" ? 1 : -1;
-    return [...base].sort((a, b) => dir * COMPARATORS[sort.key](a, b));
-  }, [data, query, statuses, priorities, assignees, sort]);
+    // Ascending on SLA means worst first: the first click on the header answers
+    // "what have I already missed?", which is the reason to sort by it at all.
+    const compare =
+      sort.key === "slaDue"
+        ? (a: Ticket, b: Ticket) =>
+            compareSla(slaById.get(a.id) ?? assess(a), slaById.get(b.id) ?? assess(b))
+        : COMPARATORS[sort.key];
+    return [...base].sort((a, b) => dir * compare(a, b));
+  }, [
+    data,
+    query,
+    statuses,
+    priorities,
+    assignees,
+    slaStates,
+    sort,
+    now,
+    slaById,
+    assess,
+  ]);
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
@@ -187,7 +218,7 @@ export function TicketTable() {
       {/* Columns use fixed widths, so let them scroll horizontally on narrow
           screens instead of squishing. */}
       <div className="overflow-x-auto">
-        <div className="min-w-[880px]">
+        <div className="min-w-[960px]">
       {/* header */}
       <div
         className={cn(
@@ -219,6 +250,12 @@ export function TicketTable() {
           onSort={onSort}
         />
         <SortHeader
+          label={t("col.slaDue")}
+          col="slaDue"
+          sort={sort}
+          onSort={onSort}
+        />
+        <SortHeader
           label={t("col.priority")}
           col="priority"
           sort={sort}
@@ -236,12 +273,6 @@ export function TicketTable() {
           sort={sort}
           onSort={onSort}
         />
-        <SortHeader
-          label={t("col.slaDue")}
-          col="slaDue"
-          sort={sort}
-          onSort={onSort}
-        />
       </div>
 
       {isLoading ? <LoadingRow /> : null}
@@ -253,6 +284,7 @@ export function TicketTable() {
       {/* rows */}
       {rows.map((t, i) => {
         const isSel = selected.has(t.id);
+        const sla = slaById.get(t.id) ?? assess(t);
         return (
           <div
             key={t.id}
@@ -270,9 +302,15 @@ export function TicketTable() {
               }
             }}
             className={cn(
-              "grid cursor-pointer items-center px-4 py-3 text-[13px]",
+              // Every row carries the 3px edge, transparent unless the clock is
+              // against it, so nothing shifts sideways as a ticket changes state.
+              "grid cursor-pointer items-center border-l-[3px] px-4 py-3 text-[13px]",
               COLS,
-              i < rows.length - 1 && "border-b border-[#f1f4f8]",
+              // One colour class, never two: `cn` is a plain join with no
+              // tailwind-merge behind it, so a transparent default left in place
+              // would race the real colour on stylesheet order and usually win.
+              STRIPE[sla.state] ?? "border-l-transparent",
+              i < rows.length - 1 && "border-b border-b-[#f1f4f8]",
               isSel ? "bg-[#eff7f2]" : "hover:bg-[#fafbfc]",
             )}
           >
@@ -301,6 +339,9 @@ export function TicketTable() {
             <span>
               <StatusBadge status={t.status} />
             </span>
+            <span>
+              <SlaBadge sla={sla} />
+            </span>
             <PriorityIndicator priority={t.priority} />
             <span className="flex items-center gap-2 text-[12.5px] text-[#475569]">
               {t.assignee ? (
@@ -317,12 +358,6 @@ export function TicketTable() {
               )}
             </span>
             <span className="text-[12.5px] text-[#475569]">{t.category}</span>
-            <span
-              className="font-mono text-[12px] font-medium"
-              style={{ color: slaColor[t.slaState] }}
-            >
-              {t.slaDue}
-            </span>
           </div>
         );
       })}
