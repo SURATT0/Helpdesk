@@ -176,6 +176,33 @@ function toTicketDto(row: TicketRow): Ticket {
   };
 }
 
+/** Postgres int4: a larger number is not a ticket id, it is a typo. */
+const MAX_TICKET_ID = 2_147_483_647;
+
+/**
+ * What free text matches in the closed log: the subject, the ticket id, and the
+ * requester's name or email.
+ *
+ * The requester is matched by name/email rather than by id because a picker would
+ * need the user directory, which `user:read` gates — so a requester browsing
+ * their own closed tickets could not use their own filter.
+ *
+ * "#1042" and "1042" both mean the id: "#" is how the UI writes ids, so pasting
+ * one back in has to work. A number still tries the subject as well — "wave 2" is
+ * a real thing to search for.
+ */
+function textWhere(q: string): Prisma.TicketWhereInput {
+  const insensitive = { contains: q, mode: "insensitive" as const };
+  const OR: Prisma.TicketWhereInput[] = [
+    { subject: insensitive },
+    { requester: { name: insensitive } },
+    { requester: { email: insensitive } },
+  ];
+  const id = Number(q.replace(/^#/, ""));
+  if (Number.isInteger(id) && id > 0 && id <= MAX_TICKET_ID) OR.push({ id });
+  return { OR };
+}
+
 export const ticketRepository = {
   async findMany(filter: TicketFilter, user: AuthUser): Promise<Ticket[]> {
     const rows = await prisma.ticket.findMany({
@@ -216,15 +243,19 @@ export const ticketRepository = {
    * still carries the timestamp of its earlier closure; requiring the status too
    * keeps it out of the log until it is genuinely closed again.
    */
-  async findClosedInPeriod(
-    window: {
-      start: Date;
-      end: Date;
+  async findClosed(
+    filter: {
+      /**
+       * The calendar window to stay inside, or null for the whole archive within
+       * the viewer's scope. Null is what makes the log searchable: nothing can be
+       * found by month until you already know which month it is in.
+       */
+      period: { start: Date; end: Date } | null;
       limit: number;
       offset: number;
-      /** Narrow the period, for the log's filter row. Both optional. */
+      /** Narrow the results, for the log's filter row. Both optional. */
       priority?: Priority;
-      /** Free text over subject and requester name — what "I half-remember it" needs. */
+      /** Free text over subject, id and requester — what "I half-remember it" needs. */
       q?: string;
     },
     user: AuthUser,
@@ -232,25 +263,16 @@ export const ticketRepository = {
     const where: Prisma.TicketWhereInput = {
       AND: [
         ticketScopeWhere(user),
-        { status: "closed", closedAt: { gte: window.start, lt: window.end } },
-        ...(window.priority ? [{ priority: window.priority }] : []),
-        // Requester matched by NAME rather than by id: a picker would need the
-        // user directory, which `user:read` gates — so a requester browsing their
-        // own closed tickets could not use their own filter.
-        ...(window.q
+        { status: "closed" },
+        ...(filter.period
           ? [
               {
-                OR: [
-                  { subject: { contains: window.q, mode: "insensitive" as const } },
-                  {
-                    requester: {
-                      name: { contains: window.q, mode: "insensitive" as const },
-                    },
-                  },
-                ],
+                closedAt: { gte: filter.period.start, lt: filter.period.end },
               },
             ]
           : []),
+        ...(filter.priority ? [{ priority: filter.priority }] : []),
+        ...(filter.q ? [textWhere(filter.q)] : []),
       ],
     };
 
@@ -258,9 +280,13 @@ export const ticketRepository = {
       prisma.ticket.findMany({
         where,
         include: ticketInclude,
-        orderBy: { closedAt: "desc" },
-        take: window.limit,
-        skip: window.offset,
+        // Id breaks the tie. `closedAt` alone leaves the order of two tickets
+        // closed in the same instant up to the query plan, so consecutive pages
+        // could repeat a row and drop another — and bulk closures share a
+        // timestamp routinely (the auto-close sweep closes in batches).
+        orderBy: [{ closedAt: "desc" }, { id: "desc" }],
+        take: filter.limit,
+        skip: filter.offset,
       }),
       prisma.ticket.count({ where }),
     ]);

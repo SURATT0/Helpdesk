@@ -135,14 +135,20 @@ export const ticketService = {
   },
 
   /**
-   * The closed-ticket history log for one calendar period. Resolves the window
-   * here rather than accepting raw `from`/`to` from the client so that "this
-   * month" means one thing across the app, and echoes the resolved period back
-   * so the client can label it and drive prev/next without repeating the maths.
+   * The closed-ticket history log.
+   *
+   * `granularity: "all"` reads the whole archive in reach, newest first — the
+   * mode a search needs, since narrowing by month presupposes knowing the month.
+   * Any other granularity resolves one calendar window HERE rather than accepting
+   * raw `from`/`to` from the client, so that "this month" means one thing across
+   * the app, and echoes the resolved period back so the client can label it and
+   * drive prev/next without repeating the maths. `period` is null in `all` mode:
+   * there is no window to label, and inventing one would let a caller navigate
+   * relative to a window it never asked for.
    */
   async closedHistory(
     input: {
-      granularity: Granularity;
+      granularity: Granularity | "all";
       anchor?: Date;
       limit: number;
       offset: number;
@@ -150,15 +156,14 @@ export const ticketService = {
       q?: string;
     },
     user: AuthUser,
-  ): Promise<{ items: Ticket[]; total: number; period: Period }> {
-    const period = resolvePeriod(
-      input.granularity,
-      input.anchor ?? new Date(),
-    );
-    const { items, total } = await ticketRepository.findClosedInPeriod(
+  ): Promise<{ items: Ticket[]; total: number; period: Period | null }> {
+    const period =
+      input.granularity === "all"
+        ? null
+        : resolvePeriod(input.granularity, input.anchor ?? new Date());
+    const { items, total } = await ticketRepository.findClosed(
       {
-        start: period.start,
-        end: period.end,
+        period: period && { start: period.start, end: period.end },
         limit: input.limit,
         offset: input.offset,
         priority: input.priority,

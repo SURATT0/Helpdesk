@@ -59,7 +59,8 @@ export const ticketController = {
   /**
    * The closed-ticket history log. `meta.period` carries the window the server
    * resolved plus the anchors either side, so the client labels and navigates
-   * from the response instead of computing calendar boundaries itself.
+   * from the response instead of computing calendar boundaries itself — or null
+   * when the caller asked for the whole archive (`granularity=all`).
    */
   async closedHistory(req: Request, res: Response) {
     const query = closedHistoryQuery.parse(req.query);
@@ -74,7 +75,9 @@ export const ticketController = {
         limit: query.limit,
         offset: query.offset,
         returned: items.length,
-        period: {
+        // Null in `all` mode — there is no window, so there is nothing to label
+        // and no anchor either side of it.
+        period: period && {
           granularity: period.granularity,
           start: period.start.toISOString(),
           end: period.end.toISOString(),
