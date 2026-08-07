@@ -208,8 +208,10 @@ test("the log is translated", async ({ page }) => {
  * assert behaviour — what the label says, that stepping moves by the span's own
  * length, that an empty span says so — rather than which tickets land in a range.
  */
-const rangeButton = (page: Page) =>
-  page.getByRole("button", { name: /^(Any date|[A-Z][a-z]{2} \d)/ });
+// By test id, not by name: the trigger's accessible name is the value it holds,
+// and in Thai that starts with a digit — the same shape as every button in the
+// year jump bar beside it.
+const rangeButton = (page: Page) => page.getByTestId("date-range");
 
 test("a preset narrows the log and names the span it picked", async ({
   page,
@@ -312,7 +314,7 @@ test("the range picker is translated, dates and all", async ({ page }) => {
   await page.goto("/history");
   await page.getByRole("button", { name: "ไทย" }).click();
 
-  const button = page.getByRole("button", { name: /^(ทุกช่วงเวลา|\d)/ });
+  const button = rangeButton(page);
   await expect(button).toHaveText("ทุกช่วงเวลา");
   await button.click();
   await expect(

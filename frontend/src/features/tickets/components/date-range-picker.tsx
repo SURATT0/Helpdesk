@@ -202,6 +202,10 @@ export function DateRangePicker({
       <div className="relative">
         <button
           type="button"
+          // The accessible name is the value, which is right for a screen reader
+          // but says nothing a test can hold onto — in Thai the label starts with
+          // a digit, exactly like every button in the year jump bar.
+          data-testid="date-range"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           className={cn(
