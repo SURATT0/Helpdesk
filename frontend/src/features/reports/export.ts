@@ -29,10 +29,11 @@ export function reportsToCsv(
   const { kpis, resolutionTrend, byPriority, byCategory, byAgent } = summary;
   const sections: (string | number)[][] = [
     ["Metric", "Value"],
-    ["Avg resolution time (h)", kpis.avgResolutionHours],
-    ["Median first response (min)", kpis.medianFirstResponseMin],
+    // Named for what they measure: the CSV outlives the screen it came from.
+    ["Avg resolution time, opened to closed (h)", kpis.avgResolutionHours],
+    ["First response time, median (min)", kpis.medianFirstResponseMin],
     ["SLA compliance (%)", kpis.slaCompliancePct],
-    ["Resolved tickets", kpis.resolvedCount],
+    ["Closed tickets measured", kpis.resolvedCount],
     ["Tickets judged for SLA", kpis.judgedCount],
     [],
     ["Day", "Tickets resolved"],

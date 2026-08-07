@@ -7,6 +7,7 @@ import { PRIORITY_META } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { toneForName } from "@/features/tickets/data";
+import { formatDuration } from "@/features/tickets/duration";
 import { trendDayLabels } from "../export";
 import { useReportsSummary } from "../queries";
 
@@ -61,15 +62,26 @@ export function ReportsBody() {
     );
   }
 
+  // Hours and minutes, not a raw count in one unit: "184 min" and "15.7 h" are
+  // both numbers the reader has to convert before they mean anything. Shared by
+  // both time KPIs and the agent table so no two durations on the page are
+  // written differently.
+  const units = {
+    d: t("closedLog.unit.d"),
+    h: t("closedLog.unit.h"),
+    m: t("closedLog.unit.m"),
+  };
+  const hours = (n: number) => formatDuration(n * 3_600_000, units);
+
   const kpis = [
     {
       label: t("report.kpi.avgRes"),
-      value: `${data.kpis.avgResolutionHours} h`,
+      value: hours(data.kpis.avgResolutionHours),
       sub: t("report.kpi.avgRes.sub", { n: data.kpis.resolvedCount }),
     },
     {
       label: t("report.kpi.firstResp"),
-      value: `${data.kpis.medianFirstResponseMin} min`,
+      value: formatDuration(data.kpis.medianFirstResponseMin * 60_000, units),
       sub: t("report.kpi.firstResp.sub"),
     },
     {
@@ -337,7 +349,7 @@ export function ReportsBody() {
                   {r.resolved}
                 </span>
                 <span className="font-mono text-[12px] font-medium text-[#475569]">
-                  {r.avgResolutionHours} h
+                  {hours(r.avgResolutionHours)}
                 </span>
               </div>
             ))}

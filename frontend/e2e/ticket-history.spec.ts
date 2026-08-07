@@ -186,7 +186,7 @@ test("the log is translated", async ({ page }) => {
   await page.goto("/history");
   await page.getByRole("button", { name: "ไทย" }).click();
 
-  await expect(page.getByText("ประวัติตั๋วงาน").first()).toBeVisible();
+  await expect(page.getByText("ประวัติ Ticket").first()).toBeVisible();
   await expect(page.getByPlaceholder(/^ค้นหาจาก ticket ที่ปิดแล้ว \d+ ใบ/)).toBeVisible();
   await expect(page.getByRole("button", { name: "ตัวกรอง", exact: true })).toBeVisible();
   // One Thai form covers every count — the language has no grammatical plural.
