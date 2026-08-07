@@ -223,7 +223,13 @@ export const ticketRepository = {
         ],
       },
       include: ticketInclude,
-      orderBy: { dueAt: "asc" },
+      // Id breaks the tie, as it does for the closed log. `due_at` alone leaves
+      // two tickets with the same target in whatever order the plan produces, and
+      // ties are the normal case here rather than a rarity: `due_at` is derived
+      // from the creation time plus a fixed per-priority target, so any two
+      // tickets of the same priority raised in the same instant — a CSV import,
+      // a burst of self-service tickets — share one to the millisecond.
+      orderBy: [{ dueAt: "asc" }, { id: "asc" }],
     });
     return rows.map(toTicketDto);
   },

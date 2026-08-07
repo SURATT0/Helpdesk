@@ -490,6 +490,114 @@ describe("tickets — closed history period picker", () => {
   });
 });
 
+describe("tickets — SLA states the seed guarantees", () => {
+  const list = (token: string) =>
+    request(app).get(`${API}/tickets`).set(bearer(token));
+
+  /**
+   * The seed ages some in-flight tickets so their SLA target has already passed.
+   * Before that every seeded ticket was raised at seed time, so nothing could be
+   * late and the whole breached-and-still-open branch was unreachable in a fresh
+   * database — including from the E2E suite.
+   */
+  it("ships tickets that are past due and still open", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await list(dana);
+    expect(res.status).toBe(200);
+
+    const now = Date.now();
+    const overdue = res.body.data.filter(
+      (t: { status: string; dueAt: string | null }) =>
+        t.dueAt != null &&
+        Date.parse(t.dueAt) < now &&
+        ["new", "open", "in_progress"].includes(t.status),
+    );
+    expect(overdue.length).toBeGreaterThanOrEqual(2);
+    // The server's own verdict agrees — this is the state the badge paints red.
+    expect(
+      overdue.every((t: { slaState: string }) => t.slaState === "danger"),
+    ).toBe(true);
+  });
+
+  it("ships one about to breach and one comfortably ahead", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await list(dana);
+    const active = res.body.data.filter((t: { status: string }) =>
+      ["new", "open", "in_progress"].includes(t.status),
+    );
+    const remaining = (t: { dueAt: string }) => Date.parse(t.dueAt) - Date.now();
+
+    // A demo with only breaches is as unrealistic as one with none: the point is
+    // that every tier the badge can paint is reachable.
+    expect(
+      active.some(
+        (t: { dueAt: string }) =>
+          remaining(t) > 0 && remaining(t) < 60 * 60 * 1000,
+      ),
+    ).toBe(true);
+    expect(
+      active.some((t: { dueAt: string }) => remaining(t) > 4 * 60 * 60 * 1000),
+    ).toBe(true);
+  });
+
+  it("leaves paused tickets alone", async () => {
+    // A pending ticket shows its clock as stopped, so an overdue one would only
+    // read as a contradiction.
+    const dana = await login("dana.reyes@acme.com");
+    const res = await list(dana);
+    const pending = res.body.data.filter(
+      (t: { status: string }) => t.status === "pending",
+    );
+    expect(pending.length).toBeGreaterThan(0);
+    expect(
+      pending.every((t: { slaState: string }) => t.slaState === "paused"),
+    ).toBe(true);
+  });
+});
+
+describe("tickets — list ordering", () => {
+  it("orders by the SLA target, breaking ties on id", async () => {
+    // `due_at` is the creation time plus a fixed per-priority target, so any two
+    // tickets of the same priority created in the same instant — a CSV import, a
+    // burst of self-service tickets — share one to the millisecond. Without a
+    // tiebreaker their order is whatever the query plan produces.
+    const category = await prisma.category.findFirstOrThrow();
+    const requester = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    const dueAt = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    const ids = [9101, 9102, 9103];
+    for (const id of [...ids].reverse()) {
+      await prisma.ticket.create({
+        data: {
+          id,
+          subject: `Tied target ${id}`,
+          description: "same due_at",
+          status: "open",
+          priority: "high",
+          requesterId: requester.id,
+          categoryId: category.id,
+          customerId: requester.customerId,
+          dueAt,
+        },
+      });
+    }
+
+    const dana = await login("dana.reyes@acme.com");
+    const seen = async () => {
+      const res = await request(app).get(`${API}/tickets`).set(bearer(dana));
+      return res.body.data
+        .map((t: { id: number }) => t.id)
+        .filter((id: number) => ids.includes(id));
+    };
+
+    expect(await seen()).toEqual(ids);
+    // Stable, not merely correct once: the same question twice gives the same
+    // answer, which is what pagination and "the row hasn't moved" depend on.
+    expect(await seen()).toEqual(ids);
+  });
+});
+
 describe("tickets — assignee identity and filter", () => {
   it("exposes assigneeId alongside the display name", async () => {
     const dana = await login("dana.reyes@acme.com");
