@@ -664,8 +664,8 @@ describe("reports — what the resolution clock measures", () => {
 
     const data = await summary(await login("marcus.chen@acme.com"));
     // 4, not 24: the twenty hours before anyone looked at it were never work.
-    expect(data.kpis.avgResolutionHours).toBe(4);
-    expect(data.kpis.resolvedCount).toBe(1);
+    expect(data.kpis.avgHandlingHours).toBe(4);
+    expect(data.kpis.handledCount).toBe(1);
   });
 
   it("measures to closed, not to resolved", async () => {
@@ -681,8 +681,8 @@ describe("reports — what the resolution clock measures", () => {
     });
 
     const data = await summary(await login("marcus.chen@acme.com"));
-    expect(data.kpis.resolvedCount).toBe(0);
-    expect(data.kpis.avgResolutionHours).toBe(0);
+    expect(data.kpis.handledCount).toBe(0);
+    expect(data.kpis.avgHandlingHours).toBe(0);
   });
 
   it("skips a ticket that was closed without ever being picked up", async () => {
@@ -699,7 +699,7 @@ describe("reports — what the resolution clock measures", () => {
     // Nothing recorded the pickup, so there is no start — better to leave it out
     // than to fall back to the creation time and quietly reintroduce the queue.
     const data = await summary(await login("marcus.chen@acme.com"));
-    expect(data.kpis.resolvedCount).toBe(0);
+    expect(data.kpis.handledCount).toBe(0);
   });
 
   it("still times the first response from when the ticket was raised", async () => {
@@ -718,18 +718,43 @@ describe("reports — what the resolution clock measures", () => {
     expect(data.kpis.medianFirstResponseMin).toBe(20 * 60);
   });
 
+  it("counts the daily trend on closures, matching the headline", async () => {
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    // Resolved four days ago, closed today. Counting resolutions put this on the
+    // wrong bar — a chart of one event sitting under a KPI measuring to another.
+    const raised = new Date(Date.now() - 5 * 24 * HOUR);
+    const ticket = await ticketFor(marcus.id, {
+      raised,
+      openedAt: new Date(raised.getTime() + HOUR),
+      closedAt: new Date(),
+    });
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { resolvedAt: new Date(Date.now() - 4 * 24 * HOUR) },
+    });
+
+    const data = await summary(await login("marcus.chen@acme.com"));
+    const trend = data.closureTrend as number[];
+    expect(trend).toHaveLength(7);
+    // Today is the last bar, and it holds the closure.
+    expect(trend.at(-1)).toBe(1);
+    expect(trend.slice(0, -1).every((n) => n === 0)).toBe(true);
+  });
+
   it("gives an agent's average the same clock as the headline", async () => {
     const dana = await login("dana.reyes@acme.com");
     const data = await summary(dana);
     const rows = data.byAgent as {
       agent: string;
-      avgResolutionHours: number;
+      avgHandlingHours: number;
     }[];
     expect(rows.length).toBeGreaterThan(0);
     // Two tables on one page must not answer different questions: every agent's
     // average is drawn from the same measurement, so none can exceed the span of
     // the archive it is measured over.
-    expect(rows.every((r) => r.avgResolutionHours >= 0)).toBe(true);
+    expect(rows.every((r) => r.avgHandlingHours >= 0)).toBe(true);
   });
 });
 
