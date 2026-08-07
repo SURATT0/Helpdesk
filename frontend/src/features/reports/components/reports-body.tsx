@@ -76,8 +76,8 @@ export function ReportsBody() {
   const kpis = [
     {
       label: t("report.kpi.avgRes"),
-      value: hours(data.kpis.avgResolutionHours),
-      sub: t("report.kpi.avgRes.sub", { n: data.kpis.resolvedCount }),
+      value: hours(data.kpis.avgHandlingHours),
+      sub: t("report.kpi.avgRes.sub", { n: data.kpis.handledCount }),
     },
     {
       label: t("report.kpi.firstResp"),
@@ -91,8 +91,8 @@ export function ReportsBody() {
     },
   ];
 
-  const labels = trendDayLabels(data.resolutionTrend.length);
-  const chart = buildChart(data.resolutionTrend);
+  const labels = trendDayLabels(data.closureTrend.length);
+  const chart = buildChart(data.closureTrend);
   const totalMet = data.byPriority.reduce((a, r) => a + r.met, 0);
   const totalBreached = data.byPriority.reduce((a, r) => a + r.breached, 0);
   const totalJudged = totalMet + totalBreached;
@@ -129,7 +129,7 @@ export function ReportsBody() {
           </span>
         </div>
 
-        {totalJudged === 0 && chart.max <= 1 && data.kpis.resolvedCount === 0 ? (
+        {totalJudged === 0 && chart.max <= 1 && data.kpis.handledCount === 0 ? (
           <div className="py-10 text-center text-[12.5px] text-faint">
             {t("report.empty")}
           </div>
@@ -346,10 +346,10 @@ export function ReportsBody() {
                   {r.agent}
                 </span>
                 <span className="font-mono text-[12px] font-medium text-[#475569]">
-                  {r.resolved}
+                  {r.handled}
                 </span>
                 <span className="font-mono text-[12px] font-medium text-[#475569]">
-                  {hours(r.avgResolutionHours)}
+                  {hours(r.avgHandlingHours)}
                 </span>
               </div>
             ))}

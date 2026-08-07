@@ -26,18 +26,18 @@ export function reportsToCsv(
   summary: ReportsSummary,
   trendLabels: string[],
 ): string {
-  const { kpis, resolutionTrend, byPriority, byCategory, byAgent } = summary;
+  const { kpis, closureTrend, byPriority, byCategory, byAgent } = summary;
   const sections: (string | number)[][] = [
     ["Metric", "Value"],
     // Named for what they measure: the CSV outlives the screen it came from.
-    ["Avg resolution time, opened to closed (h)", kpis.avgResolutionHours],
+    ["Avg handling time, opened to closed (h)", kpis.avgHandlingHours],
     ["First response time, median (min)", kpis.medianFirstResponseMin],
     ["SLA compliance (%)", kpis.slaCompliancePct],
-    ["Closed tickets measured", kpis.resolvedCount],
+    ["Closed tickets measured", kpis.handledCount],
     ["Tickets judged for SLA", kpis.judgedCount],
     [],
-    ["Day", "Tickets resolved"],
-    ...resolutionTrend.map((n, i) => [trendLabels[i] ?? `Day ${i + 1}`, n]),
+    ["Day", "Tickets closed"],
+    ...closureTrend.map((n, i) => [trendLabels[i] ?? `Day ${i + 1}`, n]),
     [],
     ["Priority", "Compliance (%)", "Met", "Breached"],
     ...byPriority.map((r) => [r.priority, r.compliancePct, r.met, r.breached]),
@@ -51,7 +51,7 @@ export function reportsToCsv(
     ]),
     [],
     ["Agent", "Resolved", "Avg resolution (h)"],
-    ...byAgent.map((r) => [r.agent, r.resolved, r.avgResolutionHours]),
+    ...byAgent.map((r) => [r.agent, r.handled, r.avgHandlingHours]),
   ];
   return toRows(sections);
 }

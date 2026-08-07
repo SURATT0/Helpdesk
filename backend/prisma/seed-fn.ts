@@ -504,12 +504,26 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
       create: { id: t.id, ...data },
     });
 
-    // A two-step trail rather than one row, so the ticket's history panel reads
-    // as a real lifecycle and the timestamps line up with the log.
+    /**
+     * When somebody picked it up: early in the window, and never more than a
+     * working day in, however long the ticket ran.
+     *
+     * This row is what the reports page measures both of its time KPIs from —
+     * first response ends here, and handling time starts here. Without it the
+     * only transition on a seeded ticket was the closing one, so every figure
+     * came out as zero and both metrics looked broken in the demo.
+     */
+    const pickedUpAt = new Date(
+      createdAt.getTime() + Math.min(t.openHours * 0.3, 8) * HOUR_MS,
+    );
+
+    // A trail rather than one row, so the ticket's history panel reads as a real
+    // lifecycle and the timestamps line up with the log.
     await prisma.ticketStatusHistory.deleteMany({ where: { ticketId: t.id } });
     await prisma.ticketStatusHistory.createMany({
       data: [
         { ticketId: t.id, fromStatus: null, toStatus: "new", changedById: requesterId, createdAt },
+        { ticketId: t.id, fromStatus: "new", toStatus: "open", changedById: assigneeId, createdAt: pickedUpAt },
         { ticketId: t.id, fromStatus: "resolved", toStatus: "closed", changedById: assigneeId, createdAt: closedAt },
       ],
     });

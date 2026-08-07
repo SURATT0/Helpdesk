@@ -4,13 +4,13 @@ import { prioritySchema } from "@/features/tickets/schemas";
 export const reportsSummarySchema = z.object({
   data: z.object({
     kpis: z.object({
-      avgResolutionHours: z.number(),
+      avgHandlingHours: z.number(),
       medianFirstResponseMin: z.number(),
       slaCompliancePct: z.number(),
-      resolvedCount: z.number(),
+      handledCount: z.number(),
       judgedCount: z.number(),
     }),
-    resolutionTrend: z.array(z.number()),
+    closureTrend: z.array(z.number()),
     byPriority: z.array(
       z.object({
         priority: prioritySchema,
@@ -31,8 +31,8 @@ export const reportsSummarySchema = z.object({
     byAgent: z.array(
       z.object({
         agent: z.string(),
-        resolved: z.number(),
-        avgResolutionHours: z.number(),
+        handled: z.number(),
+        avgHandlingHours: z.number(),
       }),
     ),
   }),

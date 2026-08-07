@@ -18,8 +18,16 @@ function median(nums: number[]): number {
 
 export type ReportsSummary = {
   kpis: {
-    /** Hours from the ticket being picked up to it reaching `closed`. */
-    avgResolutionHours: number;
+    /**
+     * Hours from the ticket being picked up to it reaching `closed`.
+     *
+     * Named "handling" rather than "resolution" because that is what it now
+     * measures: the queue wait before anyone looked is excluded, and it ends at
+     * the close rather than at the claim. The dashboard still carries an
+     * `avgResolutionHours` of its own, measured raised → resolved — two names for
+     * two different questions, which is the point.
+     */
+    avgHandlingHours: number;
     /** Minutes from the ticket being raised to the first status change. */
     medianFirstResponseMin: number;
     slaCompliancePct: number;
@@ -28,10 +36,11 @@ export type ReportsSummary = {
      * `closed` AND were picked up at some point. A ticket closed without ever
      * changing status has no clock to measure.
      */
-    resolvedCount: number;
+    handledCount: number;
     judgedCount: number;
   };
-  resolutionTrend: number[];
+  /** Tickets that reached `closed` on each of the last 7 days, oldest first. */
+  closureTrend: number[];
   byPriority: {
     priority: Priority;
     compliancePct: number;
@@ -47,8 +56,9 @@ export type ReportsSummary = {
   }[];
   byAgent: {
     agent: string;
-    resolved: number;
-    avgResolutionHours: number;
+    /** Tickets of theirs that reached `closed` — the set their average covers. */
+    handled: number;
+    avgHandlingHours: number;
   }[];
 };
 
@@ -116,7 +126,7 @@ export const reportsRepository = {
     const resHours = terminal
       .map(handlingHours)
       .filter((h): h is number => h != null);
-    const avgResolutionHours = resHours.length
+    const avgHandlingHours = resHours.length
       ? round1(resHours.reduce((a, b) => a + b, 0) / resHours.length)
       : 0;
 
@@ -172,10 +182,10 @@ export const reportsRepository = {
     const byAgent = [...agentMap.entries()]
       .map(([agent, hrs]) => ({
         agent,
-        resolved: hrs.length,
-        avgResolutionHours: round1(hrs.reduce((a, b) => a + b, 0) / hrs.length),
+        handled: hrs.length,
+        avgHandlingHours: round1(hrs.reduce((a, b) => a + b, 0) / hrs.length),
       }))
-      .sort((a, b) => b.resolved - a.resolved);
+      .sort((a, b) => b.handled - a.handled);
 
     const firstByTicket = new Map<number, number>();
     for (const h of firstTransitions) {
@@ -188,33 +198,39 @@ export const reportsRepository = {
     }
     const medianFirstResponseMin = Math.round(median([...firstByTicket.values()]));
 
-    // Resolutions per day over the last 7 days (oldest → newest).
-    const resolutionTrend: number[] = [];
+    /**
+     * Closures per day over the last 7 days (oldest → newest).
+     *
+     * Counts `closed_at`, matching the handling average above. It counted
+     * `resolved_at` before, which put a chart of one event directly under a KPI
+     * measuring to another — the same ticket landed on a different day in each.
+     */
+    const closureTrend: number[] = [];
     for (let i = 6; i >= 0; i--) {
       const start = new Date(now);
       start.setHours(0, 0, 0, 0);
       start.setDate(start.getDate() - i);
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
-      resolutionTrend.push(
+      closureTrend.push(
         terminal.filter(
           (t) =>
-            t.resolvedAt &&
-            t.resolvedAt.getTime() >= start.getTime() &&
-            t.resolvedAt.getTime() < end.getTime(),
+            t.closedAt &&
+            t.closedAt.getTime() >= start.getTime() &&
+            t.closedAt.getTime() < end.getTime(),
         ).length,
       );
     }
 
     return {
       kpis: {
-        avgResolutionHours,
+        avgHandlingHours,
         medianFirstResponseMin,
         slaCompliancePct,
-        resolvedCount: resHours.length,
+        handledCount: resHours.length,
         judgedCount: judged.length,
       },
-      resolutionTrend,
+      closureTrend,
       byPriority,
       byCategory,
       byAgent,
