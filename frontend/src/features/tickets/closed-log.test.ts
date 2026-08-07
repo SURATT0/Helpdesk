@@ -16,25 +16,29 @@ const ago = (days: number) => ({
   closedAt: new Date(NOW.getTime() - days * DAY).toISOString(),
 });
 
-const group = (items: { closedAt: string | null }[]) =>
-  groupClosedLog(items, NOW);
+const group = (items: { closedAt: string | null }[]) => groupClosedLog(items);
 
 describe("groupClosedLog — sections", () => {
-  it("puts the current ISO week under one heading, Monday onwards", () => {
-    // NOW is Thursday 6 Aug 2026; Monday is the 3rd, so 3 days back is in, 4 is not.
-    const groups = group([ago(0), ago(3), ago(4)]);
-    expect(groups.map((g) => g.kind)).toEqual(["this_week", "last_week"]);
+  it("puts a whole calendar month under one heading", () => {
+    // NOW is 6 Aug 2026; 0 and 3 days back are both August, 20 back is July.
+    const groups = group([ago(0), ago(3), ago(20)]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ year: 2026, month: 7 }); // August
     expect(groups[0].items).toHaveLength(2);
+    expect(groups[1]).toMatchObject({ year: 2026, month: 6 }); // July
   });
 
-  it("separates last week from this one", () => {
-    const groups = group([ago(1), ago(5)]);
-    expect(groups.map((g) => g.kind)).toEqual(["this_week", "last_week"]);
+  it("splits at the month boundary, however close the two days are", () => {
+    // 1 and 2 August against 31 July: consecutive days, different sections. A
+    // week-shaped section would have had to file all three under one month.
+    const groups = group([ago(4), ago(5), ago(6)]);
+    expect(groups.map((g) => g.month)).toEqual([7, 6]);
+    expect(groups[0].items).toHaveLength(2);
+    expect(groups[1].items).toHaveLength(1);
   });
 
-  it("names everything older by its month", () => {
+  it("names everything by its own month", () => {
     const groups = group([ago(20), ago(50)]);
-    expect(groups.map((g) => g.kind)).toEqual(["month", "month"]);
     expect(groups[0]).toMatchObject({ year: 2026, month: 6 }); // July
     expect(groups[1]).toMatchObject({ year: 2026, month: 5 }); // June
   });

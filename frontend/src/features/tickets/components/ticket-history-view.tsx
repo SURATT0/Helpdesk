@@ -13,6 +13,8 @@ import {
   type ClosedGroup,
   type Gap,
 } from "../closed-log";
+import { rangeContains, type DateRange } from "../date-range";
+import { DateRangePicker, formatRangeLabel } from "./date-range-picker";
 import { useClosedLog, useClosedTotal } from "../queries";
 import type { Ticket } from "../schemas";
 
@@ -102,19 +104,16 @@ function formatYear(year: number, lang: string): string {
   return parts.find((p) => p.type === "year")?.value ?? String(year);
 }
 
-/** The words a section is known by — never a date range for the reader to decode. */
+/** The month a section covers — never a date range for the reader to decode. */
 function useHeading() {
-  const { t, lang } = useI18n();
+  const { lang } = useI18n();
   return React.useCallback(
-    (group: ClosedGroup<Ticket>) => {
-      if (group.kind === "this_week") return t("closedLog.thisWeek");
-      if (group.kind === "last_week") return t("closedLog.lastWeek");
-      return new Intl.DateTimeFormat(locale(lang), {
+    (group: ClosedGroup<Ticket>) =>
+      new Intl.DateTimeFormat(locale(lang), {
         month: "long",
         year: "numeric",
-      }).format(new Date(group.year, group.month, 1));
-    },
-    [t, lang],
+      }).format(new Date(group.year, group.month, 1)),
+    [lang],
   );
 }
 
@@ -221,8 +220,16 @@ export function TicketHistoryView() {
   const { t, lang } = useI18n();
   const heading = useHeading();
   const [priority, setPriority] = React.useState<Priority | "">("");
+  const [range, setRange] = React.useState<DateRange | null>(null);
   const [query, setQuery] = React.useState("");
   const [debouncedQuery, setDebouncedQuery] = React.useState("");
+
+  /**
+   * Today, fixed for the life of the view. The presets are relative to it, and a
+   * "last 7 days" that quietly re-anchored at midnight would move the list under
+   * a reader who had not touched anything.
+   */
+  const today = React.useMemo(() => new Date(), []);
 
   React.useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -245,10 +252,31 @@ export function TicketHistoryView() {
   // box quotes, which must not shrink as you type into it.
   const { data: archiveTotal } = useClosedTotal();
 
-  const tickets = React.useMemo(
+  const loaded = React.useMemo(
     () => (data?.pages ?? []).flatMap((p) => p.data),
     [data],
   );
+
+  /**
+   * The date range narrows what has already been fetched rather than being sent
+   * to the server: the log reads the whole archive in one query, so a span inside
+   * it is a question the client can already answer, and the ticket query stays
+   * exactly as it was.
+   *
+   * That only holds while everything is loaded, so an active range pulls the
+   * remaining pages in below. Filtering a partly-loaded list would silently drop
+   * closures from the far end of the archive — the very thing a date filter is
+   * used to go looking for.
+   */
+  const tickets = React.useMemo(
+    () =>
+      range ? loaded.filter((x) => rangeContains(range, x.closedAt)) : loaded,
+    [loaded, range],
+  );
+  React.useEffect(() => {
+    if (range && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [range, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   const groups = React.useMemo(() => groupClosedLog(tickets), [tickets]);
   const years = React.useMemo(() => yearsIn(groups), [groups]);
   /** The first section of each year — where the year bar jumps to. */
@@ -358,11 +386,12 @@ export function TicketHistoryView() {
       ?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
 
-  const filtering = debouncedQuery.length > 0 || priority !== "";
+  const filtering = debouncedQuery.length > 0 || priority !== "" || range != null;
   const clearAll = () => {
     setQuery("");
     setDebouncedQuery("");
     setPriority("");
+    setRange(null);
   };
   const searchLabel = t("closedLog.searchAll", { n: archiveTotal ?? 0 });
 
@@ -404,6 +433,7 @@ export function TicketHistoryView() {
         </label>
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          <DateRangePicker value={range} onChange={setRange} today={today} />
           <FiltersButton priority={priority} onPick={setPriority} />
           {years.length > 1 ? (
             <div
@@ -473,6 +503,21 @@ export function TicketHistoryView() {
                   {t("closedLog.clearSearch")}
                 </button>
               </>
+            ) : range ? (
+              <>
+                <p className="text-[13px] text-muted">
+                  {t("closedLog.noMatchRange", {
+                    range: formatRangeLabel(range, lang),
+                  })}
+                </p>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-app"
+                >
+                  {t("closedLog.clearFilters")}
+                </button>
+              </>
             ) : priority ? (
               <>
                 <p className="text-[13px] text-muted">
@@ -528,7 +573,13 @@ export function TicketHistoryView() {
 
       {filtering && tickets.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
-          {t("closedLog.matches", { n: data?.pages[0]?.meta.total ?? 0 })}
+          {/* With a range on, the server's total counts the whole archive — the
+              narrowing happened here, so the count has to come from here too. */}
+          <span>
+            {t("closedLog.matches", {
+              n: range ? tickets.length : (data?.pages[0]?.meta.total ?? 0),
+            })}
+          </span>
           <button
             type="button"
             onClick={clearAll}
