@@ -192,11 +192,24 @@ const en: Dict = {
   "closedLog.closeFilters": "Close filters",
   "closedLog.clearFilters": "Clear filters",
   "closedLog.jumpToYear": "Jump to a year",
-  // Section headings. Named the way someone talks about them — a reader should
-  // never have to work out which week "Jul 27 – Aug 2" was.
-  "closedLog.thisWeek": "This week",
-  "closedLog.lastWeek": "Last week",
   "closedLog.groupCount": "{n} closed",
+  // Date range picker. The label itself is formatted by Intl, not from here —
+  // where the year and the separator go is the locale's business, not a string's.
+  "range.any": "Any date",
+  "range.title": "Date range",
+  "range.close": "Close the date picker",
+  "range.earlier": "Earlier period",
+  "range.later": "Later period",
+  "range.prevMonth": "Previous month",
+  "range.nextMonth": "Next month",
+  "range.pickStart": "Pick the first day",
+  "range.pickEnd": "Now pick the last day",
+  "range.custom": "Custom range",
+  "range.preset.last7": "Last 7 days",
+  "range.preset.last30": "Last 30 days",
+  "range.preset.thisMonth": "This month",
+  "range.preset.thisYear": "This year",
+  "closedLog.noMatchRange": "Nothing was closed between {range}.",
   // The silences between sections. Two headings can sit next to each other and be
   // nine months apart; this is what says so.
   "closedLog.gap.day": "no tickets for 1 day",
@@ -753,9 +766,22 @@ const th: Dict = {
   "closedLog.closeFilters": "ปิดตัวกรอง",
   "closedLog.clearFilters": "ล้างตัวกรอง",
   "closedLog.jumpToYear": "ข้ามไปปี",
-  "closedLog.thisWeek": "สัปดาห์นี้",
-  "closedLog.lastWeek": "สัปดาห์ก่อน",
   "closedLog.groupCount": "ปิด {n} ใบ",
+  "range.any": "ทุกช่วงเวลา",
+  "range.title": "ช่วงวันที่",
+  "range.close": "ปิดตัวเลือกวันที่",
+  "range.earlier": "ช่วงก่อนหน้า",
+  "range.later": "ช่วงถัดไป",
+  "range.prevMonth": "เดือนก่อนหน้า",
+  "range.nextMonth": "เดือนถัดไป",
+  "range.pickStart": "เลือกวันเริ่ม",
+  "range.pickEnd": "เลือกวันจบ",
+  "range.custom": "กำหนดเอง",
+  "range.preset.last7": "7 วันล่าสุด",
+  "range.preset.last30": "30 วันล่าสุด",
+  "range.preset.thisMonth": "เดือนนี้",
+  "range.preset.thisYear": "ปีนี้",
+  "closedLog.noMatchRange": "ไม่มี ticket ที่ปิดในช่วง {range}",
   // Thai has no grammatical plural, so one form is correct for every count —
   // the singular keys exist only because English needs them.
   "closedLog.gap.day": "ไม่มี ticket ปิด 1 วัน",

@@ -3,23 +3,21 @@
  * sections it is read in, and name the silences between them.
  *
  * Pure and framework-free, like `duration.ts` and `sla.ts`, so the awkward cases
- * — a week that straddles two months, a four-year gap, a single ticket — are
- * unit-testable without rendering anything.
+ * — a four-year gap, a single ticket, the same month in two different years —
+ * are unit-testable without rendering anything.
  *
- * The headings deliberately do NOT use a date range. "Jul 27 – Aug 2, 2026" makes
- * the reader work out which week that is; "This week" does not.
+ * Sections are calendar months. A month is the coarsest unit that still says
+ * *when* without making the reader decode it, and every ticket falls in exactly
+ * one — which a week-shaped section cannot promise, since a week that straddles
+ * two months has to be filed under one of them.
  */
 
 export type ClosedLogItem = { closedAt: string | null };
 
-/** Which heading a group gets, and therefore how it is worded. */
-export type GroupKind = "this_week" | "last_week" | "month";
-
 export type ClosedGroup<T> = {
   /** Stable identity for React keys and for the year jump bar. */
   key: string;
-  kind: GroupKind;
-  /** Local year and 0-based month — what a "month" heading formats. */
+  /** Local year and 0-based month — what the heading formats. */
   year: number;
   month: number;
   items: T[];
@@ -53,41 +51,9 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** Monday of the ISO week `d` falls in — weeks start Monday, as the server reckons them. */
-function startOfWeek(d: Date): Date {
-  const day = startOfDay(d);
-  // getDay(): 0 = Sunday, so Sunday counts back 6 days rather than 0.
-  const back = (day.getDay() + 6) % 7;
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate() - back);
-}
-
 /**
- * Which section a closure belongs to, relative to `now`.
- *
- * "This week" is the current ISO week, not a rolling 7 days: a Monday morning
- * would otherwise be filed under a heading that also covers last Wednesday, and
- * "this week" would silently mean something different every day.
- */
-function kindFor(closedAt: Date, now: Date): GroupKind {
-  const thisWeek = startOfWeek(now);
-  if (closedAt.getTime() >= thisWeek.getTime()) return "this_week";
-  const lastWeek = new Date(
-    thisWeek.getFullYear(),
-    thisWeek.getMonth(),
-    thisWeek.getDate() - 7,
-  );
-  if (closedAt.getTime() >= lastWeek.getTime()) return "last_week";
-  return "month";
-}
-
-function groupKey(kind: GroupKind, d: Date): string {
-  if (kind === "month") return `${d.getFullYear()}-${d.getMonth()}`;
-  return kind;
-}
-
-/**
- * Split a newest-first list into consecutive sections, measuring the silence
- * before each one.
+ * Split a newest-first list into consecutive month sections, measuring the
+ * silence before each one.
  *
  * The gap is measured between adjacent *tickets* — the oldest of the previous
  * section and the newest of this one — not between section boundaries, because
@@ -100,7 +66,6 @@ function groupKey(kind: GroupKind, d: Date): string {
  */
 export function groupClosedLog<T extends ClosedLogItem>(
   items: T[],
-  now: Date = new Date(),
 ): ClosedGroup<T>[] {
   const groups: ClosedGroup<T>[] = [];
   let previousClosedAt: Date | null = null;
@@ -109,8 +74,7 @@ export function groupClosedLog<T extends ClosedLogItem>(
     const ms = item.closedAt ? Date.parse(item.closedAt) : NaN;
     if (Number.isNaN(ms)) continue;
     const closedAt = new Date(ms);
-    const kind = kindFor(closedAt, now);
-    const key = groupKey(kind, closedAt);
+    const key = `${closedAt.getFullYear()}-${closedAt.getMonth()}`;
     const last = groups.at(-1);
 
     if (last && last.key === key) {
@@ -118,7 +82,6 @@ export function groupClosedLog<T extends ClosedLogItem>(
     } else {
       groups.push({
         key,
-        kind,
         year: closedAt.getFullYear(),
         month: closedAt.getMonth(),
         items: [item],
@@ -133,8 +96,8 @@ export function groupClosedLog<T extends ClosedLogItem>(
 
 /**
  * The silence between two closures, or null when it is short enough to be
- * unremarkable. `newer` and `older` are whole days apart at day granularity, so
- * two closures on consecutive days never read as a gap.
+ * unremarkable. Measured in whole days, so two closures on consecutive days
+ * never read as a gap because of the time of day.
  */
 export function gapBetween(newer: Date, older: Date): Gap | null {
   const days = Math.round(

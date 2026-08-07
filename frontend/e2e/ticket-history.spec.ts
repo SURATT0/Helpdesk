@@ -35,8 +35,9 @@ test("the sidebar links to the log, which opens on the whole archive", async ({
   await expect(search(page)).toBeVisible();
   await expect(rows(page).first()).toBeVisible();
 
-  // Sections are named the way people talk about them, never as a date range.
-  await expect(page.getByText("This week", { exact: true })).toBeVisible();
+  // Sections are calendar months — a name, never a range for the reader to
+  // decode. The only en dash allowed on the page is inside the range picker's
+  // own label, and nothing has picked a range yet.
   await expect(page.getByText(/^[A-Z][a-z]+ \d{4}$/).first()).toBeVisible();
   await expect(page.getByText(/–/)).toHaveCount(0);
 
@@ -188,7 +189,6 @@ test("the log is translated", async ({ page }) => {
   await expect(page.getByText("ประวัติตั๋วงาน").first()).toBeVisible();
   await expect(page.getByPlaceholder(/^ค้นหาจาก ticket ที่ปิดแล้ว \d+ ใบ/)).toBeVisible();
   await expect(page.getByRole("button", { name: "ตัวกรอง", exact: true })).toBeVisible();
-  await expect(page.getByText("สัปดาห์นี้", { exact: true })).toBeVisible();
   // One Thai form covers every count — the language has no grammatical plural.
   await expect(page.getByText(/^ไม่มี ticket ปิด \d+ เดือน$/).first()).toBeVisible();
 
@@ -201,6 +201,131 @@ test("the log is translated", async ({ page }) => {
   await expect(
     page.getByText(new RegExp(`^\\S+ ${newest}$`)).first(),
   ).toBeVisible();
+});
+
+/**
+ * The date range picker. The seed closes tickets relative to "now", so these
+ * assert behaviour — what the label says, that stepping moves by the span's own
+ * length, that an empty span says so — rather than which tickets land in a range.
+ */
+const rangeButton = (page: Page) =>
+  page.getByRole("button", { name: /^(Any date|[A-Z][a-z]{2} \d)/ });
+
+test("a preset narrows the log and names the span it picked", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/history");
+
+  await expect(rangeButton(page)).toHaveText("Any date");
+  await rangeButton(page).click();
+  await page.getByRole("button", { name: "This year", exact: true }).click();
+
+  // The label is the span, written by the locale — "Jan 1 – Aug 6, 2026".
+  await expect(rangeButton(page)).toHaveText(/^Jan 1 – .+ \d{4}$/);
+  await expect(page.getByText(/^\d+ matching$/)).toBeVisible();
+  // Nothing older than this year survives the filter.
+  await expect(page.getByText(/^[A-Z][a-z]+ 202[0-5]$/)).toHaveCount(0);
+});
+
+test("the arrows step by the length of the span that is selected", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/history");
+
+  await rangeButton(page).click();
+  await page.getByRole("button", { name: "Last 7 days", exact: true }).click();
+  const start = await rangeButton(page).textContent();
+
+  // Back one, then forward one, returns to exactly the same seven days.
+  await page.getByRole("button", { name: "Earlier period" }).click();
+  await expect(rangeButton(page)).not.toHaveText(start!);
+  await page.getByRole("button", { name: "Later period" }).click();
+  await expect(rangeButton(page)).toHaveText(start!);
+});
+
+test("a span with nothing in it says so, and can be left", async ({ page }) => {
+  await login(page);
+  await page.goto("/history");
+
+  // Step the last seven days FORWARD into next week. Nothing closes in the
+  // future, so that span is empty by construction rather than by whichever dates
+  // the seed happens to have produced today.
+  await rangeButton(page).click();
+  await page.getByRole("button", { name: "Last 7 days", exact: true }).click();
+  await page.getByRole("button", { name: "Later period" }).click();
+
+  await expect(page.getByText(/^Nothing was closed between /)).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(rangeButton(page)).toHaveText("Any date");
+  await expect(rows(page).first()).toBeVisible();
+});
+
+test("preset and custom range swap freely, without getting stuck", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/history");
+
+  // Preset → custom.
+  await rangeButton(page).click();
+  await page.getByRole("button", { name: "This month", exact: true }).click();
+  const presetLabel = await rangeButton(page).textContent();
+
+  await rangeButton(page).click();
+  const dialog = page.getByRole("dialog", { name: "Date range" });
+  // Days are addressed by their full date: the grid pads with the neighbouring
+  // months, so "5" alone matches two cells.
+  const shown = (await dialog
+    .getByText(/^[A-Z][a-z]+ \d{4}$/)
+    .first()
+    .textContent())!;
+  const [monthName, year] = shown.split(" ");
+  // Later day first, to prove the ends get ordered rather than taken as given.
+  await dialog
+    .getByRole("button", { name: `${monthName} 12, ${year}`, exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: `${monthName} 5, ${year}`, exact: true })
+    .click();
+  const customLabel = await rangeButton(page).textContent();
+  expect(customLabel).not.toBe(presetLabel);
+  expect(customLabel).toMatch(/5 – 12|12 – .+5/);
+
+  // Custom → preset.
+  await rangeButton(page).click();
+  await page.getByRole("button", { name: "This year", exact: true }).click();
+  await expect(rangeButton(page)).toHaveText(/^Jan 1 – /);
+
+  // Preset → off.
+  await rangeButton(page).click();
+  await page
+    .getByRole("dialog", { name: "Date range" })
+    .getByRole("button", { name: "Any date", exact: true })
+    .click();
+  await expect(rangeButton(page)).toHaveText("Any date");
+});
+
+test("the range picker is translated, dates and all", async ({ page }) => {
+  await login(page);
+  await page.goto("/history");
+  await page.getByRole("button", { name: "ไทย" }).click();
+
+  const button = page.getByRole("button", { name: /^(ทุกช่วงเวลา|\d)/ });
+  await expect(button).toHaveText("ทุกช่วงเวลา");
+  await button.click();
+  await expect(
+    page.getByRole("button", { name: "7 วันล่าสุด", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "เดือนนี้", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "ปีนี้", exact: true }).click();
+
+  // Thai month names, and the Buddhist era the section headings already use.
+  await expect(button).toHaveText(/25\d{2}$/);
+  await expect(button).not.toHaveText(/20\d{2}$/);
 });
 
 test("on a phone the filters open as a sheet from the bottom edge", async ({
