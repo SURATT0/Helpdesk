@@ -53,16 +53,25 @@ export const ticketListSchema = z.object({
 
 export const ticketEnvelopeSchema = z.object({ data: ticketSchema });
 
-export const granularitySchema = z.enum(["week", "month", "year"]);
+/**
+ * `all` asks for the whole archive at once rather than one calendar window — the
+ * mode the closed log reads in, because a log that only shows one month cannot be
+ * searched without already knowing the month. The bucketed sizes remain for
+ * anything that genuinely wants a single period.
+ */
+export const granularitySchema = z.enum(["all", "week", "month", "year"]);
+
+/** The window sizes that resolve to an actual period — `all` has none. */
+export const periodGranularitySchema = z.enum(["week", "month", "year"]);
 
 /**
- * The window the server resolved, echoed back on every history response. The
- * client labels the period from `start`/`end` and navigates with the anchors —
+ * The window the server resolved, echoed back on every bucketed history response.
+ * The client labels the period from `start`/`end` and navigates with the anchors —
  * it never computes calendar boundaries itself, so "this month" can't drift
  * between the two sides.
  */
 export const periodSchema = z.object({
-  granularity: granularitySchema,
+  granularity: periodGranularitySchema,
   start: z.string(),
   /** Exclusive: the first instant of the next period. */
   end: z.string(),
@@ -72,28 +81,6 @@ export const periodSchema = z.object({
   isCurrent: z.boolean(),
 });
 
-/**
- * One populated period offered by the picker. Carries its own window so the same
- * formatter labels it as labels the window on screen, and a count so the user can
- * see where the volume is before jumping.
- */
-export const closedPeriodSchema = z.object({
-  start: z.string(),
-  end: z.string(),
-  count: z.number(),
-});
-
-export const closedPeriodsSchema = z.object({
-  data: z.array(closedPeriodSchema),
-  meta: z.object({
-    granularity: granularitySchema,
-    returned: z.number(),
-    limit: z.number(),
-    /** The archive had more periods than the cap — the list is partial. */
-    truncated: z.boolean(),
-  }),
-});
-
 export const closedHistorySchema = z.object({
   data: z.array(ticketSchema),
   meta: z.object({
@@ -101,15 +88,14 @@ export const closedHistorySchema = z.object({
     limit: z.number(),
     offset: z.number(),
     returned: z.number(),
-    period: periodSchema,
+    /** Null when the whole archive was asked for: there is no window to label. */
+    period: periodSchema.nullable(),
   }),
 });
 
 export type Granularity = z.infer<typeof granularitySchema>;
 export type Period = z.infer<typeof periodSchema>;
 export type ClosedHistoryPage = z.infer<typeof closedHistorySchema>;
-export type ClosedPeriod = z.infer<typeof closedPeriodSchema>;
-export type ClosedPeriodsPage = z.infer<typeof closedPeriodsSchema>;
 
 /**
  * Result of handing one person's queue to another. `remaining` is non-zero when

@@ -2,337 +2,437 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronLeft, ChevronRight, Info, Search } from "lucide-react";
-import { Avatar } from "@/components/ui/avatar";
-import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { Info, Search, SlidersHorizontal, X } from "lucide-react";
+import { ErrorState, LoadingRow } from "@/components/ui/states";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import { PRIORITY_META, type Priority } from "@/lib/domain";
-import { toneForName } from "../data";
-import { formatDuration, openDuration } from "../duration";
-import { useClosedHistory, useClosedPeriods } from "../queries";
-import type { Granularity, Period, Ticket } from "../schemas";
-
-const PAGE_SIZE = 50;
-
-/**
- * Four columns, down from seven. This log is read two ways — hunting a ticket you
- * half-remember, and scanning what a period contained — and neither needs the
- * priority or the requester of something already closed. Both moved into the
- * filter row above, where they narrow the period instead of repeating per row, and
- * both are on the ticket's own page for when a row turns out to be the one.
- */
-const COLS = "grid-cols-[64px_1fr_180px_90px]";
-
-const GRANULARITIES: readonly Granularity[] = ["week", "month", "year"];
+import {
+  groupClosedLog,
+  yearsIn,
+  type ClosedGroup,
+  type Gap,
+} from "../closed-log";
+import { useClosedLog, useClosedTotal } from "../queries";
+import type { Ticket } from "../schemas";
 
 const locale = (lang: string) => (lang === "th" ? "th-TH" : "en-US");
 
+/** Priority as a dot only. The word is there for screen readers; the colour scans. */
+const DOT: Record<Priority, string> = {
+  critical: "bg-priority-critical",
+  high: "bg-priority-high",
+  medium: "bg-priority-medium",
+  low: "bg-priority-low",
+};
+
+const PRIORITIES = Object.keys(PRIORITY_META) as Priority[];
+
 /**
- * Label a window from its own bounds rather than from a granularity switch on
- * the client, so the text always describes what the server actually queried.
- * `end` is exclusive, so the week label counts back a day to name its last day.
- *
- * Takes just the three fields it reads, so the same formatter labels the window
- * on screen and every entry in the picker — those cannot drift apart.
+ * The closing day on a row: day and month, no year. The section heading above
+ * already carries the year, and repeating it per row is what made the old table
+ * give the date a column of its own.
  */
-function periodLabel(
-  period: { granularity: Granularity; start: string; end: string },
-  lang: string,
-): string {
-  const start = new Date(period.start);
-  const loc = locale(lang);
-
-  if (period.granularity === "year") {
-    return start.toLocaleDateString(loc, { year: "numeric" });
-  }
-  if (period.granularity === "month") {
-    return start.toLocaleDateString(loc, { month: "long", year: "numeric" });
-  }
-
-  // `formatRange` elides whatever the two ends share, in the order the locale
-  // wants: "Aug 3 – 9, 2026", "Jul 27 – Aug 2, 2026", "Dec 29, 2025 – Jan 4, 2026",
-  // and "3–9 ส.ค. 2569" in Thai. Doing it by hand meant choosing which end kept the
-  // month, and doing that wrong is what produced "3 – Aug 9, 2026"; Intl also
-  // refuses to format a day+year with no month, so this is not a shortcut — it is
-  // the only way to get all four shapes right in both locales.
-  const lastDay = new Date(Date.parse(period.end) - 86_400_000);
-  return new Intl.DateTimeFormat(loc, {
+function formatClosedAt(iso: string | null, lang: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat(locale(lang), {
     day: "numeric",
     month: "short",
-    year: "numeric",
-  }).formatRange(start, lastDay);
+  }).format(d);
 }
 
-/** The day a ticket was closed, as a stable key for grouping. */
-const dayKey = (iso: string | null) => (iso ? iso.slice(0, 10) : "unknown");
-
-const formatDayHeading = (key: string, lang: string) =>
-  key === "unknown"
-    ? "—"
-    : new Date(`${key}T00:00:00`).toLocaleDateString(locale(lang), {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-      });
-
-/** Rows sharing a closing day, so the day is named once instead of per row. */
-function groupByDay(tickets: Ticket[]): { key: string; tickets: Ticket[] }[] {
-  const groups: { key: string; tickets: Ticket[] }[] = [];
-  for (const ticket of tickets) {
-    const key = dayKey(ticket.closedAt);
-    const last = groups[groups.length - 1];
-    if (last?.key === key) last.tickets.push(ticket);
-    else groups.push({ key, tickets: [ticket] });
-  }
-  return groups;
-}
-
-function Row({ ticket, last }: { ticket: Ticket; last: boolean }) {
+function Row({ ticket, lang }: { ticket: Ticket; lang: string }) {
   const { t } = useI18n();
-  const ms = openDuration(ticket.createdAt, ticket.closedAt);
-  const labels = {
-    d: t("closedLog.unit.d"),
-    h: t("closedLog.unit.h"),
-    m: t("closedLog.unit.m"),
-  };
-
   return (
     <Link
       href={`/tickets/${ticket.id}`}
-      className={cn(
-        "grid items-center px-4 py-2.5 text-[13px] hover:bg-app",
-        COLS,
-        !last && "border-b border-[#f1f4f8]",
-      )}
+      className="flex items-center gap-2.5 border-b border-line px-3 py-2.5 last:border-b-0 hover:bg-app sm:gap-3 sm:px-4"
     >
-      <span className="font-mono text-[12px] text-faint">#{ticket.id}</span>
-
-      <span className="min-w-0 truncate pr-3 font-medium text-ink">
+      <span className={cn("h-2 w-2 flex-none rounded-full", DOT[ticket.priority])} />
+      <span className="sr-only">{t(`priority.${ticket.priority}`)}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
         {ticket.subject}
       </span>
-
-      {/* The one place an avatar earns its space: a face is faster to scan down a
-          column than a name, and this is the only column of people left. */}
-      <span className="min-w-0">
-        {ticket.assignee ? (
-          <span className="flex items-center gap-2">
-            <Avatar
-              name={ticket.assignee}
-              tone={toneForName(ticket.assignee)}
-              size={22}
-            />
-            <span className="truncate text-[12.5px] text-[#475569]">
-              {ticket.assignee}
-            </span>
-          </span>
-        ) : (
-          <span className="text-[12px] italic text-faint">
-            {t("closedLog.unassigned")}
-          </span>
-        )}
-      </span>
-
-      <span className="text-[12px] tabular-nums text-[#475569]">
-        {ms == null ? "—" : formatDuration(ms, labels)}
+      <span className="flex-none whitespace-nowrap text-[11.5px] text-faint">
+        #{ticket.id} · {formatClosedAt(ticket.closedAt, lang)}
       </span>
     </Link>
   );
 }
 
 /**
- * The window on screen, as a button that opens a list of the periods that hold
- * something. The arrows either side step one period at a time; this is how you
- * cross years without clicking twelve times, and it also makes the label
- * discoverable as a control rather than looking like static text.
- *
- * Only populated periods are listed, so every entry leads somewhere — and the
- * list doubles as an answer to "which years do we even have history for", which
- * the stepper alone could only reveal by trial.
- *
- * Button and list are separate components on purpose: the list renders in normal
- * flow BELOW the toolbar and pushes the table down, rather than floating over it.
- * As an overlay it covered the two right-hand columns of the rows behind it.
+ * A stretch with nothing in it, drawn rather than left as an unexplained jump
+ * between two headings. This is what makes the log read as a timeline instead of
+ * a list of unrelated months: two sections can sit next to each other and be
+ * nine months apart, and nothing but this says so.
  */
-function PeriodPickerButton({
-  label,
-  open,
-  onToggle,
-  disabled,
-}: {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  disabled: boolean;
-}) {
+function GapMarker({ gap }: { gap: Gap }) {
+  const { t } = useI18n();
+  const key =
+    gap.unit === "months"
+      ? gap.amount === 1
+        ? "closedLog.gap.month"
+        : "closedLog.gap.months"
+      : gap.amount === 1
+        ? "closedLog.gap.day"
+        : "closedLog.gap.days";
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      aria-haspopup="listbox"
-      aria-expanded={open}
-      // Test id, not a semantic handle: the label is plain text whose shape
-      // varies by granularity and locale, so there is nothing stable to match
-      // on from the outside.
-      data-testid="history-period"
-      className="flex min-w-[15ch] items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] font-semibold text-ink hover:bg-app disabled:opacity-40"
-    >
-      {label}
-      <ChevronDown
-        size={13}
-        className={cn("text-faint transition-transform", open && "rotate-180")}
-      />
-    </button>
-  );
-}
-
-function PeriodPanel({
-  granularity,
-  current,
-  onPick,
-  onClose,
-}: {
-  granularity: Granularity;
-  current: Period | undefined;
-  onPick: (anchor: string) => void;
-  onClose: () => void;
-}) {
-  const { t, lang } = useI18n();
-  // Fetched only once opened: the picker is a detour, not the main path.
-  const { data, isLoading } = useClosedPeriods(granularity, { enabled: true });
-  const periods = data?.data ?? [];
-
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      role="listbox"
-      aria-label={t("closedLog.pickPeriod")}
-      className="mb-3 max-h-[240px] overflow-y-auto rounded-lg border border-line bg-panel p-1"
-    >
-      {isLoading ? (
-        <div className="px-3 py-2 text-[12.5px] text-faint">
-          {t("closedLog.loading")}
-        </div>
-      ) : null}
-
-      {!isLoading && periods.length === 0 ? (
-        <div className="px-3 py-2 text-[12.5px] text-faint">
-          {t("closedLog.noPeriods")}
-        </div>
-      ) : null}
-
-      {/* Several across a row rather than one long column: the panel now takes
-          vertical space from the table, so it should not take more than it needs. */}
-      <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
-        {periods.map((p) => {
-          const selected = current?.start === p.start;
-          return (
-            <button
-              key={p.start}
-              type="button"
-              role="option"
-              aria-selected={selected}
-              onClick={() => {
-                // `start` is inside its own period, so it works as the anchor.
-                onPick(p.start);
-                onClose();
-              }}
-              className={cn(
-                "flex items-center justify-between gap-3 rounded-md px-3 py-1.5 text-left text-[12.5px] hover:bg-app",
-                selected ? "bg-[#e4f2ea] font-semibold text-brand-hover" : "text-ink",
-              )}
-            >
-              <span className="truncate">
-                {periodLabel({ granularity, start: p.start, end: p.end }, lang)}
-              </span>
-              <span className="flex-none tabular-nums text-[11.5px] text-faint">
-                {p.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {data?.meta.truncated ? (
-        <div className="mt-1 border-t border-[#f1f4f8] px-3 py-1.5 text-[11.5px] text-faint">
-          {t("closedLog.periodsTruncated", { limit: data.meta.limit })}
-        </div>
-      ) : null}
+    <div className="flex items-center gap-3 bg-app px-3 py-2 sm:px-4">
+      <span className="h-px flex-1 bg-line" />
+      <span className="text-[11px] font-medium tracking-[0.02em] text-faint">
+        {t(key, { n: gap.amount })}
+      </span>
+      <span className="h-px flex-1 bg-line" />
     </div>
   );
 }
 
 /**
- * The closed-ticket history log: one calendar period at a time, stepped with the
- * anchors the server returns. Changing granularity clears the anchor so the view
- * lands on the *current* week/month/year rather than reinterpreting the period
- * being viewed — stepping back three months and switching to "year" should show
- * this year, not the year around that month.
+ * A year as the section headings write it. Thai renders dates in the Buddhist era,
+ * so a raw `2026` in the jump bar would disagree with the "กรกฎาคม 2569" heading it
+ * scrolls to. Taken from `formatToParts` because asking Intl for a year on its own
+ * yields "พ.ศ. 2569" — the era prefix is more than a chip can hold.
  */
+function formatYear(year: number, lang: string): string {
+  const parts = new Intl.DateTimeFormat(locale(lang), {
+    year: "numeric",
+  }).formatToParts(new Date(year, 0, 1));
+  return parts.find((p) => p.type === "year")?.value ?? String(year);
+}
+
+/** The words a section is known by — never a date range for the reader to decode. */
+function useHeading() {
+  const { t, lang } = useI18n();
+  return React.useCallback(
+    (group: ClosedGroup<Ticket>) => {
+      if (group.kind === "this_week") return t("closedLog.thisWeek");
+      if (group.kind === "last_week") return t("closedLog.lastWeek");
+      return new Intl.DateTimeFormat(locale(lang), {
+        month: "long",
+        year: "numeric",
+      }).format(new Date(group.year, group.month, 1));
+    },
+    [t, lang],
+  );
+}
+
+/**
+ * What is left of the filter row, folded into one button. A dropdown beside the
+ * button on a wide screen; a sheet from the bottom edge on a narrow one, where a
+ * menu anchored to a wrapped toolbar would open off-screen.
+ */
+function FiltersButton({
+  priority,
+  onPick,
+}: {
+  priority: Priority | "";
+  onPick: (p: Priority | "") => void;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const active = priority ? 1 : 0;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn(
+          "inline-flex flex-none items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
+          active
+            ? "border-brand bg-accent-soft text-brand-hover"
+            : "border-line bg-panel text-muted hover:bg-app",
+        )}
+      >
+        <SlidersHorizontal size={13} />
+        {active
+          ? t("closedLog.filtersCount", { n: active })
+          : t("closedLog.filters")}
+      </button>
+
+      {open ? (
+        <>
+          {/* A tap anywhere closes it. Dimmed only on small screens, where the
+              panel is a sheet over the list rather than a menu beside a button. */}
+          <div
+            className="fixed inset-0 z-30 bg-ink/20 sm:bg-transparent"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-label={t("closedLog.filters")}
+            className="fixed inset-x-0 bottom-0 z-40 rounded-t-lg border border-line bg-panel p-4 shadow-modal sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-1 sm:w-56 sm:rounded-lg sm:p-1.5 sm:shadow-card"
+          >
+            <div className="mb-2 flex items-center justify-between sm:hidden">
+              <span className="text-[13px] font-semibold text-ink">
+                {t("closedLog.filters")}
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label={t("closedLog.closeFilters")}
+                className="text-muted"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="mb-1 px-1 text-[11px] font-semibold tracking-[0.02em] text-faint">
+              {t("closedLog.col.priority")}
+            </div>
+            {(["", ...PRIORITIES] as (Priority | "")[]).map((value) => {
+              const selected = value === priority;
+              return (
+                <button
+                  key={value || "any"}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    onPick(value);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] sm:py-1.5",
+                    selected
+                      ? "bg-accent-soft font-semibold text-brand-hover"
+                      : "text-ink hover:bg-app",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-2 w-2 flex-none rounded-full",
+                      value ? DOT[value] : "",
+                    )}
+                  />
+                  {value ? t(`priority.${value}`) : t("closedLog.anyPriority")}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function TicketHistoryView() {
   const { t, lang } = useI18n();
-  const [granularity, setGranularity] = React.useState<Granularity>("month");
-  const [anchor, setAnchor] = React.useState<string | undefined>(undefined);
-  const [offset, setOffset] = React.useState(0);
-  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const heading = useHeading();
   const [priority, setPriority] = React.useState<Priority | "">("");
   const [query, setQuery] = React.useState("");
-
-  // Debounced so typing does not fire a request per keystroke.
   const [debouncedQuery, setDebouncedQuery] = React.useState("");
+
   React.useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    const id = setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => clearTimeout(id);
   }, [query]);
 
-  const filter = React.useMemo(
-    () => ({
-      granularity,
-      anchor,
-      limit: PAGE_SIZE,
-      offset,
-      ...(priority ? { priority } : {}),
-      ...(debouncedQuery ? { q: debouncedQuery } : {}),
-    }),
-    [granularity, anchor, offset, priority, debouncedQuery],
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useClosedLog({
+    ...(priority ? { priority } : {}),
+    ...(debouncedQuery ? { q: debouncedQuery } : {}),
+  });
+  // How big the archive is regardless of the filters — the number the search
+  // box quotes, which must not shrink as you type into it.
+  const { data: archiveTotal } = useClosedTotal();
+
+  const tickets = React.useMemo(
+    () => (data?.pages ?? []).flatMap((p) => p.data),
+    [data],
   );
-  const { data, isLoading, isError, refetch } = useClosedHistory(filter);
+  const groups = React.useMemo(() => groupClosedLog(tickets), [tickets]);
+  const years = React.useMemo(() => yearsIn(groups), [groups]);
+  /** The first section of each year — where the year bar jumps to. */
+  const anchorKeys = React.useMemo(() => {
+    const first = new Map<number, string>();
+    for (const g of groups) if (!first.has(g.year)) first.set(g.year, g.key);
+    return first;
+  }, [groups]);
 
-  // Memoised because the day grouping below depends on it: `data?.data ?? []`
-  // would be a fresh array every render and regroup on each one.
-  const tickets = React.useMemo(() => data?.data ?? [], [data]);
-  const total = data?.meta.total ?? 0;
-  const period = data?.meta.period;
-  const from = total === 0 ? 0 : offset + 1;
-  const to = offset + tickets.length;
-  const groups = React.useMemo(() => groupByDay(tickets), [tickets]);
+  /**
+   * Where a section heading must stop so it lands just under the search bar
+   * rather than behind it.
+   *
+   * Measured, not hardcoded: the bar's controls wrap onto a second line at 320px.
+   * Measured against the scrollport's PADDING box, because that is what a sticky
+   * offset resolves against — measuring from the border box instead parks every
+   * heading one page-padding too low, leaving a strip between the bar and the
+   * heading for rows to scroll through.
+   */
+  const barRef = React.useRef<HTMLDivElement | null>(null);
+  const [stickyTop, setStickyTop] = React.useState(0);
+  React.useEffect(() => {
+    const el = barRef.current;
+    const scroller = el?.closest("main");
+    if (!el || !scroller) return;
+    const measure = () => {
+      const padding = parseFloat(getComputedStyle(scroller).paddingTop) || 0;
+      const scrollportTop = scroller.getBoundingClientRect().top + padding;
+      setStickyTop(
+        Math.round(el.getBoundingClientRect().bottom - scrollportTop),
+      );
+    };
+    measure();
+    // Fires on width changes too, which is what catches the padding stepping up
+    // at the `sm` breakpoint.
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-  /** Any period move resets paging — page 3 of July says nothing about June. */
-  const goTo = (nextAnchor: string) => {
-    setAnchor(nextAnchor);
-    setOffset(0);
+  /**
+   * Which year the reader is currently inside, for the jump bar: the last section
+   * whose heading has reached the line the headings pin to.
+   *
+   * Read straight off the DOM in section order rather than through an
+   * IntersectionObserver: an observer is only told about headings whose visibility
+   * *changed*, so scrolling fast enough for one to cross the band between two
+   * callbacks leaves the highlight on the previous year — which is exactly what it
+   * did on a four-year archive where whole years are one row tall.
+   */
+  const [activeYear, setActiveYear] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    const scroller = barRef.current?.closest("main");
+    if (!scroller) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const line = scroller.getBoundingClientRect().top + stickyTop + 8;
+      let current: number | null = null;
+      for (const group of groups) {
+        const el = document.getElementById(`closed-section-${group.key}`);
+        if (el && el.getBoundingClientRect().top <= line) current = group.year;
+      }
+      // At the end of the list, the oldest year is the one being read even though
+      // its heading never reaches the line — a short archive bottoms out first.
+      // Without this, clicking the oldest year in the bar scrolls there and leaves
+      // the bar highlighting a different one.
+      const atBottom =
+        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      if (atBottom) current = groups.at(-1)?.year ?? current;
+      setActiveYear(current ?? groups[0]?.year ?? null);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [groups, stickyTop]);
+
+  // Load the next page when the end comes into view. An archive that fits in one
+  // page never triggers this — the list simply arrives whole.
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const jumpTo = (year: number) => {
+    const key = anchorKeys.get(year);
+    if (!key) return;
+    document
+      .getElementById(`closed-section-${key}`)
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
 
-  /** Narrowing changes what page 1 even means, so paging restarts with it. */
-  const narrow = <T,>(set: (v: T) => void) => (value: T) => {
-    set(value);
-    setOffset(0);
+  const filtering = debouncedQuery.length > 0 || priority !== "";
+  const clearAll = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setPriority("");
   };
+  const searchLabel = t("closedLog.searchAll", { n: archiveTotal ?? 0 });
 
   return (
     <>
-      {/* One line. The rest of what this banner used to say — how to use the
-          period controls — the controls say themselves, and the visibility rule
-          is a footnote, so it moved into the icon's tooltip. */}
-      <p className="mb-4 flex items-center gap-2 text-[12.5px] text-[#475569]">
+      {/* Search first, and wide: finding one ticket again is what this page is
+          for. What used to sit above it — two overlapping period navigators and a
+          granularity switch — was in the way of that, and made choosing a window
+          the price of admission. */}
+      <div
+        ref={barRef}
+        // Spans the page's horizontal padding so nothing shows down either side,
+        // and owns the top padding itself — see this page's `<main>` for why that
+        // padding cannot live there.
+        className="sticky top-0 z-20 -mx-4 bg-app px-4 pb-3 pt-4 sm:-mx-6 sm:px-6 sm:pt-6"
+      >
+        <label className="flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[13px] focus-within:border-brand">
+          <Search size={14} className="flex-none text-faint" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={searchLabel}
+            aria-label={searchLabel}
+            className="w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              // Named apart from the empty state's "Clear search" button: two
+              // controls with one name is ambiguous read aloud, and this one only
+              // empties the box while that one also drops the filters.
+              aria-label={t("closedLog.clearSearchField")}
+              className="flex-none text-faint hover:text-muted"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </label>
+
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <FiltersButton priority={priority} onPick={setPriority} />
+          {years.length > 1 ? (
+            <div
+              className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+              role="group"
+              aria-label={t("closedLog.jumpToYear")}
+            >
+              {years.map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => jumpTo(y)}
+                  aria-current={activeYear === y}
+                  className={cn(
+                    "flex-none rounded-md px-2 py-1 text-[12px] font-semibold",
+                    activeYear === y
+                      ? "bg-accent-soft text-brand-hover"
+                      : "text-faint hover:bg-panel hover:text-muted",
+                  )}
+                >
+                  {formatYear(y, lang)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <p className="mb-3 flex items-center gap-2 text-[12px] text-muted">
         {t("closedLog.explainer")}
         <span
           title={t("closedLog.scopeNote")}
@@ -344,177 +444,98 @@ export function TicketHistoryView() {
         </span>
       </p>
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Granularity */}
-          <div className="inline-flex rounded-md border border-line bg-white p-0.5">
-            {GRANULARITIES.map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => {
-                  setGranularity(g);
-                  setAnchor(undefined);
-                  setOffset(0);
-                  setPickerOpen(false);
-                }}
-                className={cn(
-                  "rounded-[5px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
-                  granularity === g
-                    ? "bg-[#e4f2ea] text-brand-hover"
-                    : "text-[#475569] hover:bg-app",
-                )}
-              >
-                {t(`closedLog.granularity.${g}`)}
-              </button>
-            ))}
-          </div>
-
-          {/* Search: subject or requester — the two things you remember about a
-              ticket you are trying to find again. */}
-          <label className="flex w-64 items-center gap-2 rounded-md border border-line bg-white px-2.5 py-[7px] text-[12.5px] focus-within:border-brand">
-            <Search size={13} className="flex-none text-faint" />
-            <input
-              value={query}
-              onChange={(e) => narrow(setQuery)(e.target.value)}
-              placeholder={t("closedLog.searchPlaceholder")}
-              aria-label={t("closedLog.searchPlaceholder")}
-              className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
-            />
-          </label>
-
-          {/* Priority: a filter, not a column. */}
-          <select
-            value={priority}
-            onChange={(e) => narrow(setPriority)(e.target.value as Priority | "")}
-            aria-label={t("closedLog.col.priority")}
-            className="rounded-md border border-line bg-white px-2.5 py-[7px] text-[12.5px] font-medium text-[#475569]"
-          >
-            <option value="">{t("closedLog.anyPriority")}</option>
-            {(Object.keys(PRIORITY_META) as Priority[]).map((p) => (
-              <option key={p} value={p}>
-                {t(`priority.${p}`)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Period navigator */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => period && goTo(period.prevAnchor)}
-            disabled={!period}
-            aria-label={t("closedLog.olderPeriod")}
-            className="flex items-center rounded-md border border-line bg-white px-2 py-1.5 text-[#475569] hover:bg-app disabled:opacity-40"
-          >
-            <ChevronLeft size={14} />
-          </button>
-          <PeriodPickerButton
-            label={period ? periodLabel(period, lang) : "—"}
-            open={pickerOpen}
-            disabled={!period}
-            onToggle={() => setPickerOpen((o) => !o)}
+      {/* No `overflow-hidden` here, deliberately: it would make this card the
+          nearest scroll container, and the sticky section headings would then
+          stick to the card — pinned inside it, covering the first rows — instead
+          of to the page. The headings are the same colour as the card, so nothing
+          needs clipping anyway. */}
+      <div className="rounded-lg border border-line bg-panel">
+        {isLoading ? <LoadingRow label={t("closedLog.loading")} /> : null}
+        {isError ? (
+          <ErrorState
+            message={t("closedLog.loadError")}
+            onRetry={() => refetch()}
           />
-          <button
-            type="button"
-            onClick={() => period && goTo(period.nextAnchor)}
-            // No paging into the future: the current period is the newest one
-            // that can hold anything.
-            disabled={!period || period.isCurrent}
-            aria-label={t("closedLog.newerPeriod")}
-            className="flex items-center rounded-md border border-line bg-white px-2 py-1.5 text-[#475569] hover:bg-app disabled:opacity-40"
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
+        ) : null}
 
-      {pickerOpen ? (
-        <PeriodPanel
-          granularity={granularity}
-          current={period}
-          onPick={goTo}
-          onClose={() => setPickerOpen(false)}
-        />
-      ) : null}
+        {!isLoading && !isError && tickets.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            {debouncedQuery ? (
+              <>
+                <p className="text-[13px] text-muted">
+                  {t("closedLog.noMatch", { q: debouncedQuery })}
+                </p>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-app"
+                >
+                  {t("closedLog.clearSearch")}
+                </button>
+              </>
+            ) : priority ? (
+              <>
+                <p className="text-[13px] text-muted">
+                  {t("closedLog.noMatchFilter")}
+                </p>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-app"
+                >
+                  {t("closedLog.clearFilters")}
+                </button>
+              </>
+            ) : (
+              // Nothing has ever been closed: a statement, not a call to action.
+              // There is nothing the reader could do from here anyway.
+              <p className="text-[13px] text-muted">
+                {t("closedLog.emptyArchive")}
+              </p>
+            )}
+          </div>
+        ) : null}
 
-      <div className="mb-2 text-[12.5px] text-[#475569]">
-        {t("closedLog.closedCount", { count: total })}
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="overflow-x-auto">
-          <div className="min-w-[640px]">
+        {groups.map((group) => (
+          <div key={group.key}>
+            {group.gap ? <GapMarker gap={group.gap} /> : null}
             <div
-              className={cn(
-                "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
-                COLS,
-              )}
+              id={`closed-section-${group.key}`}
+              style={{ top: stickyTop, scrollMarginTop: stickyTop + 8 }}
+              className="sticky z-10 flex items-center justify-between border-y border-line bg-panel px-3 py-2 sm:px-4"
             >
-              <span>{t("closedLog.col.id")}</span>
-              <span>{t("closedLog.col.subject")}</span>
-              <span>{t("closedLog.col.assignee")}</span>
-              <span>{t("closedLog.col.duration")}</span>
+              <span className="text-[12px] font-semibold text-ink">
+                {heading(group)}
+              </span>
+              <span
+                className="text-[11.5px] font-medium text-faint"
+                aria-label={t("closedLog.groupCount", { n: group.items.length })}
+              >
+                {group.items.length}
+              </span>
             </div>
-
-            {isLoading ? <LoadingRow label={t("closedLog.loading")} /> : null}
-            {isError ? (
-              <ErrorState
-                message={t("closedLog.loadError")}
-                onRetry={() => refetch()}
-              />
-            ) : null}
-            {!isLoading && !isError && tickets.length === 0 ? (
-              <EmptyState message={t("closedLog.empty")} />
-            ) : null}
-
-            {groups.map((group, gi) => (
-              <div key={group.key}>
-                {/* The closing day, named once. This is what replaced the date
-                    column: the same information, one line per day instead of one
-                    cell per row. */}
-                <div className="border-b border-[#f1f4f8] bg-[#fcfdfd] px-4 py-1.5 text-[11.5px] font-semibold text-[#475569]">
-                  {formatDayHeading(group.key, lang)}
-                </div>
-                {group.tickets.map((ticket, i) => (
-                  <Row
-                    key={ticket.id}
-                    ticket={ticket}
-                    last={
-                      gi === groups.length - 1 && i === group.tickets.length - 1
-                    }
-                  />
-                ))}
-              </div>
+            {group.items.map((ticket) => (
+              <Row key={ticket.id} ticket={ticket} lang={lang} />
             ))}
           </div>
-        </div>
+        ))}
+
+        <div ref={sentinelRef} />
+        {isFetchingNextPage ? (
+          <LoadingRow label={t("closedLog.loadingMore")} />
+        ) : null}
       </div>
 
-      {total > PAGE_SIZE ? (
-        <div className="mt-3 flex items-center justify-between text-[12.5px] text-[#475569]">
-          <span>{t("closedLog.range", { from, to, total })}</span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-              disabled={offset === 0}
-              className="flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-semibold text-[#475569] hover:bg-app disabled:opacity-40"
-            >
-              <ChevronLeft size={13} />
-              {t("closedLog.prevPage")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setOffset((o) => o + PAGE_SIZE)}
-              disabled={to >= total}
-              className="flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-semibold text-[#475569] hover:bg-app disabled:opacity-40"
-            >
-              {t("closedLog.nextPage")}
-              <ChevronRight size={13} />
-            </button>
-          </div>
+      {filtering && tickets.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
+          {t("closedLog.matches", { n: data?.pages[0]?.meta.total ?? 0 })}
+          <button
+            type="button"
+            onClick={clearAll}
+            className="font-semibold text-brand hover:underline"
+          >
+            {t("closedLog.clearFilters")}
+          </button>
         </div>
       ) : null}
     </>
