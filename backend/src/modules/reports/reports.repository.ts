@@ -18,9 +18,16 @@ function median(nums: number[]): number {
 
 export type ReportsSummary = {
   kpis: {
+    /** Hours from the ticket being picked up to it reaching `closed`. */
     avgResolutionHours: number;
+    /** Minutes from the ticket being raised to the first status change. */
     medianFirstResponseMin: number;
     slaCompliancePct: number;
+    /**
+     * How many tickets the average above is drawn from — those that reached
+     * `closed` AND were picked up at some point. A ticket closed without ever
+     * changing status has no clock to measure.
+     */
     resolvedCount: number;
     judgedCount: number;
   };
@@ -53,15 +60,19 @@ export const reportsRepository = {
       prisma.ticket.findMany({
         where: { AND: [scope, { status: { in: ["resolved", "closed"] } }] },
         select: {
+          id: true,
           priority: true,
           createdAt: true,
           dueAt: true,
           resolvedAt: true,
+          closedAt: true,
           category: { select: { name: true } },
           assignee: { select: { name: true } },
         },
       }),
-      // First status transition per ticket = a proxy for "first response".
+      // First status transition per ticket = the moment someone picked it up. It
+      // is both the proxy for "first response" and the start of the handling
+      // clock below.
       prisma.ticketStatusHistory.findMany({
         where: { fromStatus: { not: null }, ticket: scope },
         orderBy: { createdAt: "asc" },
@@ -73,9 +84,38 @@ export const reportsRepository = {
       }),
     ]);
 
+    /** When each ticket was first picked up, by ticket id. */
+    const openedAt = new Map<number, Date>();
+    for (const h of firstTransitions) {
+      if (!openedAt.has(h.ticketId)) openedAt.set(h.ticketId, h.createdAt);
+    }
+
+    /**
+     * Resolution time runs from the moment the ticket was opened to the moment it
+     * reached `closed` — not from when it was raised, and not to when it was
+     * merely marked resolved.
+     *
+     * Measuring from creation charged the team for the queue: a ticket raised at
+     * 2am and picked up at 9 counted seven hours nobody could have worked. And
+     * `resolved` is a claim, `closed` is the agreement — the requester confirming,
+     * or the 72h auto-close standing in for them.
+     *
+     * The consequence, worth knowing when reading the number: a ticket resolved
+     * correctly but left for the auto-close carries up to 72 hours of waiting in
+     * this figure. That is real elapsed time to a requester, but it is not effort.
+     */
+    const handlingHours = (t: {
+      id: number;
+      closedAt: Date | null;
+    }): number | null => {
+      const from = openedAt.get(t.id);
+      if (!from || !t.closedAt) return null;
+      return (t.closedAt.getTime() - from.getTime()) / HOUR;
+    };
+
     const resHours = terminal
-      .filter((t) => t.resolvedAt)
-      .map((t) => (t.resolvedAt!.getTime() - t.createdAt.getTime()) / HOUR);
+      .map(handlingHours)
+      .filter((h): h is number => h != null);
     const avgResolutionHours = resHours.length
       ? round1(resHours.reduce((a, b) => a + b, 0) / resHours.length)
       : 0;
@@ -118,11 +158,13 @@ export const reportsRepository = {
       }))
       .sort((a, b) => b.judged - a.judged);
 
-    // Resolution throughput per assignee (resolved tickets only), busiest first.
+    // Throughput per assignee, busiest first. Same clock as the headline figure:
+    // an agent's average and the team's have to be the same measurement, or the
+    // two tables on one page answer different questions.
     const agentMap = new Map<string, number[]>();
     for (const t of terminal) {
-      if (!t.resolvedAt || !t.assignee) continue;
-      const hrs = (t.resolvedAt.getTime() - t.createdAt.getTime()) / HOUR;
+      const hrs = handlingHours(t);
+      if (hrs == null || !t.assignee) continue;
       const arr = agentMap.get(t.assignee.name) ?? [];
       arr.push(hrs);
       agentMap.set(t.assignee.name, arr);

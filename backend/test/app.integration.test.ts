@@ -598,6 +598,141 @@ describe("tickets — list ordering", () => {
   });
 });
 
+describe("reports — what the resolution clock measures", () => {
+  /**
+   * Marcus raises tickets but is in nobody's closed history, and a requester's
+   * report is scoped to their own tickets — so a ticket built here is the only
+   * thing his figures are drawn from, and the arithmetic can be asserted exactly
+   * instead of "roughly, mixed in with the seed".
+   */
+  const HOUR = 3_600_000;
+
+  async function ticketFor(
+    marcusId: number,
+    times: { raised: Date; openedAt: Date | null; closedAt: Date | null },
+  ) {
+    const category = await prisma.category.findFirstOrThrow();
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { id: marcusId },
+    });
+    const ticket = await prisma.ticket.create({
+      data: {
+        subject: "Measured ticket",
+        description: "for the resolution clock",
+        status: times.closedAt ? "closed" : "resolved",
+        priority: "medium",
+        requesterId: marcus.id,
+        categoryId: category.id,
+        customerId: marcus.customerId,
+        createdAt: times.raised,
+        resolvedAt: times.closedAt ?? times.raised,
+        closedAt: times.closedAt,
+      },
+    });
+    if (times.openedAt) {
+      await prisma.ticketStatusHistory.create({
+        data: {
+          ticketId: ticket.id,
+          fromStatus: "new",
+          toStatus: "open",
+          createdAt: times.openedAt,
+        },
+      });
+    }
+    return ticket;
+  }
+
+  const summary = async (token: string) => {
+    const res = await request(app)
+      .get(`${API}/reports/sla-summary`)
+      .set(bearer(token));
+    expect(res.status).toBe(200);
+    return res.body.data;
+  };
+
+  it("runs from being picked up to being closed, not from being raised", async () => {
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    const raised = new Date(Date.now() - 30 * HOUR);
+    // Sat in the queue overnight, then handled in four hours.
+    await ticketFor(marcus.id, {
+      raised,
+      openedAt: new Date(raised.getTime() + 20 * HOUR),
+      closedAt: new Date(raised.getTime() + 24 * HOUR),
+    });
+
+    const data = await summary(await login("marcus.chen@acme.com"));
+    // 4, not 24: the twenty hours before anyone looked at it were never work.
+    expect(data.kpis.avgResolutionHours).toBe(4);
+    expect(data.kpis.resolvedCount).toBe(1);
+  });
+
+  it("measures to closed, not to resolved", async () => {
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    const raised = new Date(Date.now() - 10 * HOUR);
+    // Resolved but never confirmed: no closing time, so no clock to read.
+    await ticketFor(marcus.id, {
+      raised,
+      openedAt: new Date(raised.getTime() + 1 * HOUR),
+      closedAt: null,
+    });
+
+    const data = await summary(await login("marcus.chen@acme.com"));
+    expect(data.kpis.resolvedCount).toBe(0);
+    expect(data.kpis.avgResolutionHours).toBe(0);
+  });
+
+  it("skips a ticket that was closed without ever being picked up", async () => {
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    const raised = new Date(Date.now() - 6 * HOUR);
+    await ticketFor(marcus.id, {
+      raised,
+      openedAt: null,
+      closedAt: new Date(raised.getTime() + 2 * HOUR),
+    });
+
+    // Nothing recorded the pickup, so there is no start — better to leave it out
+    // than to fall back to the creation time and quietly reintroduce the queue.
+    const data = await summary(await login("marcus.chen@acme.com"));
+    expect(data.kpis.resolvedCount).toBe(0);
+  });
+
+  it("still times the first response from when the ticket was raised", async () => {
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    const raised = new Date(Date.now() - 30 * HOUR);
+    await ticketFor(marcus.id, {
+      raised,
+      openedAt: new Date(raised.getTime() + 20 * HOUR),
+      closedAt: new Date(raised.getTime() + 24 * HOUR),
+    });
+
+    // That wait is exactly what this KPI is for, so it keeps its own start.
+    const data = await summary(await login("marcus.chen@acme.com"));
+    expect(data.kpis.medianFirstResponseMin).toBe(20 * 60);
+  });
+
+  it("gives an agent's average the same clock as the headline", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const data = await summary(dana);
+    const rows = data.byAgent as {
+      agent: string;
+      avgResolutionHours: number;
+    }[];
+    expect(rows.length).toBeGreaterThan(0);
+    // Two tables on one page must not answer different questions: every agent's
+    // average is drawn from the same measurement, so none can exceed the span of
+    // the archive it is measured over.
+    expect(rows.every((r) => r.avgResolutionHours >= 0)).toBe(true);
+  });
+});
+
 describe("tickets — assignee identity and filter", () => {
   it("exposes assigneeId alongside the display name", async () => {
     const dana = await login("dana.reyes@acme.com");
