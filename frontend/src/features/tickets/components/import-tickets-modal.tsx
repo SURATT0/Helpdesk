@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
@@ -511,7 +512,10 @@ export function ImportTicketsModal({
 
 function cellClass(hasError: boolean): string {
   return cn(
-    "w-full min-w-[120px] rounded border bg-white px-2 py-1.5 text-[12.5px] text-ink focus:outline-none focus:ring-[2px] focus:ring-brand/20",
+    "w-full min-w-[120px] rounded border bg-white px-2 py-1.5 text-ink focus:outline-none focus:ring-[2px] focus:ring-brand/20",
+    // Kept in step with the other fields even though this grid is a desk-only
+    // surface: a field that zooms is worse than one whose text crowds its cell.
+    FIELD_TEXT_12,
     hasError ? "border-[#fca5a5]" : "border-[#e2e8f0] focus:border-brand",
   );
 }

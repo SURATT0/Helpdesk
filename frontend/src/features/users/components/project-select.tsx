@@ -1,5 +1,6 @@
 "use client";
 
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
 import type { Project } from "@/features/projects/schemas";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,9 @@ export function ProjectSelect({
         onChange(e.target.value === "" ? null : Number(e.target.value))
       }
       className={cn(
-        "w-full rounded-md border border-[#e2e8f0] bg-white px-2.5 py-1.5 text-[12.5px] text-ink",
+        "w-full rounded-md border border-[#e2e8f0] bg-white px-2.5 py-1.5 text-ink",
+        // A <select> zooms iOS just like a text field does.
+        FIELD_TEXT_12,
         "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
         disabled && "cursor-not-allowed bg-[#fafbfc] text-faint",
       )}

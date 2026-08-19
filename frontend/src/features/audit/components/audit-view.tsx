@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight, Info, ShieldAlert } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
@@ -180,7 +181,10 @@ export function AuditView() {
             setAction(e.target.value);
             setOffset(0); // a new filter invalidates the current page window
           }}
-          className="rounded-md border border-line bg-white px-2.5 py-1.5 text-[12.5px] text-ink"
+          className={cn(
+            "rounded-md border border-line bg-white px-2.5 py-1.5 text-ink",
+            FIELD_TEXT_12,
+          )}
         >
           <option value="">{t("audit.allActions")}</option>
           {families.map((f) => (

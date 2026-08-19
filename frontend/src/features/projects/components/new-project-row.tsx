@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import { Plus, X } from "lucide-react";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
+import { cn } from "@/lib/utils";
 import { useCreateProject } from "../queries";
 
 /**
@@ -52,7 +54,13 @@ export function NewProjectRow() {
         onChange={(e) => setName(e.target.value)}
         placeholder={t("projects.namePlaceholder")}
         maxLength={80}
-        className="w-56 rounded-md border border-[#e2e8f0] bg-white px-2.5 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15"
+        // Fluid on a phone — a fixed 224px field plus the two buttons beside it
+        // overflowed the row.
+        className={cn(
+          "w-full min-w-0 rounded-md border border-[#e2e8f0] bg-white px-2.5 py-1.5 text-ink sm:w-56",
+          "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
+          FIELD_TEXT_12,
+        )}
       />
       <button
         type="submit"

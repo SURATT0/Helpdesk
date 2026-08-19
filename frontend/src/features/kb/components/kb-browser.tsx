@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ChevronRight, Clock, Search } from "lucide-react";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import { useKbArticles } from "../queries";
@@ -44,13 +45,16 @@ export function KbBrowser() {
 
   return (
     <div className="flex flex-col gap-4 p-6">
-      <div className="flex w-full max-w-[420px] items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-[13px] focus-within:border-brand">
+      <div className="flex w-full min-w-0 max-w-[420px] items-center gap-2 rounded-md border border-line bg-white px-3 py-2 focus-within:border-brand">
         <Search size={14} strokeWidth={2} className="flex-none text-faint" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("kb.search")}
-          className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+          className={cn(
+            "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+            FIELD_TEXT_13,
+          )}
         />
       </div>
 

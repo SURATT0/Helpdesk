@@ -20,7 +20,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (status !== "authenticated") {
     return (
-      <div className="grid h-screen place-items-center bg-app">
+      <div className="grid h-dvh place-items-center bg-app">
         <LoadingRow label="Loading…" />
       </div>
     );

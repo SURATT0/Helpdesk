@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileText, Upload, X } from "lucide-react";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -233,7 +233,11 @@ export function CreateTicketModal({
                 id="ticket-category"
                 value={categoryId ?? ""}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full rounded-md border border-[#e2e8f0] bg-white px-3.5 py-2.5 text-[13px] text-ink focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15"
+                className={cn(
+                  "w-full rounded-md border border-[#e2e8f0] bg-white px-3.5 py-2.5 text-ink",
+                  "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
+                  FIELD_TEXT_13,
+                )}
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>

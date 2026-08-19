@@ -3,7 +3,9 @@
 import * as React from "react";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useUpdateProblem } from "../queries";
 import { KbArticlePicker } from "./kb-article-picker";
@@ -102,7 +104,10 @@ export function EditProblemModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
-              className="rounded-md border border-line bg-white px-3 py-[7px] text-[13px] text-ink focus:border-brand focus:outline-none"
+              className={cn(
+                "rounded-md border border-line bg-white px-3 py-[7px] text-ink focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
           </div>
 
@@ -114,7 +119,10 @@ export function EditProblemModal({
               id="ep-status"
               value={status}
               onChange={(e) => setStatus(e.target.value as ProblemStatus)}
-              className="rounded-md border border-line bg-white px-2.5 py-[7px] text-[13px] text-ink focus:border-brand focus:outline-none"
+              className={cn(
+                "rounded-md border border-line bg-white px-2.5 py-[7px] text-ink focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             >
               {PROBLEM_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -138,7 +146,10 @@ export function EditProblemModal({
               rows={4}
               maxLength={5000}
               placeholder={t("problem.workaroundPlaceholder")}
-              className="resize-none rounded-md border border-line bg-white px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+              className={cn(
+                "resize-none rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-faint focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
             <span className="text-[11.5px] text-faint">
               {t("problem.workaroundHelp")}
@@ -171,7 +182,10 @@ export function EditProblemModal({
               rows={3}
               maxLength={5000}
               placeholder={t("problem.rootCausePlaceholder")}
-              className="resize-none rounded-md border border-line bg-white px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+              className={cn(
+                "resize-none rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-faint focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
           </div>
         </div>

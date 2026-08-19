@@ -4,6 +4,7 @@ import * as React from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
+import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
@@ -151,13 +152,16 @@ export function FilterBar() {
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-6 py-4">
-      <div className="flex w-[260px] items-center gap-2 rounded-md border border-line bg-white px-3 py-[7px] text-[13px] focus-within:border-brand">
+      <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-line bg-white px-3 py-[7px] focus-within:border-brand sm:w-[260px]">
         <Search size={13} strokeWidth={2} className="flex-none text-faint" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("filter.search")}
-          className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+          className={cn(
+            "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+            FIELD_TEXT_13,
+          )}
         />
       </div>
 

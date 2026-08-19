@@ -4,7 +4,9 @@ import * as React from "react";
 import { AlertTriangle, ArrowRight, Loader2, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { toneForName } from "@/features/tickets/data";
 import { useReassignTickets } from "@/features/tickets/queries";
 import type { ReassignResult } from "@/features/tickets/schemas";
@@ -133,7 +135,10 @@ export function HandoverQueueModal({
                     const v = e.target.value;
                     setToUserId(v === "" ? "" : v === "none" ? "none" : Number(v));
                   }}
-                  className="w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-[12.5px] text-ink"
+                  className={cn(
+                    "w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-ink",
+                    FIELD_TEXT_12,
+                  )}
                 >
                   <option value="">{t("handover.choose")}</option>
                   <option value="none">{t("handover.unassign")}</option>

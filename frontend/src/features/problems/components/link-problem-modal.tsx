@@ -3,7 +3,9 @@
 import * as React from "react";
 import { Link2, Loader2, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useLinkOrConvertProblem, useProblems } from "../queries";
 import { ProblemStatusBadge } from "./problem-status-badge";
@@ -109,13 +111,16 @@ export function LinkProblemModal({
 
         {mode === "link" ? (
           <>
-            <div className="mb-2 flex items-center gap-2 rounded-md border border-line bg-white px-3 py-[7px] text-[13px] focus-within:border-brand">
+            <div className="mb-2 flex min-w-0 items-center gap-2 rounded-md border border-line bg-white px-3 py-[7px] focus-within:border-brand">
               <Search size={13} className="flex-none text-faint" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("problem.searchPlaceholder")}
-                className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+                className={cn(
+                  "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+                  FIELD_TEXT_13,
+                )}
               />
             </div>
 
@@ -173,7 +178,10 @@ export function LinkProblemModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
-              className="rounded-md border border-line bg-white px-3 py-[7px] text-[13px] text-ink focus:border-brand focus:outline-none"
+              className={cn(
+                "rounded-md border border-line bg-white px-3 py-[7px] text-ink focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
             <label className="text-[12px] font-medium text-faint" htmlFor="p-desc">
               {t("problem.descLabel")}
@@ -185,7 +193,10 @@ export function LinkProblemModal({
               rows={4}
               maxLength={5000}
               placeholder={t("problem.descPlaceholder")}
-              className="resize-none rounded-md border border-line bg-white px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+              className={cn(
+                "resize-none rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-faint focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
           </div>
         )}
