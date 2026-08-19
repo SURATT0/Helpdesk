@@ -12,6 +12,7 @@ import {
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { TableScroll } from "@/components/ui/table-scroll";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
 import { matchesFilters, useSearch } from "../search-context";
@@ -217,8 +218,7 @@ export function TicketTable() {
     <div className="mx-4 mb-2 overflow-hidden rounded-lg border border-line bg-panel sm:mx-6">
       {/* Columns use fixed widths, so let them scroll horizontally on narrow
           screens instead of squishing. */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[960px]">
+      <TableScroll minWidth={960}>
       {/* header */}
       <div
         className={cn(
@@ -361,8 +361,7 @@ export function TicketTable() {
           </div>
         );
       })}
-        </div>
-      </div>
+      </TableScroll>
 
       {/* bulk bar */}
       {selected.size > 0 && rows.length > 0 ? (

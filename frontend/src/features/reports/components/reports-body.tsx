@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Skeleton, ErrorState } from "@/components/ui/states";
 import { Avatar } from "@/components/ui/avatar";
+import { TableScroll } from "@/components/ui/table-scroll";
 import { PRIORITY_META } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
@@ -13,6 +14,13 @@ import { useReportsSummary } from "../queries";
 
 const ROW = "grid-cols-[130px_1fr_70px_90px]";
 const AGENT_ROW = "grid-cols-[1fr_120px_120px]";
+
+// 290px of fixed columns + 40px of row padding. The `1fr` column holds the
+// compliance bar next to a 44px percentage, so it needs real width or the bar
+// reads as empty; these floors give it ~190px and ~160px respectively, and the
+// columns scroll below that rather than compressing into it.
+const ROW_MIN_WIDTH = 520;
+const AGENT_ROW_MIN_WIDTH = 440;
 
 // Chart geometry (viewBox units). The series is *scaled* to this box — the old
 // code plotted raw counts as y-pixels, so the line was stuck at the top.
@@ -188,7 +196,9 @@ export function ReportsBody() {
       </Card>
 
       {/* SLA by priority */}
-      <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+      <div className="overflow-hidden rounded-lg border border-line bg-panel">
+        {/* Outside the scroller: the section's own title should not slide away
+            when the columns are scrolled. */}
         <div className="border-b border-[#eef1f5] px-5 py-3.5">
           <div className="text-[13.5px] font-semibold text-ink">
             {t("report.byPriority.title")}
@@ -197,6 +207,7 @@ export function ReportsBody() {
             {t("report.byPriority.sub")}
           </div>
         </div>
+        <TableScroll minWidth={ROW_MIN_WIDTH}>
         <div
           className={`grid ${ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
         >
@@ -254,11 +265,12 @@ export function ReportsBody() {
             {totalBreached}
           </span>
         </div>
+        </TableScroll>
       </div>
 
       {/* SLA by category */}
       {data.byCategory.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+        <div className="overflow-hidden rounded-lg border border-line bg-panel">
           <div className="border-b border-[#eef1f5] px-5 py-3.5">
             <div className="text-[13.5px] font-semibold text-ink">
               {t("report.byCategory.title")}
@@ -267,6 +279,7 @@ export function ReportsBody() {
               {t("report.byCategory.sub")}
             </div>
           </div>
+          <TableScroll minWidth={ROW_MIN_WIDTH}>
           <div
             className={`grid ${ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
           >
@@ -303,11 +316,12 @@ export function ReportsBody() {
               </span>
             </div>
           ))}
+          </TableScroll>
         </div>
       ) : null}
 
       {/* Throughput by agent */}
-      <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+      <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="border-b border-[#eef1f5] px-5 py-3.5">
           <div className="text-[13.5px] font-semibold text-ink">
             {t("report.byAgent.title")}
@@ -317,11 +331,13 @@ export function ReportsBody() {
           </div>
         </div>
         {data.byAgent.length === 0 ? (
+          // No columns to hold apart, so no scroller — a centred sentence
+          // inside a width floor would be pushed off to the left.
           <div className="px-5 py-6 text-center text-[12.5px] text-faint">
             {t("report.sectionEmpty")}
           </div>
         ) : (
-          <>
+          <TableScroll minWidth={AGENT_ROW_MIN_WIDTH}>
             <div
               className={`grid ${AGENT_ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
             >
@@ -353,7 +369,7 @@ export function ReportsBody() {
                 </span>
               </div>
             ))}
-          </>
+          </TableScroll>
         )}
       </div>
     </div>

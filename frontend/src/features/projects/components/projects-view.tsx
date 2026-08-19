@@ -3,6 +3,7 @@
 import { Info, ShieldAlert } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { TableScroll } from "@/components/ui/table-scroll";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
@@ -108,8 +109,7 @@ export function ProjectsView() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <div className="overflow-x-auto">
-            <div className="min-w-[760px]">
+          <TableScroll minWidth={760}>
               <div
                 className={cn(
                   "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
@@ -185,8 +185,7 @@ export function ProjectsView() {
                   </div>
                 );
               })}
-            </div>
-          </div>
+          </TableScroll>
         </div>
 
         {update.isError ? (
