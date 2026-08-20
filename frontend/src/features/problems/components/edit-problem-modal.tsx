@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -68,13 +69,13 @@ export function EditProblemModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("problem.editTitle")}
+    <Dialog
+      open
+      onClose={onClose}
+      label={t("problem.editTitle")}
+      panelClassName="max-w-[540px]"
     >
-      <div className="flex max-h-[85vh] w-full max-w-[540px] flex-col overflow-y-auto rounded-xl border border-line bg-panel p-5 shadow-modal">
+      <div className="flex max-h-[85dvh] flex-col overflow-y-auto rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[14.5px] font-semibold text-ink">
@@ -224,6 +225,6 @@ export function EditProblemModal({
           </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

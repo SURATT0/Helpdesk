@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { createPortal } from "react-dom";
+import { Dialog } from "@/components/ui/dialog";
 import {
   Check,
   Download,
@@ -273,30 +273,21 @@ function Lightbox({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
-  if (typeof document === "undefined") return null;
-  // Portal to <body> so the overlay is centered on the whole viewport, escaping
-  // the properties rail's scroll container (a fixed element can otherwise be
-  // trapped by a transformed/clipping ancestor).
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("att.previewFile", { name: opened.filename })}
-      className="fixed inset-0 z-[60] grid place-items-center p-6"
-      style={{ background: "rgba(15,23,42,.8)" }}
-      onClick={onClose}
+  // `z-[60]`: this can open on top of another dialog (a ticket's attachment
+  // opened from inside a modal), so it has to outrank the default z-50.
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      label={t("att.previewFile", { name: opened.filename })}
+      backdrop="bg-ink/80"
+      z="z-[60]"
+      padding="sm:p-6"
+      width="w-auto"
     >
       {/* Centered modal card */}
-      <div
-        className="flex max-h-[88vh] max-w-[880px] flex-col overflow-hidden rounded-xl bg-panel shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="flex max-h-[88dvh] max-w-[880px] flex-col overflow-hidden rounded-xl bg-panel shadow-modal">
         <div className="flex items-center gap-3 border-b border-line px-4 py-3">
           <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
             {opened.filename}
@@ -327,8 +318,7 @@ function Lightbox({
           />
         </div>
       </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }
 

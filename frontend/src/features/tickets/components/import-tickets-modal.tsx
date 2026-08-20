@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -74,9 +75,6 @@ export function ImportTicketsModal({
     setBanner(null);
     setCreatedTotal(0);
     importTickets.reset();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -205,18 +203,16 @@ export function ImportTicketsModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-start justify-center overflow-y-auto p-[44px]"
-      style={{ background: "rgba(15,23,42,.45)" }}
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="import-tickets-title"
+      align="start"
+      backdrop="bg-ink/45"
+      padding="sm:p-[44px]"
+      panelClassName="max-w-[920px]"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-tickets-title"
-        className="w-full max-w-[920px] overflow-hidden rounded-[14px] bg-white shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
         <div className="flex items-center justify-between border-b border-[#eef1f5] px-6 py-[18px]">
           <div>
             <div
@@ -506,7 +502,7 @@ export function ImportTicketsModal({
           </div>
         ) : null}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
