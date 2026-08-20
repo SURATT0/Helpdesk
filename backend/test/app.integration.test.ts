@@ -2002,6 +2002,96 @@ describe("tickets — CSV import (importMany)", () => {
       .send({ rows: [] });
     expect(res.status).toBe(400);
   });
+
+  /**
+   * The tenant boundary on the write path. `create` files a ticket under the
+   * *requester's* customer, so a row naming an address outside the importer's own
+   * customer used to write a ticket into someone else's tenant — counted as
+   * created, then invisible in the importer's own list, because it sits behind a
+   * scope they do not reach. Globex's users carry @acme.com addresses in the
+   * seed, so nothing about the address warns you either.
+   */
+  const GLOBEX_REQUESTER = "priya.shah@acme.com";
+
+  const globexTicketCount = () =>
+    prisma.ticket.count({ where: { customer: { name: "Globex Inc" } } });
+
+  it("refuses a requester in another customer, and files nothing there", async () => {
+    const before = await globexTicketCount();
+    const dana = await login("dana.reyes@acme.com"); // admin, Acme Corp
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row({ requesterEmail: GLOBEX_REQUESTER })] });
+
+    expect(res.status).toBe(200); // nothing created → 200, not 201
+    expect(res.body.data.created).toBe(0);
+    expect(res.body.data.results[0]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+    });
+    expect(await globexTicketCount()).toBe(before);
+  });
+
+  it("says the same thing for a foreign requester as for one who does not exist", async () => {
+    // Otherwise the import doubles as a directory probe: feed it addresses and
+    // the wording tells you which ones exist inside other customers.
+    const dana = await login("dana.reyes@acme.com");
+    const send = (requesterEmail: string) =>
+      request(app)
+        .post(`${API}/tickets/import`)
+        .set(bearer(dana))
+        .send({ rows: [row({ requesterEmail })] });
+
+    // Identical wording, differing only by the address that was asked about —
+    // so the response says nothing about whether the user exists elsewhere.
+    const foreign = await send(GLOBEX_REQUESTER);
+    const missing = await send("ghost@acme.com");
+    expect(foreign.body.data.results[0].error).toBe(
+      `No user with email "${GLOBEX_REQUESTER}"`,
+    );
+    expect(missing.body.data.results[0].error).toBe(
+      `No user with email "ghost@acme.com"`,
+    );
+    expect(foreign.body.data.results[0]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+    });
+    expect(missing.body.data.results[0]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+    });
+  });
+
+  it("keys on reach, not on the role name", async () => {
+    // Morgan Lee is a super_admin who belongs to Acme. The top role must not let
+    // them out of their own customer.
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(morgan))
+      .send({ rows: [row({ requesterEmail: GLOBEX_REQUESTER })] });
+    expect(res.body.data.created).toBe(0);
+    expect(res.body.data.results[0]).toMatchObject({ field: "requesterEmail" });
+  });
+
+  it("lets a platform-wide super_admin import into any customer", async () => {
+    // Sam Rivera has no customer of their own, which is what platform-wide reach
+    // is keyed on — they legitimately serve every tenant.
+    const sam = await login("sam.rivera@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(sam))
+      .send({ rows: [row({ requesterEmail: GLOBEX_REQUESTER })] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.created).toBe(1);
+    const created = await prisma.ticket.findUniqueOrThrow({
+      where: { id: res.body.data.results[0].ticketId },
+      include: { customer: true },
+    });
+    expect(created.customer?.name).toBe("Globex Inc");
+  });
 });
 
 describe("integrations — external sources", () => {
