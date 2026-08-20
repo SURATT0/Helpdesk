@@ -12,7 +12,7 @@ import {
   ReopenWindowExpired,
 } from "../../shared/errors";
 import { notificationRepository } from "../notifications/notification.repository";
-import { mayReceiveAssignment } from "./ticket.scope";
+import { mayImportForRequester, mayReceiveAssignment } from "./ticket.scope";
 import { resolvePeriod, type Granularity, type Period } from "./history.period";
 import { formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
 import { ACTIVE_STATUSES } from "./ticket.validators";
@@ -207,10 +207,14 @@ export const ticketService = {
           });
           continue;
         }
-        const requesterId = await ticketRepository.findUserIdByEmail(
+        const requester = await ticketRepository.findRequesterByEmail(
           row.requesterEmail,
         );
-        if (requesterId == null) {
+        // One message for "no such user" and "not yours to file for", on purpose.
+        // Telling them apart would turn the import into a directory probe: feed it
+        // a list of addresses and the wording says which ones exist in other
+        // customers. The row fails either way, so the importer loses nothing.
+        if (requester == null || !mayImportForRequester(user, requester)) {
           results.push({
             index,
             ok: false,
@@ -224,7 +228,7 @@ export const ticketService = {
           description: row.description,
           priority: row.priority,
           categoryId,
-          requesterId,
+          requesterId: requester.id,
           actorId: user.id,
         });
         results.push({ index, ok: true, ticketId: ticket.id });
