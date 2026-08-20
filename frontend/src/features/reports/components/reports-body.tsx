@@ -43,7 +43,7 @@ function buildChart(series: number[]) {
 }
 
 export function ReportsBody() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data, isLoading, isError, refetch } = useReportsSummary();
 
   if (isLoading) {
@@ -64,7 +64,7 @@ export function ReportsBody() {
     return (
       <div className="p-6">
         <Card>
-          <ErrorState message="Couldn't load reports" onRetry={() => refetch()} />
+          <ErrorState message={t("report.loadError")} onRetry={() => refetch()} />
         </Card>
       </div>
     );
@@ -99,7 +99,7 @@ export function ReportsBody() {
     },
   ];
 
-  const labels = trendDayLabels(data.closureTrend.length);
+  const labels = trendDayLabels(data.closureTrend.length, locale);
   const chart = buildChart(data.closureTrend);
   const totalMet = data.byPriority.reduce((a, r) => a + r.met, 0);
   const totalBreached = data.byPriority.reduce((a, r) => a + r.breached, 0);

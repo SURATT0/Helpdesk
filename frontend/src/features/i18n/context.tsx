@@ -5,9 +5,24 @@ import { dictionaries, type Lang } from "./dictionary";
 
 const STORAGE_KEY = "deskly_lang";
 
+/**
+ * The BCP-47 tag to format dates and numbers with for a given language.
+ *
+ * Exported so non-React code can reach it too — `Intl` and `toLocale*` must
+ * always be given a locale explicitly, because their default is the BROWSER's,
+ * not the app's. Passing `[]` or omitting the argument silently formats in
+ * whatever language the machine is set to, which is how the CSV export ended up
+ * disagreeing with the screen it was exported from.
+ */
+export function localeOf(lang: Lang): string {
+  return lang === "th" ? "th-TH" : "en-US";
+}
+
 type TranslateParams = Record<string, string | number>;
 type I18nValue = {
   lang: Lang;
+  /** `localeOf(lang)`, so a component never has to re-derive it. */
+  locale: string;
   setLang: (lang: Lang) => void;
   t: (key: string, params?: TranslateParams) => string;
 };
@@ -54,7 +69,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     [lang],
   );
 
-  const value = React.useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
+  const value = React.useMemo(
+    () => ({ lang, locale: localeOf(lang), setLang, t }),
+    [lang, setLang, t],
+  );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

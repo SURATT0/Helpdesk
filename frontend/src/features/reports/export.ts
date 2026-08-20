@@ -1,13 +1,24 @@
 import type { ReportsSummary } from "./schemas";
 
-/** Calendar-day labels for the last `count` days (oldest → today). */
-export function trendDayLabels(count: number): string[] {
+/**
+ * Calendar-day labels for the last `count` days (oldest → today).
+ *
+ * `locale` is required rather than defaulted: this used to pass `[]`, which
+ * means "use the browser's locale" — so the chart axis and the exported CSV
+ * were formatted in the machine's language regardless of the one the user had
+ * picked in the app. Callers read it from `useI18n()`.
+ */
+export function trendDayLabels(count: number, locale: string): string[] {
   const out: string[] = [];
   const today = new Date();
+  const format = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+  });
   for (let i = count - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    out.push(d.toLocaleDateString([], { month: "short", day: "numeric" }));
+    out.push(format.format(d));
   }
   return out;
 }
