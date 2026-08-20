@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Plus, X } from "lucide-react";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import { useCreateProject } from "../queries";
@@ -77,7 +78,10 @@ export function NewProjectRow() {
           create.reset();
         }}
         aria-label={t("common.cancel")}
-        className="grid h-7 w-7 place-items-center rounded-md border border-line text-[#475569] hover:bg-app"
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+          TOUCH_TARGET,
+        )}
       >
         <X size={14} strokeWidth={2} />
       </button>

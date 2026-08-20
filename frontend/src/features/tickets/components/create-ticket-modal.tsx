@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileText, Upload, X } from "lucide-react";
 import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api-client";
@@ -151,7 +152,10 @@ export function CreateTicketModal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-[30px] w-[30px] place-items-center rounded-md border border-line text-muted hover:bg-app"
+            className={cn(
+              "grid h-[30px] w-[30px] flex-none place-items-center rounded-md border border-line text-muted hover:bg-app",
+              TOUCH_TARGET,
+            )}
             aria-label={t("create.close")}
           >
             <X size={14} />

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -227,7 +228,10 @@ export function ImportTicketsModal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-[30px] w-[30px] place-items-center rounded-md border border-line text-muted hover:bg-app"
+            className={cn(
+              "grid h-[30px] w-[30px] flex-none place-items-center rounded-md border border-line text-muted hover:bg-app",
+              TOUCH_TARGET,
+            )}
             aria-label={t("create.close")}
           >
             <X size={14} />

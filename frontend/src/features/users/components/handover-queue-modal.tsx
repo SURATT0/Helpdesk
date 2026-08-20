@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { toneForName } from "@/features/tickets/data";
@@ -83,7 +84,10 @@ export function HandoverQueueModal({
             type="button"
             onClick={onClose}
             aria-label={t("handover.close")}
-            className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app"
+            className={cn(
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              TOUCH_TARGET,
+            )}
           >
             <X size={14} />
           </button>

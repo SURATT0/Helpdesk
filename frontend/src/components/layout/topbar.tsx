@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Menu, Plus, Search } from "lucide-react";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useCreateTicket } from "@/features/tickets/create-ticket-context";
 import { useSearch } from "@/features/tickets/search-context";
 import { useI18n } from "@/features/i18n/context";
@@ -49,7 +50,10 @@ export function Topbar({
         type="button"
         onClick={toggleNav}
         aria-label={t("nav.menu")}
-        className="grid h-9 w-9 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app lg:hidden"
+        className={cn(
+          "grid h-9 w-9 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app lg:hidden",
+          TOUCH_TARGET,
+        )}
       >
         <Menu size={17} strokeWidth={2} />
       </button>

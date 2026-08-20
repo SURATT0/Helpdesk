@@ -17,7 +17,10 @@ export function LanguageToggle() {
           onClick={() => setLang(l)}
           aria-pressed={lang === l}
           className={cn(
-            "px-2 py-1",
+            // Grows vertically on a touch screen: 26px tall is well under the
+            // 44px floor, and unlike the icon buttons this is a segmented pair
+            // whose width is set by its label.
+            "px-2 py-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:px-3.5",
             lang === l ? "bg-brand text-white" : "text-muted hover:bg-app",
           )}
         >

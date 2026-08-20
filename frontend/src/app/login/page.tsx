@@ -6,9 +6,11 @@ import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { LanguageToggle } from "@/components/layout/language-toggle";
 import { Input, Label } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const { login, status } = useAuth();
@@ -138,7 +140,9 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
-                  className="pl-9 pr-10"
+                  // The right padding has to clear the reveal button, which is
+                  // wider on a touch screen — otherwise the value runs under it.
+                  className="pl-9 pr-10 [@media(pointer:coarse)]:pr-14"
                   required
                 />
                 <button
@@ -147,7 +151,10 @@ export default function LoginPage() {
                   aria-label={
                     showPassword ? t("login.hidePassword") : t("login.showPassword")
                   }
-                  className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-faint hover:text-muted"
+                  className={cn(
+                    "absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-faint hover:text-muted",
+                    TOUCH_TARGET,
+                  )}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
