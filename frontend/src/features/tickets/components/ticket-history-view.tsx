@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Info, Search, SlidersHorizontal, X } from "lucide-react";
 import { ErrorState, LoadingRow } from "@/components/ui/states";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   type Gap,
 } from "../closed-log";
 import { rangeContains, type DateRange } from "../date-range";
+import { filtersToSearch, readFilters } from "../history-filter-url";
 import { DateRangePicker, formatRangeLabel } from "./date-range-picker";
 import { useClosedLog, useClosedTotal } from "../queries";
 import type { Ticket } from "../schemas";
@@ -51,7 +53,15 @@ function Row({ ticket, lang }: { ticket: Ticket; lang: string }) {
   return (
     <Link
       href={`/tickets/${ticket.id}`}
-      className="flex items-center gap-2.5 border-b border-line px-3 py-2.5 last:border-b-0 hover:bg-app sm:gap-3 sm:px-4"
+      // `relative` is load-bearing, not decoration: the screen-reader label
+      // below is `sr-only`, which is `position: absolute`. Without a positioned
+      // ancestor it resolves against the initial containing block instead — so
+      // it escapes this page's scroll container *and* the shell's
+      // `overflow-hidden`, and every row adds its own offset to the document's
+      // height. One archive-length page then scrolls behind the viewport,
+      // carrying the sticky search bar, the year bar and the sidebar off-screen
+      // with it.
+      className="relative flex items-center gap-2.5 border-b border-line px-3 py-2.5 last:border-b-0 hover:bg-app sm:gap-3 sm:px-4"
     >
       <span className={cn("h-2 w-2 flex-none rounded-full", DOT[ticket.priority])} />
       <span className="sr-only">{t(`priority.${ticket.priority}`)}</span>
@@ -220,10 +230,21 @@ function FiltersButton({
 export function TicketHistoryView() {
   const { t, lang } = useI18n();
   const heading = useHeading();
-  const [priority, setPriority] = React.useState<Priority | "">("");
-  const [range, setRange] = React.useState<DateRange | null>(null);
-  const [query, setQuery] = React.useState("");
-  const [debouncedQuery, setDebouncedQuery] = React.useState("");
+  /**
+   * The filters start from the URL, and are read from it exactly once.
+   *
+   * Once mounted the state below owns them and writes back — re-reading on every
+   * change would fight the reader mid-keystroke, and the address bar is only an
+   * entry point, not a second source of truth.
+   */
+  const searchParams = useSearchParams();
+  const [initial] = React.useState(() => readFilters(searchParams));
+  const [priority, setPriority] = React.useState<Priority | "">(
+    initial.priority,
+  );
+  const [range, setRange] = React.useState<DateRange | null>(initial.range);
+  const [query, setQuery] = React.useState(initial.query);
+  const [debouncedQuery, setDebouncedQuery] = React.useState(initial.query);
 
   /**
    * Today, fixed for the life of the view. The presets are relative to it, and a
@@ -236,6 +257,32 @@ export function TicketHistoryView() {
     const id = setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => clearTimeout(id);
   }, [query]);
+
+  /**
+   * Mirror the filters into the address bar, so leaving the page and coming back
+   * — Back out of a ticket, most of all — returns to the list that was being
+   * read rather than to the whole archive, and so a filtered view can be linked
+   * to.
+   *
+   * `replaceState`, not `router.replace`: this relabels the entry the reader is
+   * already on instead of routing. A push would stack one history entry per
+   * filter change, turning Back into an undo of the last dozen keystrokes before
+   * it ever left the page; `router.replace` avoids that but still re-runs the
+   * route for a change only this component cares about.
+   *
+   * Keyed on the *debounced* query for the same reason the fetch is: typing
+   * "vpn" should leave one URL behind, not three.
+   */
+  React.useEffect(() => {
+    const next = `${window.location.pathname}${filtersToSearch({
+      priority,
+      range,
+      query: debouncedQuery,
+    })}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(window.history.state, "", next);
+    }
+  }, [priority, range, debouncedQuery]);
 
   const {
     data,
