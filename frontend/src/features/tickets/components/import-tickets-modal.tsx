@@ -94,6 +94,13 @@ export function ImportTicketsModal({
           setFileError(t("import.parseError"));
           return;
         }
+        // Before anything else: a file that ended inside a quoted field has had
+        // everything past that point folded into one cell. Whatever survives
+        // would preview as a plausible short import, so say so instead.
+        if (parsed.unterminatedQuote) {
+          setFileError(t("import.unterminatedQuote"));
+          return;
+        }
         if (parsed.missingColumns.length > 0) {
           setFileError(
             t("import.missingColumns", {
