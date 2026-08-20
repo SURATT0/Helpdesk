@@ -63,3 +63,35 @@ export function mayReceiveAssignment(
   if (actor.customerId == null) return false;
   return candidate.customerId === actor.customerId;
 }
+
+/** A prospective requester for an imported row, reduced to what the decision needs. */
+export type RequesterCandidate = {
+  id: number;
+  customerId: number | null;
+};
+
+/**
+ * May `actor` file a ticket on behalf of `candidate`?
+ *
+ * The CSV import resolves each row's requester by email, and `create` files the
+ * ticket under *that requester's* customer — so without this check an importer
+ * naming an address outside their own tenant writes a ticket into someone else's,
+ * which no clause on the read path can undo. It also disappears from the
+ * importer's own list while the batch still reports it created, because the
+ * ticket is now behind `ticketScopeWhere` for a customer they do not reach.
+ *
+ *   platform-wide actor  → any user, any customer
+ *   customer-bound actor → only users inside their own customer
+ *
+ * Same shape as `mayReceiveAssignment` above, and for the same reason: which
+ * tickets a caller may read is a where-clause, but who they may name is a
+ * decision, and it belongs beside the other one rather than inline in the service.
+ */
+export function mayImportForRequester(
+  actor: AuthUser,
+  candidate: RequesterCandidate,
+): boolean {
+  if (isPlatformWide(actor)) return true;
+  if (actor.customerId == null) return false;
+  return candidate.customerId === actor.customerId;
+}

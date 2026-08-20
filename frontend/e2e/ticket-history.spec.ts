@@ -420,3 +420,120 @@ for (const [label, width] of [
     });
   }
 }
+
+/**
+ * The log is one page long, and the shell must hold it.
+ *
+ * Each row carries an `sr-only` priority label, which is `position: absolute`.
+ * With no positioned ancestor it resolved against the initial containing block
+ * instead — escaping both this page's scroll container and the shell's
+ * `overflow-hidden`, so the document itself grew by the length of the archive.
+ * The whole app then scrolled behind the viewport, taking the sticky search bar,
+ * the year bar and the sidebar with it.
+ */
+test("the archive scrolls inside the page, never the page itself", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/history");
+  await expect(rows(page).first()).toBeVisible();
+
+  // The list is taller than the viewport — otherwise this proves nothing.
+  expect(
+    await page.evaluate(() => {
+      const main = document.querySelector("main")!;
+      return main.scrollHeight - main.clientHeight;
+    }),
+  ).toBeGreaterThan(0);
+
+  const documentOverflow = () =>
+    page.evaluate(
+      () =>
+        document.documentElement.scrollHeight -
+        document.documentElement.clientHeight,
+    );
+  expect(await documentOverflow()).toBeLessThanOrEqual(2);
+
+  // Read to the bottom, then check the bar the reader searches from is still
+  // where they left it.
+  const barTop = async () =>
+    page.evaluate(
+      () =>
+        document
+          .querySelector('input[placeholder*="losed"]')!
+          .getBoundingClientRect().top,
+    );
+  const restingTop = await barTop();
+  await page.mouse.move(700, 400);
+  for (let i = 0; i < 25; i++) await page.mouse.wheel(0, 300);
+  await expect
+    .poll(async () =>
+      (
+        await page.evaluate(() => {
+          const main = document.querySelector("main")!;
+          return main.scrollTop + main.clientHeight >= main.scrollHeight - 2;
+        })
+      ).toString(),
+    )
+    .toBe("true");
+
+  expect(await documentOverflow()).toBeLessThanOrEqual(2);
+  expect(await barTop()).toBe(restingTop);
+  expect(await page.evaluate(() => document.documentElement.scrollTop)).toBe(0);
+});
+
+/**
+ * The filters live in the query string, so the list survives leaving the page.
+ *
+ * They used to be component state alone: opening a ticket from a filtered list
+ * and pressing Back landed on the whole archive again, and a filtered view could
+ * not be sent to anyone.
+ */
+test("the filters are carried in the URL, and come back with it", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/history");
+  await expect(rows(page).first()).toBeVisible();
+
+  // Nothing filtered, nothing in the address bar.
+  await expect(page).toHaveURL(/\/history$/);
+
+  await rangeButton(page).click();
+  await page.getByRole("button", { name: "This year", exact: true }).click();
+  await expect(page).toHaveURL(/[?&]from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
+  await search(page).fill("a");
+  await expect(page).toHaveURL(/[?&]q=a\b/);
+
+  const filtered = await rows(page).count();
+  const url = page.url();
+
+  // Back out of a ticket — the case this exists for.
+  await rows(page).first().click();
+  await expect(page).toHaveURL(/\/tickets\/\d+/);
+  await page.goBack();
+  await expect(page).toHaveURL(url);
+  await expect(search(page)).toHaveValue("a");
+  await expect(rangeButton(page)).toHaveText(/^Jan 1 – /);
+  await expect(rows(page)).toHaveCount(filtered);
+
+  // Clearing empties the address bar again, rather than leaving stale keys.
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/\/history$/);
+});
+
+test("a link with unusable filters opens the whole archive", async ({
+  page,
+}) => {
+  await login(page);
+  // A hand-edited or stale link: no such priority, no thirteenth month, and a
+  // range end that is not a date. None of it should filter, and none of it
+  // should break the page.
+  await page.goto("/history?priority=urgent&from=2026-13-01&to=nope");
+
+  await expect(rows(page).first()).toBeVisible();
+  await expect(rangeButton(page)).toHaveText("Any date");
+  await expect(page.getByRole("button", { name: /^Filters$/ })).toBeVisible();
+  // The unusable keys are dropped rather than kept around.
+  await expect(page).toHaveURL(/\/history$/);
+});
