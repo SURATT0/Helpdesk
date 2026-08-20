@@ -13,7 +13,11 @@ import {
   SLA_ACTIVE_STATUSES,
   type SlaState,
 } from "./sla";
-import { ticketScopeWhere, type AssignmentCandidate } from "./ticket.scope";
+import {
+  ticketScopeWhere,
+  type AssignmentCandidate,
+  type RequesterCandidate,
+} from "./ticket.scope";
 
 /** A ticket the SLA sweep may need to raise an alert for. */
 export type SlaRiskTicket = {
@@ -565,13 +569,35 @@ export const ticketRepository = {
     return row?.id ?? null;
   },
 
-  /** Resolve a requester email to its user id (case-insensitive). Null if unknown. */
+  /**
+   * Resolve a requester email to its user id (case-insensitive). Null if unknown.
+   *
+   * Deliberately unscoped: the caller is the email intake, where the sender is a
+   * stranger off the internet and there is no actor whose tenant could scope the
+   * lookup. Anything with an actor — the CSV import — must go through
+   * `findRequesterByEmail` below and `mayImportForRequester` instead.
+   */
   async findUserIdByEmail(email: string): Promise<number | null> {
     const row = await prisma.user.findFirst({
       where: { email: { equals: email.trim(), mode: "insensitive" } },
       select: { id: true },
     });
     return row?.id ?? null;
+  },
+
+  /**
+   * A prospective requester's id and tenant — the facts `mayImportForRequester`
+   * needs to decide whether the importer may file a ticket for them.
+   *
+   * Returns the candidate rather than filtering by customer in the query, so the
+   * tenancy rule stays in one pure, tested place instead of being re-expressed as
+   * a where-clause here.
+   */
+  async findRequesterByEmail(email: string): Promise<RequesterCandidate | null> {
+    return prisma.user.findFirst({
+      where: { email: { equals: email.trim(), mode: "insensitive" } },
+      select: { id: true, customerId: true },
+    });
   },
 
   async updateAssignee(
