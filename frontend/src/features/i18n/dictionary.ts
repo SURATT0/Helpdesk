@@ -386,6 +386,8 @@ const en: Dict = {
   "import.missingColumns": "File is missing required columns: {cols}",
   "import.noRows": "No data rows found in this file",
   "import.parseError": "Couldn't read that file as CSV",
+  "import.unterminatedQuote":
+    "A quotation mark is left open in this file, so everything after it reads as one cell. Close it — or remove it — and upload again.",
   "import.rowsFound": "{n} rows loaded",
   "import.errorsRemain": "{n} rows need attention before importing",
   "import.allValid": "All {n} rows look good",
@@ -953,6 +955,8 @@ const th: Dict = {
   "import.missingColumns": "ไฟล์ขาดคอลัมน์ที่จำเป็น: {cols}",
   "import.noRows": "ไม่พบข้อมูลในไฟล์นี้",
   "import.parseError": "อ่านไฟล์เป็น CSV ไม่ได้",
+  "import.unterminatedQuote":
+    "ไฟล์นี้มีเครื่องหมายคำพูดที่เปิดค้างไว้ ทำให้ข้อความหลังจากนั้นถูกอ่านรวมเป็นช่องเดียว กรุณาปิดเครื่องหมายให้ครบหรือลบออก แล้วอัปโหลดใหม่",
   "import.rowsFound": "โหลดแล้ว {n} แถว",
   "import.errorsRemain": "มี {n} แถวที่ต้องแก้ไขก่อนนำเข้า",
   "import.allValid": "ข้อมูลครบถูกต้องทั้ง {n} แถว",
