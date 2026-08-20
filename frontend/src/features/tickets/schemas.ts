@@ -172,12 +172,26 @@ export const historyListSchema = z.object({
   data: z.array(historyEntrySchema),
 });
 
+/**
+ * Why the server refused a row, as a code this app can translate.
+ *
+ * `.catch` rather than a strict enum: a server newer than this bundle may name a
+ * reason we have no wording for, and a row that fails for an unfamiliar cause
+ * should still read as failed rather than take the whole response down with a
+ * parse error. `error` carries the server's own English sentence for that case.
+ */
+export const importErrorReasonSchema = z
+  .enum(["unknown_category", "unknown_requester", "create_failed"])
+  .catch("create_failed");
+
 export const importRowResultSchema = z.discriminatedUnion("ok", [
   z.object({ index: z.number(), ok: z.literal(true), ticketId: z.number() }),
   z.object({
     index: z.number(),
     ok: z.literal(false),
     field: z.string().nullable(),
+    // Absent from a server older than this bundle — treated as the generic case.
+    reason: importErrorReasonSchema.default("create_failed"),
     error: z.string(),
   }),
 ]);
@@ -191,6 +205,7 @@ export const importResultEnvelope = z.object({ data: importResultSchema });
 export type Ticket = z.infer<typeof ticketSchema>;
 export type ReplyResult = z.infer<typeof replyResultSchema>;
 export type ImportRowResult = z.infer<typeof importRowResultSchema>;
+export type ImportErrorReason = z.infer<typeof importErrorReasonSchema>;
 export type ImportResult = z.infer<typeof importResultSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
