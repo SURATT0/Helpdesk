@@ -6,12 +6,12 @@ import { useReportsSummary } from "../queries";
 import { downloadCsv, reportsToCsv, trendDayLabels } from "../export";
 
 export function ReportActions() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data } = useReportsSummary();
 
   function exportCsv() {
     if (!data) return;
-    const labels = trendDayLabels(data.closureTrend.length);
+    const labels = trendDayLabels(data.closureTrend.length, locale);
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(`deskly-report-${stamp}.csv`, reportsToCsv(data, labels));
   }

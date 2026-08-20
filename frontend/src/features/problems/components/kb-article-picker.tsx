@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { BookOpen, Check, Loader2, Search, X } from "lucide-react";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
 import { useKbArticles } from "@/features/kb/queries";
 import { cn } from "@/lib/utils";
@@ -49,13 +50,16 @@ export function KbArticlePicker({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-[6px] text-[12.5px] focus-within:border-brand">
+      <div className="flex min-w-0 items-center gap-2 rounded-md border border-line bg-white px-2.5 py-[6px] focus-within:border-brand">
         <Search size={12} className="flex-none text-faint" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("problem.kbSearchPlaceholder")}
-          className="w-full bg-transparent text-ink placeholder:text-faint focus:outline-none"
+          className={cn(
+            "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+            FIELD_TEXT_12,
+          )}
         />
       </div>
 

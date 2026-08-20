@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Loader2, Mail, MessageSquare, Paperclip, X } from "lucide-react";
+import { FIELD_TEXT, FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
@@ -239,7 +240,12 @@ export function Composer({
               value={to}
               onChange={(e) => setTo(e.target.value)}
               placeholder={t("composer.toPlaceholder")}
-              className="min-w-0 flex-1 bg-transparent text-ink placeholder:text-faint focus:outline-none"
+              // Its own size rather than inheriting the header block's 12.5px —
+              // an editable field has to clear the touch-zoom threshold.
+              className={cn(
+                "min-w-0 flex-1 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+                FIELD_TEXT_12,
+              )}
             />
           </div>
         </div>
@@ -258,7 +264,8 @@ export function Composer({
         }}
         placeholder={placeholder}
         className={cn(
-          "w-full resize-none px-4 py-3 text-[13.5px] text-ink placeholder:text-faint focus:outline-none",
+          "w-full resize-none px-4 py-3 text-ink placeholder:text-faint focus:outline-none",
+          FIELD_TEXT,
           isNote && "bg-[#fffbeb]",
         )}
       />

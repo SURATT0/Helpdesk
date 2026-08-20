@@ -12,6 +12,7 @@ import {
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { TableScroll } from "@/components/ui/table-scroll";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
 import { matchesFilters, useSearch } from "../search-context";
@@ -22,6 +23,7 @@ import { compareSla, type SlaAssessment, type SlaState } from "../sla";
 import { useAssessSla, useSlaNow } from "../use-sla";
 import { useTickets } from "../queries";
 import type { Ticket } from "../schemas";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { cn } from "@/lib/utils";
 
 // SLA sits next to Status: the two answer "where is this?" and "how long have I
@@ -133,7 +135,10 @@ function SortHeader({
         <ChevronsUpDown
           size={12}
           strokeWidth={2}
-          className="text-[#cbd5e1] opacity-0 transition-opacity group-hover:opacity-100"
+          // Revealed on hover where there is a cursor, always visible where
+          // there is not: on a touch screen the hover state never arrives, so
+          // the only hint that these headers sort anything was invisible.
+          className="text-[#cbd5e1] opacity-0 transition-opacity group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
         />
       )}
     </button>
@@ -217,8 +222,7 @@ export function TicketTable() {
     <div className="mx-4 mb-2 overflow-hidden rounded-lg border border-line bg-panel sm:mx-6">
       {/* Columns use fixed widths, so let them scroll horizontally on narrow
           screens instead of squishing. */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[960px]">
+      <TableScroll minWidth={960}>
       {/* header */}
       <div
         className={cn(
@@ -232,7 +236,10 @@ export function TicketTable() {
           aria-checked={allSelected}
           aria-label={t("tickets.selectAll")}
           onClick={toggleAll}
-          className="inline-flex rounded-[4px]"
+          // 40px wide, not the usual 44: the checkbox column is 40px, and a
+          // wider box spilled 4px onto the ID sort button beside it, so the far
+          // left of that header toggled select-all instead of sorting.
+          className="grid w-fit place-items-center rounded-[4px] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
         >
           <Checkbox checked={allSelected} />
         </button>
@@ -320,7 +327,11 @@ export function TicketTable() {
               aria-checked={isSel}
               aria-label={selectRowLabel(t.id)}
               onClick={(e) => toggle(t.id, e)}
-              className="inline-flex w-fit rounded-[4px]"
+              // The visual box stays 14px; only the tappable area grows. A 14px
+              // checkbox is not reachable with a finger, which made bulk selection
+              // a desktop-only feature by accident. 40px wide to stay inside the
+              // column — see the select-all above.
+              className="grid w-fit place-items-center rounded-[4px] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
             >
               <Checkbox checked={isSel} />
             </button>
@@ -361,8 +372,7 @@ export function TicketTable() {
           </div>
         );
       })}
-        </div>
-      </div>
+      </TableScroll>
 
       {/* bulk bar */}
       {selected.size > 0 && rows.length > 0 ? (

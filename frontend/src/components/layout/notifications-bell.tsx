@@ -11,6 +11,7 @@ import {
 } from "@/features/notifications/queries";
 import type { Notification } from "@/features/notifications/schemas";
 import { useI18n } from "@/features/i18n/context";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { cn } from "@/lib/utils";
 
 function timeAgo(iso: string, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -46,7 +47,10 @@ export function NotificationsBell() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="relative grid h-[34px] w-[34px] place-items-center rounded-md border border-line text-[#475569] hover:bg-app"
+        className={cn(
+          "relative grid h-[34px] w-[34px] place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+          TOUCH_TARGET,
+        )}
         aria-label={t("topbar.notifications")}
       >
         <Bell size={16} strokeWidth={2} />

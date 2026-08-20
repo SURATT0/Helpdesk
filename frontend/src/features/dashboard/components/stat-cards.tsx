@@ -5,7 +5,7 @@ import { useI18n } from "@/features/i18n/context";
 import { useDashboardSummary } from "../queries";
 
 export function StatCards() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data, isLoading, isError, refetch } = useDashboardSummary();
 
   if (isLoading) {
@@ -32,7 +32,9 @@ export function StatCards() {
   const cards: { label: string; value: string; sub?: string }[] = [
     {
       label: t("dashboard.stat.total"),
-      value: s.totalTickets.toLocaleString(),
+      // Explicit locale for the same reason as the CSV export: the default is
+      // the browser's, not the app's.
+      value: s.totalTickets.toLocaleString(locale),
     },
     {
       label: t("dashboard.stat.open"),

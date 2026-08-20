@@ -18,6 +18,7 @@ import {
 import type { Role } from "@/features/auth/schemas";
 import { Logo } from "./logo";
 import { Avatar } from "@/components/ui/avatar";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useMobileNav } from "./mobile-nav-context";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -122,7 +123,10 @@ export function Sidebar() {
           onClick={() => logout()}
           aria-label={t("sidebar.signOut")}
           title={t("sidebar.signOut")}
-          className="ml-auto grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app"
+          className={cn(
+            "ml-auto grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+            TOUCH_TARGET,
+          )}
         >
           <LogOut size={14} strokeWidth={2} />
         </button>

@@ -323,6 +323,7 @@ const en: Dict = {
 
   "report.range": "Last 7 days",
   "report.export": "Export CSV",
+  "report.loadError": "Couldn't load reports",
   // Measured from the ticket being picked up to it reaching closed, so the
   // sub-line counts closed tickets rather than resolved ones.
   "report.kpi.avgRes": "Average Handling Time",
@@ -891,6 +892,7 @@ const th: Dict = {
 
   "report.range": "7 วันล่าสุด",
   "report.export": "ส่งออก CSV",
+  "report.loadError": "โหลดรายงานไม่สำเร็จ",
   "report.kpi.avgRes": "เวลาดำเนินการเฉลี่ย",
   "report.kpi.avgRes.sub": "ตั้งแต่เปิดอ่านถึงปิด จาก {n} Ticket",
   "report.kpi.firstResp": "เวลาตอบกลับเฉลี่ย",

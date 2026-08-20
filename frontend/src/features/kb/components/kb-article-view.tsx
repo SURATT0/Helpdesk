@@ -24,7 +24,7 @@ export function KbArticleView({ id }: { id: string }) {
   }
 
   return (
-    <div className="mx-auto flex max-w-[720px] flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-[720px] flex-col gap-4 p-4 sm:p-6">
       <Link
         href="/kb"
         className="inline-flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink"

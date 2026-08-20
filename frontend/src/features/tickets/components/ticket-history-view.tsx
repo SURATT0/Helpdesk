@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Info, Search, SlidersHorizontal, X } from "lucide-react";
 import { ErrorState, LoadingRow } from "@/components/ui/states";
+import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import { PRIORITY_META, type Priority } from "@/lib/domain";
@@ -408,14 +409,17 @@ export function TicketHistoryView() {
         // padding cannot live there.
         className="sticky top-0 z-20 -mx-4 bg-app px-4 pb-3 pt-4 sm:-mx-6 sm:px-6 sm:pt-6"
       >
-        <label className="flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[13px] focus-within:border-brand">
+        <label className="flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 focus-within:border-brand">
           <Search size={14} className="flex-none text-faint" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchLabel}
             aria-label={searchLabel}
-            className="w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none"
+            className={cn(
+              "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+              FIELD_TEXT_13,
+            )}
           />
           {query ? (
             <button

@@ -5,6 +5,7 @@ import { Info, Users as UsersIcon } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { TableScroll } from "@/components/ui/table-scroll";
 import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
 import { useProjects } from "@/features/projects/queries";
@@ -61,8 +62,7 @@ export default function UsersPage() {
           {t("users.explainer")}
         </p>
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <div className="overflow-x-auto">
-            <div className="min-w-[1000px]">
+          <TableScroll minWidth={1000}>
           <div
             className={cn(
               "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
@@ -172,8 +172,7 @@ export default function UsersPage() {
               </div>
             );
           })}
-            </div>
-          </div>
+          </TableScroll>
         </div>
       </main>
 

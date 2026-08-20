@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { LoadingRow } from "@/components/ui/states";
+import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "./context";
 
 /**
@@ -12,6 +13,7 @@ import { useAuth } from "./context";
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
+  const { t } = useI18n();
   const router = useRouter();
 
   React.useEffect(() => {
@@ -20,8 +22,8 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (status !== "authenticated") {
     return (
-      <div className="grid h-screen place-items-center bg-app">
-        <LoadingRow label="Loading…" />
+      <div className="grid h-dvh place-items-center bg-app">
+        <LoadingRow label={t("common.loading")} />
       </div>
     );
   }

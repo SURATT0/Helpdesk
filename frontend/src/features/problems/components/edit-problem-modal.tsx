@@ -3,7 +3,11 @@
 import * as React from "react";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { FIELD_TEXT_13 } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useUpdateProblem } from "../queries";
 import { KbArticlePicker } from "./kb-article-picker";
@@ -66,13 +70,13 @@ export function EditProblemModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("problem.editTitle")}
+    <Dialog
+      open
+      onClose={onClose}
+      label={t("problem.editTitle")}
+      panelClassName="max-w-[540px]"
     >
-      <div className="flex max-h-[85vh] w-full max-w-[540px] flex-col overflow-y-auto rounded-xl border border-line bg-panel p-5 shadow-modal">
+      <div className="flex max-h-[85dvh] flex-col overflow-y-auto rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[14.5px] font-semibold text-ink">
@@ -86,7 +90,10 @@ export function EditProblemModal({
             type="button"
             onClick={onClose}
             aria-label={t("problem.close")}
-            className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app"
+            className={cn(
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              TOUCH_TARGET,
+            )}
           >
             <X size={14} />
           </button>
@@ -102,7 +109,10 @@ export function EditProblemModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
-              className="rounded-md border border-line bg-white px-3 py-[7px] text-[13px] text-ink focus:border-brand focus:outline-none"
+              className={cn(
+                "rounded-md border border-line bg-white px-3 py-[7px] text-ink focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
           </div>
 
@@ -114,7 +124,10 @@ export function EditProblemModal({
               id="ep-status"
               value={status}
               onChange={(e) => setStatus(e.target.value as ProblemStatus)}
-              className="rounded-md border border-line bg-white px-2.5 py-[7px] text-[13px] text-ink focus:border-brand focus:outline-none"
+              className={cn(
+                "rounded-md border border-line bg-white px-2.5 py-[7px] text-ink focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             >
               {PROBLEM_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -138,7 +151,10 @@ export function EditProblemModal({
               rows={4}
               maxLength={5000}
               placeholder={t("problem.workaroundPlaceholder")}
-              className="resize-none rounded-md border border-line bg-white px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+              className={cn(
+                "resize-none rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-faint focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
             <span className="text-[11.5px] text-faint">
               {t("problem.workaroundHelp")}
@@ -171,7 +187,10 @@ export function EditProblemModal({
               rows={3}
               maxLength={5000}
               placeholder={t("problem.rootCausePlaceholder")}
-              className="resize-none rounded-md border border-line bg-white px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none"
+              className={cn(
+                "resize-none rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-faint focus:border-brand focus:outline-none",
+                FIELD_TEXT_13,
+              )}
             />
           </div>
         </div>
@@ -210,6 +229,6 @@ export function EditProblemModal({
           </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

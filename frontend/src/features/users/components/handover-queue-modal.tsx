@@ -4,7 +4,11 @@ import * as React from "react";
 import { AlertTriangle, ArrowRight, Loader2, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { toneForName } from "@/features/tickets/data";
 import { useReassignTickets } from "@/features/tickets/queries";
 import type { ReassignResult } from "@/features/tickets/schemas";
@@ -60,13 +64,13 @@ export function HandoverQueueModal({
   const moved = result?.movedTicketIds.length ?? 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("handover.title")}
+    <Dialog
+      open
+      onClose={onClose}
+      label={t("handover.title")}
+      panelClassName="max-w-[440px]"
     >
-      <div className="w-full max-w-[440px] rounded-xl border border-line bg-panel p-5 shadow-modal">
+      <div className="rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[14.5px] font-semibold text-ink">
@@ -80,7 +84,10 @@ export function HandoverQueueModal({
             type="button"
             onClick={onClose}
             aria-label={t("handover.close")}
-            className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app"
+            className={cn(
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              TOUCH_TARGET,
+            )}
           >
             <X size={14} />
           </button>
@@ -133,7 +140,10 @@ export function HandoverQueueModal({
                     const v = e.target.value;
                     setToUserId(v === "" ? "" : v === "none" ? "none" : Number(v));
                   }}
-                  className="w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-[12.5px] text-ink"
+                  className={cn(
+                    "w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-ink",
+                    FIELD_TEXT_12,
+                  )}
                 >
                   <option value="">{t("handover.choose")}</option>
                   <option value="none">{t("handover.unassign")}</option>
@@ -174,6 +184,6 @@ export function HandoverQueueModal({
           </>
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }

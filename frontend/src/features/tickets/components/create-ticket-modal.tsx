@@ -4,8 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileText, Upload, X } from "lucide-react";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { uploadAttachment } from "@/features/attachments/api";
@@ -49,25 +51,6 @@ export function CreateTicketModal({
   const [attaching, setAttaching] = React.useState(false);
   const [attachError, setAttachError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const panelRef = React.useRef<HTMLDivElement>(null);
-
-  // Keep keyboard focus inside the dialog while it's open (basic focus trap).
-  function trapFocus(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== "Tab" || !panelRef.current) return;
-    const focusables = panelRef.current.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
 
   // Live KB deflection: suggest articles from the subject once it's meaningful.
   const suggest = useKbSuggest(subject, subject.trim().length >= 3);
@@ -92,9 +75,6 @@ export function CreateTicketModal({
     setAttaching(false);
     setAttachError(null);
     createTicket.reset();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -151,20 +131,16 @@ export function CreateTicketModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-start justify-center overflow-y-auto p-[44px]"
-      style={{ background: "rgba(15,23,42,.45)" }}
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="create-ticket-title"
+      align="start"
+      backdrop="bg-ink/45"
+      padding="sm:p-[44px]"
+      panelClassName="max-w-[712px]"
     >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-ticket-title"
-        className="w-full max-w-[712px] overflow-hidden rounded-[14px] bg-white shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={trapFocus}
-      >
+      <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
         <div className="flex items-center justify-between border-b border-[#eef1f5] px-6 py-[18px]">
           <div>
             <div id="create-ticket-title" className="text-[16px] font-bold text-ink">
@@ -176,7 +152,10 @@ export function CreateTicketModal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-[30px] w-[30px] place-items-center rounded-md border border-line text-muted hover:bg-app"
+            className={cn(
+              "grid h-[30px] w-[30px] flex-none place-items-center rounded-md border border-line text-muted hover:bg-app",
+              TOUCH_TARGET,
+            )}
             aria-label={t("create.close")}
           >
             <X size={14} />
@@ -224,7 +203,9 @@ export function CreateTicketModal({
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3.5">
+          {/* Side by side only once there is room: at 375px two columns
+              left each field about 110px, which is not a usable input. */}
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <div>
               <Label htmlFor="ticket-category">
                 {t("create.category")} <span className="text-[#dc2626]">*</span>
@@ -233,7 +214,11 @@ export function CreateTicketModal({
                 id="ticket-category"
                 value={categoryId ?? ""}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full rounded-md border border-[#e2e8f0] bg-white px-3.5 py-2.5 text-[13px] text-ink focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15"
+                className={cn(
+                  "w-full rounded-md border border-[#e2e8f0] bg-white px-3.5 py-2.5 text-ink",
+                  "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
+                  FIELD_TEXT_13,
+                )}
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -388,6 +373,6 @@ export function CreateTicketModal({
           </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

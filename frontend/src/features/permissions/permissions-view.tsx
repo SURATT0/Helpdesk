@@ -50,7 +50,7 @@ export function PermissionsView() {
   const myRole = user?.role;
 
   return (
-    <div className="mx-auto flex max-w-[760px] flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-[760px] flex-col gap-4 p-4 sm:p-6">
       {/* Your access */}
       <Card className="p-5">
         <div className="flex items-center gap-3">

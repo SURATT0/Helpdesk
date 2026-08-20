@@ -87,7 +87,7 @@ export function SettingsView() {
   }
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-[640px] flex-col gap-4 p-4 sm:p-6">
       {/* Account */}
       <Section title={t("settings.account")} note={t("settings.accountNote")}>
         <div className="mb-4 flex items-center gap-3">

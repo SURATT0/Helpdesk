@@ -3,7 +3,9 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight, Info, ShieldAlert } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
+import { TableScroll } from "@/components/ui/table-scroll";
 import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -180,7 +182,10 @@ export function AuditView() {
             setAction(e.target.value);
             setOffset(0); // a new filter invalidates the current page window
           }}
-          className="rounded-md border border-line bg-white px-2.5 py-1.5 text-[12.5px] text-ink"
+          className={cn(
+            "rounded-md border border-line bg-white px-2.5 py-1.5 text-ink",
+            FIELD_TEXT_12,
+          )}
         >
           <option value="">{t("audit.allActions")}</option>
           {families.map((f) => (
@@ -204,8 +209,7 @@ export function AuditView() {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="overflow-x-auto">
-          <div className="min-w-[980px]">
+        <TableScroll minWidth={980}>
             <div
               className={cn(
                 "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
@@ -233,8 +237,7 @@ export function AuditView() {
             {entries.map((e, i) => (
               <Row key={e.id} entry={e} last={i === entries.length - 1} />
             ))}
-          </div>
-        </div>
+        </TableScroll>
       </div>
 
       {total > 0 ? (

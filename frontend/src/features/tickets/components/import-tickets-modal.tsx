@@ -4,6 +4,9 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { TOUCH_TARGET } from "@/components/ui/touch";
+import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
@@ -73,9 +76,6 @@ export function ImportTicketsModal({
     setBanner(null);
     setCreatedTotal(0);
     importTickets.reset();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -204,18 +204,16 @@ export function ImportTicketsModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-start justify-center overflow-y-auto p-[44px]"
-      style={{ background: "rgba(15,23,42,.45)" }}
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="import-tickets-title"
+      align="start"
+      backdrop="bg-ink/45"
+      padding="sm:p-[44px]"
+      panelClassName="max-w-[920px]"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-tickets-title"
-        className="w-full max-w-[920px] overflow-hidden rounded-[14px] bg-white shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
         <div className="flex items-center justify-between border-b border-[#eef1f5] px-6 py-[18px]">
           <div>
             <div
@@ -230,7 +228,10 @@ export function ImportTicketsModal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-[30px] w-[30px] place-items-center rounded-md border border-line text-muted hover:bg-app"
+            className={cn(
+              "grid h-[30px] w-[30px] flex-none place-items-center rounded-md border border-line text-muted hover:bg-app",
+              TOUCH_TARGET,
+            )}
             aria-label={t("create.close")}
           >
             <X size={14} />
@@ -505,13 +506,16 @@ export function ImportTicketsModal({
           </div>
         ) : null}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
 function cellClass(hasError: boolean): string {
   return cn(
-    "w-full min-w-[120px] rounded border bg-white px-2 py-1.5 text-[12.5px] text-ink focus:outline-none focus:ring-[2px] focus:ring-brand/20",
+    "w-full min-w-[120px] rounded border bg-white px-2 py-1.5 text-ink focus:outline-none focus:ring-[2px] focus:ring-brand/20",
+    // Kept in step with the other fields even though this grid is a desk-only
+    // surface: a field that zooms is worse than one whose text crowds its cell.
+    FIELD_TEXT_12,
     hasError ? "border-[#fca5a5]" : "border-[#e2e8f0] focus:border-brand",
   );
 }
