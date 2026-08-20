@@ -42,7 +42,7 @@ export function TicketBoard() {
   );
 
   return (
-    <div className="flex gap-3 overflow-x-auto p-6">
+    <div className="flex gap-3 overflow-x-auto p-4 sm:p-6">
       {COLUMNS.map((status) => {
         const col = tickets.filter((x) => x.status === status);
         const meta = STATUS_META[status];

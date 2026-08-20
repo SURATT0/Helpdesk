@@ -44,7 +44,7 @@ export function KbBrowser() {
   const articles = data?.articles ?? [];
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div className="flex w-full min-w-0 max-w-[420px] items-center gap-2 rounded-md border border-line bg-white px-3 py-2 focus-within:border-brand">
         <Search size={14} strokeWidth={2} className="flex-none text-faint" />
         <input

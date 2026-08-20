@@ -134,7 +134,10 @@ function SortHeader({
         <ChevronsUpDown
           size={12}
           strokeWidth={2}
-          className="text-[#cbd5e1] opacity-0 transition-opacity group-hover:opacity-100"
+          // Revealed on hover where there is a cursor, always visible where
+          // there is not: on a touch screen the hover state never arrives, so
+          // the only hint that these headers sort anything was invisible.
+          className="text-[#cbd5e1] opacity-0 transition-opacity group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
         />
       )}
     </button>

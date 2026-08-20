@@ -71,7 +71,7 @@ export function SlaSummary() {
   if (shown.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-6 pb-3">
+    <div className="flex flex-wrap items-center gap-2 px-4 pb-3 sm:px-6">
       {shown.map((tile) => {
         const n = counts.get(tile.state) ?? 0;
         const active = slaStates.has(tile.state);

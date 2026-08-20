@@ -151,7 +151,7 @@ export function FilterBar() {
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-6 py-4">
+    <div className="flex flex-wrap items-center gap-2 px-4 py-4 sm:px-6">
       <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-line bg-white px-3 py-[7px] focus-within:border-brand sm:w-[260px]">
         <Search size={13} strokeWidth={2} className="flex-none text-faint" />
         <input
