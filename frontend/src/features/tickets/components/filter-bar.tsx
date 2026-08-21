@@ -5,6 +5,7 @@ import { Check, ChevronDown, Search, X } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
@@ -51,6 +52,7 @@ function FacetDropdown<T extends string | number>({
   onToggle: (v: T) => void;
   renderOption: (v: T) => React.ReactNode;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = React.useState(false);
   const count = selected.size;
   const active = count > 0;
@@ -77,8 +79,43 @@ function FacetDropdown<T extends string | number>({
       </button>
       {open ? (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 min-w-[190px] rounded-md border border-line bg-white py-1 shadow-modal">
+          {/* A tap anywhere closes it. Dimmed below `lg`, where the panel covers
+              the list as a sheet rather than sitting beside its chip. */}
+          <div
+            className="fixed inset-0 z-30 bg-ink/20 lg:z-10 lg:bg-transparent"
+            onClick={() => setOpen(false)}
+          />
+          {/*
+            A sheet from the bottom edge below `lg`, a menu beside the chip above it.
+
+            It used to be `absolute left-0` at every width, anchored to the chip's
+            left edge with no way to come back. The bar wraps on a narrow screen and
+            the chips march rightwards on a wide one, so the panels at the right-hand
+            end opened past the edge of the window — the SLA facet overhung by 43px
+            at 375, Assignee by 16px at 768 — and since nothing on the page scrolls
+            sideways, the clipped part could not be reached at all. Option labels
+            like "Breached, still open" lost their ends.
+
+            `lg` rather than the `sm` the closed log uses, because 768 is one of the
+            widths that failed; it also lines the behaviour up with the sidebar,
+            which is a drawer below exactly this breakpoint.
+          */}
+          <div
+            role="dialog"
+            aria-label={label}
+            className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-lg border border-line bg-white p-2 shadow-modal lg:absolute lg:inset-x-auto lg:bottom-auto lg:left-0 lg:top-full lg:z-20 lg:mt-1 lg:max-h-none lg:min-w-[190px] lg:rounded-md lg:p-0 lg:py-1 lg:shadow-modal"
+          >
+            <div className="mb-1 flex items-center justify-between px-1 lg:hidden">
+              <span className="text-[13px] font-semibold text-ink">{label}</span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label={t("filter.close")}
+                className={cn("text-muted", TOUCH_TARGET)}
+              >
+                <X size={16} />
+              </button>
+            </div>
             {options.map((o) => {
               const checked = selected.has(o);
               return (
@@ -86,7 +123,9 @@ function FacetDropdown<T extends string | number>({
                   key={o}
                   type="button"
                   onClick={() => onToggle(o)}
-                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-app"
+                  // Roomier rows on the sheet, where these are finger targets
+                  // rather than something a cursor lands on precisely.
+                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left hover:bg-app lg:rounded-none lg:py-1.5"
                 >
                   <span
                     className={cn(
