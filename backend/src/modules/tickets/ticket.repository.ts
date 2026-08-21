@@ -340,7 +340,7 @@ export const ticketRepository = {
   ): Promise<AssignmentCandidate | null> {
     return prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, customerId: true },
+      select: { id: true, role: true, customerId: true, isActive: true },
     });
   },
 

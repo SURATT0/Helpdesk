@@ -19,6 +19,7 @@ const candidate = (
   id: 2,
   role: "admin",
   customerId: 7,
+  isActive: true,
   ...over,
 });
 
@@ -59,6 +60,25 @@ describe("mayReceiveAssignment", () => {
 
   it("refuses a customer-less staff target for a scoped actor", () => {
     expect(actorMay(actor(), candidate({ customerId: null }))).toBe(false);
+  });
+
+  it("refuses a closed account, whoever is asking", () => {
+    // The account is shut: no sign-in, and nothing new lands on it. True
+    // regardless of reach, so even a platform-wide actor cannot route to them.
+    expect(actorMay(actor(), candidate({ isActive: false }))).toBe(false);
+    expect(
+      actorMay(
+        actor({ role: "super_admin", customerId: null }),
+        candidate({ isActive: false }),
+      ),
+    ).toBe(false);
+  });
+
+  it("still allows an active but unavailable target", () => {
+    // `availableForAssignment` is a rota and is not this decision — someone at
+    // lunch may still be handed a queue; someone who has left may not. Keeping
+    // the two apart is the point of having both.
+    expect(actorMay(actor(), candidate({ isActive: true }))).toBe(true);
   });
 });
 

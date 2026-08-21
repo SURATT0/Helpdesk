@@ -10,6 +10,7 @@ import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
 import { useProjects } from "@/features/projects/queries";
 import { useUpdateUser, useUsers } from "@/features/users/queries";
+import { AccountToggle } from "@/features/users/components/account-toggle";
 import { AvailabilityToggle } from "@/features/users/components/availability-toggle";
 import { HandoverQueueModal } from "@/features/users/components/handover-queue-modal";
 import { ProjectSelect } from "@/features/users/components/project-select";
@@ -25,7 +26,17 @@ const ROLE_STYLE: Record<UserRole, { fg: string; bg: string }> = {
 };
 
 const COLS =
-  "grid-cols-[1.2fr_1.5fr_110px_140px_170px_120px_120px_130px]";
+  "grid-cols-[1.2fr_1.5fr_110px_140px_170px_120px_110px_120px_130px]";
+
+/**
+ * Width floor for the horizontal scroller, and it has to move with the columns.
+ *
+ * 900px of fixed columns + 32px of row padding, leaving ~178px for the two `fr`
+ * columns to share — enough that the name and email stay readable rather than
+ * becoming decoration. Adding the ACCOUNT column without raising this squeezed
+ * them to zero on a phone, which is exactly what the mobile-tables spec measures.
+ */
+const MIN_WIDTH = 1110;
 
 const formatDate = (iso: string, lang: string) =>
   new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-US", {
@@ -61,8 +72,25 @@ export default function UsersPage() {
           <Info size={14} className="mt-[2px] flex-none text-faint" />
           {t("users.explainer")}
         </p>
+
+        {/* A refused edit has to be readable. Closing an account that still holds
+            tickets comes back with the count and "hand the queue over first" —
+            the one message on this page a reader has to act on, and it used to go
+            nowhere because nothing rendered `update.error`. */}
+        {update.isError ? (
+          <div
+            role="alert"
+            className="mb-4 flex max-w-[70ch] items-start gap-2 rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2.5 text-[12.5px] font-medium text-[#b91c1c]"
+          >
+            <Info size={14} className="mt-[2px] flex-none" />
+            {update.error instanceof Error
+              ? update.error.message
+              : t("users.updateError")}
+          </div>
+        ) : null}
+
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <TableScroll minWidth={1000}>
+          <TableScroll minWidth={MIN_WIDTH}>
           <div
             className={cn(
               "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
@@ -75,6 +103,7 @@ export default function UsersPage() {
             <span>{t("users.col.team")}</span>
             <span>{t("users.col.project")}</span>
             <span>{t("users.col.routing")}</span>
+            <span>{t("users.col.account")}</span>
             <span>{t("users.col.joined")}</span>
             <span>{t("users.col.queue")}</span>
           </div>
@@ -146,6 +175,21 @@ export default function UsersPage() {
                         id: u.id,
                         input: { availableForAssignment },
                       })
+                    }
+                  />
+                </span>
+
+                <span>
+                  <AccountToggle
+                    active={u.isActive}
+                    canEdit={canEdit}
+                    // Closing your own account would lock you out; the server
+                    // refuses it too, so don't offer the switch.
+                    disabled={u.id === me?.id}
+                    pending={pendingId === u.id}
+                    ariaLabel={`${t("users.col.account")} — ${u.name}`}
+                    onChange={(isActive) =>
+                      update.mutate({ id: u.id, input: { isActive } })
                     }
                   />
                 </span>

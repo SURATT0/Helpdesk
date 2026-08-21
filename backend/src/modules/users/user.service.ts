@@ -1,4 +1,4 @@
-import { Forbidden, NotFound } from "../../shared/errors";
+import { BadRequest, Forbidden, HasOpenQueue, NotFound } from "../../shared/errors";
 import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import type { Role } from "../../shared/domain";
 import { userRepository, type UserDto } from "./user.repository";
@@ -21,6 +21,7 @@ export const userService = {
       teamId?: number | null;
       projectId?: number | null;
       availableForAssignment?: boolean;
+      isActive?: boolean;
     },
     actor: AuthUser,
   ): Promise<UserDto> {
@@ -32,6 +33,22 @@ export const userService = {
     // otherwise they could promote themselves past their own tenant.
     if (data.role === "super_admin" && !isPlatformWide(actor)) {
       throw Forbidden("Only a platform super admin can grant the super admin role");
+    }
+    if (data.isActive === false) {
+      // Closing your own account is never the intent — it is a locked-out
+      // administrator and a support call. Refused before the scope check so the
+      // message is the real reason rather than a 404.
+      if (id === actor.id) {
+        throw BadRequest("You cannot deactivate your own account");
+      }
+      // Work still on their desk has to go somewhere first. The handover queue
+      // exists for exactly this, and doing it silently here would either strand
+      // the tickets on a closed account or move them without anyone choosing
+      // where — so the API insists on the order instead of guessing.
+      const open = await userRepository.countOpenAssigned(id, actor);
+      if (open > 0) {
+        throw HasOpenQueue(open);
+      }
     }
     // Scope is enforced in the repository (customer-bound actors → their own
     // customer only); an out-of-scope target 404s.

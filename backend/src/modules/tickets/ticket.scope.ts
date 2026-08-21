@@ -38,6 +38,8 @@ export type AssignmentCandidate = {
   id: number;
   role: Role;
   customerId: number | null;
+  /** False = the account is closed; see User.isActive. */
+  isActive: boolean;
 };
 
 /**
@@ -59,6 +61,11 @@ export function mayReceiveAssignment(
   candidate: AssignmentCandidate,
 ): boolean {
   if (candidate.role === "user") return false;
+  // A closed account cannot be handed work. Checked before reach, because it is
+  // true regardless of who is asking — and this being the one decision point for
+  // "who may receive" is what makes it hold for a single ticket, a whole queue
+  // handover, and owning a routing project alike.
+  if (!candidate.isActive) return false;
   if (isPlatformWide(actor)) return true;
   if (actor.customerId == null) return false;
   return candidate.customerId === actor.customerId;

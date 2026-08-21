@@ -15,13 +15,21 @@ export const updateUserBody = z
     projectId: z.number().int().positive().nullable().optional(),
     /** The "ไม่สะดวก" switch: false makes project routing skip this person. */
     availableForAssignment: z.boolean().optional(),
+    /**
+     * Whether the account may be used at all — false is how someone who has left
+     * is retired, since a person who ever raised a ticket cannot be deleted.
+     * A different thing from `availableForAssignment`: that one is a rota, this
+     * one is the door.
+     */
+    isActive: z.boolean().optional(),
   })
   .refine(
     (d) =>
       d.role !== undefined ||
       d.teamId !== undefined ||
       d.projectId !== undefined ||
-      d.availableForAssignment !== undefined,
+      d.availableForAssignment !== undefined ||
+      d.isActive !== undefined,
     { message: "Nothing to update" },
   );
 
