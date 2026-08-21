@@ -179,6 +179,13 @@ export function PermissionsView() {
             </li>
           ))}
         </ul>
+        {/* The table above is headed "ticket visibility", which undersells it:
+            the same clause is what the history, the dashboard and the reports
+            count through. Worth saying, since a reader looking at an empty
+            dashboard otherwise has no way to tell scoping from no data. */}
+        <p className="mt-3 text-[11.5px] leading-relaxed text-faint">
+          {t("perm.scopeReach")}
+        </p>
       </Card>
     </div>
   );

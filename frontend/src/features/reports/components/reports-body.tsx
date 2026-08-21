@@ -28,18 +28,27 @@ const VB = { w: 1080, h: 180, top: 16, bottom: 148, left: 24, right: 1056 };
 
 function buildChart(series: number[]) {
   const n = series.length;
-  const max = Math.max(...series, 1);
+  /**
+   * The real high-water mark, which is what the badge reports.
+   *
+   * Kept apart from `scale` below. They used to be one value, so the floor that
+   * stops the plot dividing by zero was also printed as "peak 1/day" — a week
+   * with nothing closed in it claimed a closure that never happened, on the empty
+   * state and on any quiet week alike.
+   */
+  const peak = series.length ? Math.max(...series) : 0;
+  const scale = Math.max(peak, 1);
   const x = (i: number) =>
     VB.left + (i * (VB.right - VB.left)) / Math.max(n - 1, 1);
   const y = (v: number) =>
-    VB.top + (1 - v / max) * (VB.bottom - VB.top);
+    VB.top + (1 - v / scale) * (VB.bottom - VB.top);
   const points = series.map((v, i) => ({ x: x(i), y: y(v), v }));
   const line = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const area =
     n > 0
       ? `${line} ${x(n - 1).toFixed(1)},${VB.bottom} ${VB.left},${VB.bottom}`
       : "";
-  return { points, line, area, max };
+  return { points, line, area, peak };
 }
 
 export function ReportsBody() {
@@ -80,27 +89,42 @@ export function ReportsBody() {
     m: t("closedLog.unit.m"),
   };
   const hours = (n: number) => formatDuration(n * 3_600_000, units);
+  /**
+   * Nothing measured reads as a dash, never as a figure.
+   *
+   * `formatDuration(0)` is "<1m" and 0% is 0%, so an account with no finished
+   * tickets announced sub-minute handling and total SLA failure — the two most
+   * alarming numbers on the page, from an absence of data. The counts below each
+   * tile said "across 0 tickets", but the figure is what gets read.
+   */
+  const noneYet = t("sla.none");
 
   const kpis = [
     {
       label: t("report.kpi.avgRes"),
-      value: hours(data.kpis.avgHandlingHours),
+      value: data.kpis.handledCount
+        ? hours(data.kpis.avgHandlingHours)
+        : noneYet,
       sub: t("report.kpi.avgRes.sub", { n: data.kpis.handledCount }),
     },
     {
       label: t("report.kpi.firstResp"),
-      value: formatDuration(data.kpis.medianFirstResponseMin * 60_000, units),
+      value: data.kpis.medianFirstResponseMin
+        ? formatDuration(data.kpis.medianFirstResponseMin * 60_000, units)
+        : noneYet,
       sub: t("report.kpi.firstResp.sub"),
     },
     {
       label: t("report.kpi.sla"),
-      value: `${data.kpis.slaCompliancePct}%`,
+      value: data.kpis.judgedCount
+        ? `${data.kpis.slaCompliancePct}%`
+        : noneYet,
       sub: t("report.kpi.sla.sub", { n: data.kpis.judgedCount }),
     },
   ];
 
-  const labels = trendDayLabels(data.closureTrend.length, locale);
-  const chart = buildChart(data.closureTrend);
+  const labels = trendDayLabels(data.closureTrend, locale);
+  const chart = buildChart(data.closureTrend.map((d) => d.count));
   const totalMet = data.byPriority.reduce((a, r) => a + r.met, 0);
   const totalBreached = data.byPriority.reduce((a, r) => a + r.breached, 0);
   const totalJudged = totalMet + totalBreached;
@@ -133,11 +157,15 @@ export function ReportsBody() {
             <div className="text-[11.5px] text-faint">{t("report.trend.sub")}</div>
           </div>
           <span className="rounded-full bg-[#efe0cd] px-2.5 py-1 font-mono text-[11px] font-semibold text-brand-hover">
-            {t("report.trend.peak", { n: chart.max })}
+            {t("report.trend.peak", { n: chart.peak })}
           </span>
         </div>
 
-        {totalJudged === 0 && chart.max <= 1 && data.kpis.handledCount === 0 ? (
+        {/* Nothing judged, nothing closed and no bar to draw — say so rather than
+            plot a flat line along the floor. `peak` is the real high-water mark
+            now, so this reads as "no closures" instead of leaning on the old
+            scale floor of 1. */}
+        {totalJudged === 0 && chart.peak === 0 && data.kpis.handledCount === 0 ? (
           <div className="py-10 text-center text-[12.5px] text-faint">
             {t("report.empty")}
           </div>
@@ -268,17 +296,27 @@ export function ReportsBody() {
         </TableScroll>
       </div>
 
-      {/* SLA by category */}
-      {data.byCategory.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <div className="border-b border-[#eef1f5] px-5 py-3.5">
-            <div className="text-[13.5px] font-semibold text-ink">
-              {t("report.byCategory.title")}
-            </div>
-            <div className="text-[11.5px] text-faint">
-              {t("report.byCategory.sub")}
-            </div>
+      {/* SLA by category. The heading stays even with nothing to show — an empty
+          list used to remove the whole block, so a reader with no judged tickets
+          never learned the section existed. The agent table below says "not
+          enough data yet" in the same situation; these two now behave alike. */}
+      <div className="overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="border-b border-[#eef1f5] px-5 py-3.5">
+          <div className="text-[13.5px] font-semibold text-ink">
+            {t("report.byCategory.title")}
           </div>
+          <div className="text-[11.5px] text-faint">
+            {t("report.byCategory.sub")}
+          </div>
+        </div>
+        {data.byCategory.length === 0 ? (
+          // No columns to hold apart, so no scroller — same reasoning as the
+          // agent table's empty state.
+          <div className="px-5 py-6 text-center text-[12.5px] text-faint">
+            {t("report.sectionEmpty")}
+          </div>
+        ) : (
+          <>
           <TableScroll minWidth={ROW_MIN_WIDTH}>
           <div
             className={`grid ${ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
@@ -317,8 +355,9 @@ export function ReportsBody() {
             </div>
           ))}
           </TableScroll>
-        </div>
-      ) : null}
+          </>
+        )}
+      </div>
 
       {/* Throughput by agent */}
       <div className="overflow-hidden rounded-lg border border-line bg-panel">

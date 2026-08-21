@@ -50,6 +50,8 @@ const en: Dict = {
   "scope.admin": "All tickets in your customer (every department)",
   "scope.super_admin":
     "All tickets in your customer — or every customer, if you belong to none",
+  "perm.scopeReach":
+    "The same scope governs the ticket list, the closed history, the dashboard and the reports — every one of them counts only the tickets above. The knowledge base is outside it: every article is readable by everyone signed in.",
 
   "topbar.search": "Search tickets, users, articles…",
   "topbar.newTicket": "New ticket",
@@ -635,6 +637,8 @@ const th: Dict = {
   "scope.admin": "Ticket ทั้งหมดในลูกค้าของคุณ (ทุกแผนก)",
   "scope.super_admin":
     "Ticket ทั้งหมดในลูกค้าของคุณ — หรือทุกลูกค้า ถ้าคุณไม่สังกัดลูกค้าใด",
+  "perm.scopeReach":
+    "ขอบเขตเดียวกันนี้ใช้กับรายการ Ticket ประวัติ Ticket แดชบอร์ด และรายงาน — ทุกหน้านับเฉพาะ Ticket ตามด้านบน ส่วนฐานความรู้อยู่นอกขอบเขตนี้ ทุกบทความอ่านได้ทุกคนที่เข้าสู่ระบบ",
 
   "topbar.search": "ค้นหา Ticket ผู้ใช้ บทความ…",
   "topbar.newTicket": "สร้าง Ticket",

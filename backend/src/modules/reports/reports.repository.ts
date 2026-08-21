@@ -9,6 +9,18 @@ const MIN = 60_000;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/**
+ * A date as `YYYY-MM-DD` in the server's local time.
+ *
+ * Built from the parts, not `toISOString().slice(0, 10)`: that converts to UTC
+ * first, which would relabel the very buckets it is meant to describe on any
+ * server not running UTC.
+ */
+function localDay(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function median(nums: number[]): number {
   if (nums.length === 0) return 0;
   const sorted = [...nums].sort((a, b) => a - b);
@@ -39,8 +51,15 @@ export type ReportsSummary = {
     handledCount: number;
     judgedCount: number;
   };
-  /** Tickets that reached `closed` on each of the last 7 days, oldest first. */
-  closureTrend: number[];
+  /**
+   * Tickets that reached `closed` on each of the last 7 days, oldest first.
+   *
+   * `day` is the bucket's own calendar day as `YYYY-MM-DD`, in the server's local
+   * time — the same clock that cut the bucket. The client labels each bar from
+   * this rather than recomputing the window, so the axis and the counts cannot
+   * disagree about where a day starts.
+   */
+  closureTrend: { day: string; count: number }[];
   byPriority: {
     priority: Priority;
     compliancePct: number;
@@ -199,27 +218,36 @@ export const reportsRepository = {
     const medianFirstResponseMin = Math.round(median([...firstByTicket.values()]));
 
     /**
-     * Closures per day over the last 7 days (oldest → newest).
+     * Closures per day over the last 7 days (oldest → newest), each bucket
+     * carrying the day it counts.
      *
      * Counts `closed_at`, matching the handling average above. It counted
      * `resolved_at` before, which put a chart of one event directly under a KPI
      * measuring to another — the same ticket landed on a different day in each.
+     *
+     * The day travels with the count because the client used to derive its own
+     * axis labels from `new Date()` in the browser. The buckets are cut here, in
+     * the server's local time; the labels were cut there, in the reader's. A
+     * closure at 03:00 in Bangkok on a UTC server therefore sat under yesterday's
+     * bar while the label above it said today. One side has to own the calendar,
+     * and it is the side doing the counting.
      */
-    const closureTrend: number[] = [];
+    const closureTrend: { day: string; count: number }[] = [];
     for (let i = 6; i >= 0; i--) {
       const start = new Date(now);
       start.setHours(0, 0, 0, 0);
       start.setDate(start.getDate() - i);
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
-      closureTrend.push(
-        terminal.filter(
+      closureTrend.push({
+        day: localDay(start),
+        count: terminal.filter(
           (t) =>
             t.closedAt &&
             t.closedAt.getTime() >= start.getTime() &&
             t.closedAt.getTime() < end.getTime(),
         ).length,
-      );
+      });
     }
 
     return {
