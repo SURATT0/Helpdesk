@@ -10,7 +10,9 @@ export const reportsSummarySchema = z.object({
       handledCount: z.number(),
       judgedCount: z.number(),
     }),
-    closureTrend: z.array(z.number()),
+    // Each bucket carries the day it counts, cut by the server's calendar — the
+    // client no longer derives the axis from its own clock (see reports.repository).
+    closureTrend: z.array(z.object({ day: z.string(), count: z.number() })),
     byPriority: z.array(
       z.object({
         priority: prioritySchema,

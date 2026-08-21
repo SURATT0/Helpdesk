@@ -11,7 +11,7 @@ export function ReportActions() {
 
   function exportCsv() {
     if (!data) return;
-    const labels = trendDayLabels(data.closureTrend.length, locale);
+    const labels = trendDayLabels(data.closureTrend, locale);
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(`deskly-report-${stamp}.csv`, reportsToCsv(data, labels));
   }

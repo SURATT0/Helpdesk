@@ -8,19 +8,29 @@ import type { ReportsSummary } from "./schemas";
  * were formatted in the machine's language regardless of the one the user had
  * picked in the app. Callers read it from `useI18n()`.
  */
-export function trendDayLabels(count: number, locale: string): string[] {
-  const out: string[] = [];
-  const today = new Date();
+/**
+ * Axis labels for the closure trend, read off the buckets themselves.
+ *
+ * It used to rebuild the window from `new Date()` in the browser, which put the
+ * labels on the reader's calendar and the counts on the server's — a closure at
+ * 03:00 in Bangkok on a UTC server landed under yesterday's bar with today's date
+ * above it. Each `day` arrives as `YYYY-MM-DD`; it is split into parts rather
+ * than passed to `new Date(string)`, which would read a bare date as UTC and
+ * shift it back by a day for anyone west of Greenwich.
+ */
+export function trendDayLabels(
+  days: readonly { day: string }[],
+  locale: string,
+): string[] {
   const format = new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
   });
-  for (let i = count - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    out.push(format.format(d));
-  }
-  return out;
+  return days.map(({ day }) => {
+    const [y, m, d] = day.split("-").map(Number);
+    if (!y || !m || !d) return day;
+    return format.format(new Date(y, m - 1, d));
+  });
 }
 
 function csvEscape(value: string | number): string {
@@ -48,7 +58,7 @@ export function reportsToCsv(
     ["Tickets judged for SLA", kpis.judgedCount],
     [],
     ["Day", "Tickets closed"],
-    ...closureTrend.map((n, i) => [trendLabels[i] ?? `Day ${i + 1}`, n]),
+    ...closureTrend.map(({ count }, i) => [trendLabels[i] ?? `Day ${i + 1}`, count]),
     [],
     ["Priority", "Compliance (%)", "Met", "Breached"],
     ...byPriority.map((r) => [r.priority, r.compliancePct, r.met, r.breached]),

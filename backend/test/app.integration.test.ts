@@ -601,6 +601,141 @@ describe("tickets — list ordering", () => {
   });
 });
 
+/**
+ * What a requester reaches, across every surface that counts tickets.
+ *
+ * All four go through `ticketScopeWhere`, so for role `user` they resolve to
+ * "tickets I raised" — and the knowledge base deliberately does not, because an
+ * article is the same article for everyone. That is already how it behaves; this
+ * pins it down, since a scope that is correct by habit rather than by test is one
+ * refactor away from not being.
+ */
+describe("scope — a requester sees only their own, except the KB", () => {
+  const REQUESTER = "marcus.chen@acme.com";
+
+  /**
+   * Somebody else's ticket in the same customer — closed, raised by l.osei.
+   * Not 1042: that one is Marcus's own, which is exactly the mistake this
+   * constant is named to prevent.
+   */
+  const OTHERS_TICKET = 1001;
+
+  it("lists only the tickets they raised", async () => {
+    const marcus = await login(REQUESTER);
+    const me = await prisma.user.findUniqueOrThrow({
+      where: { email: REQUESTER },
+    });
+    const res = await request(app).get(`${API}/tickets`).set(bearer(marcus));
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+
+    const mine = await prisma.ticket.findMany({
+      where: { requesterId: me.id, deletedAt: null },
+      select: { id: true },
+    });
+    expect(res.body.data.map((t: { id: number }) => t.id).sort()).toEqual(
+      mine.map((t) => t.id).sort(),
+    );
+  });
+
+  it("cannot open someone else's ticket, and is told it is missing", async () => {
+    // 404 rather than 403: a forbidden here would confirm the ticket exists.
+    const marcus = await login(REQUESTER);
+    const res = await request(app)
+      .get(`${API}/tickets/${OTHERS_TICKET}`)
+      .set(bearer(marcus));
+    expect(res.status).toBe(404);
+  });
+
+  it("cannot reach someone else's ticket through the closed history", async () => {
+    const marcus = await login(REQUESTER);
+    const me = await prisma.user.findUniqueOrThrow({
+      where: { email: REQUESTER },
+    });
+    const res = await request(app)
+      .get(`${API}/tickets/closed?granularity=all&limit=200&offset=0`)
+      .set(bearer(marcus));
+    expect(res.status).toBe(200);
+    for (const t of res.body.data as { requesterEmail: string }[]) {
+      expect(t.requesterEmail).toBe(me.email);
+    }
+  });
+
+  it("cannot search past the scope either", async () => {
+    // The free-text filter runs inside the scope clause, not around it — a
+    // requester searching a colleague's subject must still come back empty.
+    const other = await prisma.ticket.findUniqueOrThrow({
+      where: { id: OTHERS_TICKET },
+    });
+    const marcus = await login(REQUESTER);
+    const res = await request(app)
+      .get(
+        `${API}/tickets/closed?granularity=all&limit=50&offset=0&q=${encodeURIComponent(
+          other.subject,
+        )}`,
+      )
+      .set(bearer(marcus));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it("counts only their own on the dashboard", async () => {
+    const marcus = await login(REQUESTER);
+    const me = await prisma.user.findUniqueOrThrow({
+      where: { email: REQUESTER },
+    });
+    const res = await request(app)
+      .get(`${API}/dashboard/summary`)
+      .set(bearer(marcus));
+    expect(res.status).toBe(200);
+
+    const mine = await prisma.ticket.count({
+      where: { requesterId: me.id, deletedAt: null },
+    });
+    expect(res.body.data.stats.totalTickets).toBe(mine);
+
+    // And that is smaller than what an admin of the same customer sees.
+    const dana = await login("dana.reyes@acme.com");
+    const asAdmin = await request(app)
+      .get(`${API}/dashboard/summary`)
+      .set(bearer(dana));
+    expect(asAdmin.body.data.stats.totalTickets).toBeGreaterThan(mine);
+  });
+
+  it("reports only on their own", async () => {
+    const marcus = await login(REQUESTER);
+    const res = await request(app)
+      .get(`${API}/reports/sla-summary`)
+      .set(bearer(marcus));
+    expect(res.status).toBe(200);
+    // Marcus is in nobody's closed history, so his own report has nothing in it —
+    // while the same call as an admin is full of the customer's agents.
+    expect(res.body.data.byAgent).toEqual([]);
+
+    const dana = await login("dana.reyes@acme.com");
+    const asAdmin = await request(app)
+      .get(`${API}/reports/sla-summary`)
+      .set(bearer(dana));
+    expect(asAdmin.body.data.byAgent.length).toBeGreaterThan(0);
+  });
+
+  it("reads the same knowledge base as everyone else", async () => {
+    // The one surface that is deliberately not scoped: an article is the same
+    // article whoever opens it.
+    const marcus = await login(REQUESTER);
+    const dana = await login("dana.reyes@acme.com");
+
+    const asRequester = await request(app).get(`${API}/kb`).set(bearer(marcus));
+    const asAdmin = await request(app).get(`${API}/kb`).set(bearer(dana));
+    expect(asRequester.status).toBe(200);
+    expect(asAdmin.status).toBe(200);
+    expect(asRequester.body.data.length).toBeGreaterThan(0);
+    expect(asRequester.body.data.map((a: { id: number }) => a.id)).toEqual(
+      asAdmin.body.data.map((a: { id: number }) => a.id),
+    );
+  });
+});
+
 describe("reports — what the resolution clock measures", () => {
   /**
    * Marcus raises tickets but is in nobody's closed history, and a requester's
@@ -739,11 +874,20 @@ describe("reports — what the resolution clock measures", () => {
     });
 
     const data = await summary(await login("marcus.chen@acme.com"));
-    const trend = data.closureTrend as number[];
+    const trend = data.closureTrend as { day: string; count: number }[];
     expect(trend).toHaveLength(7);
     // Today is the last bar, and it holds the closure.
-    expect(trend.at(-1)).toBe(1);
-    expect(trend.slice(0, -1).every((n) => n === 0)).toBe(true);
+    expect(trend.at(-1)!.count).toBe(1);
+    expect(trend.slice(0, -1).every((d) => d.count === 0)).toBe(true);
+
+    // Each bucket names the day it counted, so the client can label the axis
+    // from the same calendar that cut it instead of rebuilding the window.
+    const today = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    expect(trend.at(-1)!.day).toBe(
+      `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
+    );
+    expect(trend.map((d) => d.day)).toEqual([...trend.map((d) => d.day)].sort());
   });
 
   it("gives an agent's average the same clock as the headline", async () => {
