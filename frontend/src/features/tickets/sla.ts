@@ -21,7 +21,6 @@ export type SlaState =
   | "at_risk"
   | "due_soon"
   | "on_track"
-  | "paused"
   | "breached_closed"
   | "met"
   | "no_sla";
@@ -64,7 +63,6 @@ export type SlaLabels = {
   left: string;
   /** Finished late — "missed by {d}". */
   missed: string;
-  paused: string;
   met: string;
   /** No SLA target on this ticket. */
   none: string;
@@ -85,10 +83,16 @@ export type SlaInput = {
  * Judge one ticket's SLA. `now` is injectable so callers can tick a shared clock
  * (and so tests don't depend on the wall clock).
  *
- * Note there is no paused-duration input: nothing in the system records how long
- * a ticket sat in `pending`, and `due_at` is never pushed out to compensate — so
- * "paused" means the badge stops counting, not that the deadline moved. Taking a
- * `pausedMs` argument would imply an adjustment this data cannot support.
+ * There is no paused state, and no paused-duration input, because there is no
+ * paused clock: an SLA policy in the spec is `{ first_response_mins,
+ * resolution_mins }` with nothing to stop it, and `due_at` is computed once at
+ * creation and never moved. `pending` used to get a "Paused, clock stopped"
+ * badge, which was false in the one direction that matters — a ticket sitting on
+ * the requester went past its target showing the same calm grey as one with a day
+ * of headroom, and only turned red once somebody resumed it.
+ *
+ * Waiting on the requester is what the ticket's *status* says. What this says is
+ * how it is doing against a target that runs either way.
  */
 export function assessSla(
   ticket: SlaInput,
@@ -124,10 +128,6 @@ export function judgeSla(
   }
 
   const minutesDelta = minutesBetween(due, now);
-  // Paused wins over the countdown: the clock is stopped, so the headroom is
-  // still reported but not dressed up as time in hand.
-  if (status === "pending") return { state: "paused", minutesDelta };
-
   const remainingMs = due - now;
   if (remainingMs < 0) return { state: "breached_open", minutesDelta };
   const state: SlaState =
@@ -154,8 +154,6 @@ function describe(
     case "due_soon":
     case "on_track":
       return fill(labels.left, ms, labels.units);
-    case "paused":
-      return labels.paused;
     case "met":
       return labels.met;
     case "no_sla":
@@ -176,9 +174,13 @@ function fill(template: string, ms: number, units: DurationLabels): string {
 }
 
 /**
- * Sort order for the SLA column: worst first. Breached-and-open leads, ordered by
- * how badly it has overrun, then whatever is closest to breaching; finished and
- * paused tickets sink to the bottom, where nothing is at stake.
+ * Sort order for the SLA column: worst first. Everything with a running clock
+ * leads, ordered by how badly it has overrun or how close it is to breaching;
+ * finished tickets sink to the bottom, where nothing is at stake.
+ *
+ * A `pending` ticket sorts by its clock like any other running one — it used to
+ * land in a bucket of its own, below tickets that were already closed, which put
+ * the least visible breaches furthest down the page.
  */
 const SORT_BUCKET: Record<SlaState, number> = {
   breached_open: 0,
@@ -186,9 +188,8 @@ const SORT_BUCKET: Record<SlaState, number> = {
   due_soon: 0,
   on_track: 0,
   breached_closed: 1,
-  paused: 2,
-  met: 3,
-  no_sla: 4,
+  met: 2,
+  no_sla: 3,
 };
 
 export function compareSla(a: SlaAssessment, b: SlaAssessment): number {

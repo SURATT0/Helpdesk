@@ -32,8 +32,41 @@ test("the badge separates overdue, at risk and comfortable", async ({
   await expect(page.getByLabel(/^SLA: Breached, still open/).first()).toBeVisible();
   await expect(page.getByLabel(/^SLA: At risk/).first()).toBeVisible();
   await expect(page.getByLabel(/^SLA: On track/).first()).toBeVisible();
-  // And a paused one, whose clock is stopped rather than late.
-  await expect(page.getByLabel(/^SLA: Paused/).first()).toBeVisible();
+  // And nothing claims a stopped clock. A pending ticket is waiting on its
+  // requester, not on its deadline — `due_at` never moves — so it carries the
+  // same verdict as any other unfinished row rather than a "Paused" badge that
+  // hid an overrun behind the same grey as a day of headroom.
+  await expect(page.getByLabel(/^SLA: Paused/)).toHaveCount(0);
+});
+
+test("a pending ticket is judged by its clock like any other", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/tickets");
+
+  // Filter to the pending rows rather than trusting whichever ones the seed's
+  // relative dates produce today.
+  await page.getByRole("button", { name: "＋ Status" }).click();
+  await page.getByRole("button", { name: "Pending" }).click();
+  await page.keyboard.press("Escape");
+
+  const rows = page.getByRole("button", { name: /^Open ticket #/ });
+  await expect(rows.first()).toBeVisible();
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(0);
+
+  // Each one carries a running-clock verdict — never "Paused", which used to
+  // show the same calm grey whether the deadline was a day away or a day gone.
+  const verdicts = await page
+    .locator('[aria-label^="SLA: "]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
+  expect(verdicts).toHaveLength(count);
+  for (const v of verdicts) {
+    expect(v).toMatch(
+      /^SLA: (Breached, still open|At risk|Due soon|On track)/,
+    );
+  }
 });
 
 test("the still-open breaches are counted and can be filtered to", async ({
