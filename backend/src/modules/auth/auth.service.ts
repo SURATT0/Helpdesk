@@ -42,8 +42,21 @@ type UserRow = {
   customerId: number | null;
   passwordHash: string | null;
   availableForAssignment: boolean;
+  isActive: boolean;
   team: { department: string } | null;
 };
+
+/**
+ * A deactivated account cannot start or continue a session.
+ *
+ * Named apart from the credential failure on purpose. It is only ever reached
+ * *after* the password has already been verified (or a valid refresh cookie
+ * presented), so saying what is actually wrong tells an attacker nothing they did
+ * not already have — and telling a real person "invalid email or password" when
+ * their password is fine sends them to reset it, twice, before they call anyone.
+ */
+const Deactivated = () =>
+  Unauthorized("This account has been deactivated — contact your administrator");
 
 function toPublicUser(u: UserRow): PublicUser {
   return {
@@ -90,6 +103,9 @@ export const authService = {
     if (!user || !user.passwordHash || !ok) {
       throw Unauthorized("Invalid email or password");
     }
+    // Checked after the compare, so a wrong password still answers uniformly and
+    // the door being shut is not something you can probe for.
+    if (!user.isActive) throw Deactivated();
     await authRepository.deleteExpired(user.id); // opportunistic cleanup
     return mintSession(user, randomUUID());
   },
@@ -97,6 +113,21 @@ export const authService = {
   async refresh(rawToken: string): Promise<Session> {
     const row = await authRepository.findRefreshToken(hashRefreshToken(rawToken));
     if (!row) throw Unauthorized("Invalid session");
+
+    /**
+     * Deactivation has to bite here, not only at the next login. The refresh
+     * cookie lives seven days and is what keeps a tab signed in indefinitely, so
+     * a check only on the password path would leave a departed employee working
+     * until their browser happened to close.
+     *
+     * The whole family goes with it. Leaving the cookie merely refused would let
+     * the client retry it every fifteen minutes forever; revoking makes the
+     * session end once, and stays correct if the account is ever switched back on.
+     */
+    if (!row.user.isActive) {
+      await authRepository.revokeFamily(row.familyId);
+      throw Deactivated();
+    }
 
     if (row.revokedAt) {
       // An already-revoked token came back. Usually that IS theft — but not always:
@@ -141,6 +172,9 @@ export const authService = {
   async me(userId: number): Promise<PublicUser> {
     const user = await authRepository.findUserById(userId);
     if (!user) throw Unauthorized("Session expired");
+    // A still-valid access token outlives deactivation by up to its 15 minutes.
+    // This is what stops the app rendering for someone already shut out.
+    if (!user.isActive) throw Deactivated();
     return toPublicUser(user);
   },
 

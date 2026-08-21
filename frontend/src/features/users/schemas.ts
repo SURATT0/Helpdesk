@@ -18,6 +18,12 @@ export const userSchema = z.object({
    * owner. It does not limit what they can see or do.
    */
   availableForAssignment: z.boolean(),
+  /**
+   * False = the account is closed. They cannot sign in, an open session ends at
+   * its next refresh, and no new work routes to them. A different switch from
+   * `availableForAssignment` above: that one is a rota, this one is the door.
+   */
+  isActive: z.boolean(),
   createdAt: z.string(),
 });
 

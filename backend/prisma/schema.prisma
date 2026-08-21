@@ -157,6 +157,16 @@ model User {
   // restrict what they can see or do — an unavailable agent still works their
   // open tickets.
   availableForAssignment Boolean               @default(true) @map("available_for_assignment")
+  // Whether this account may be used at all. False = the person has left: they
+  // cannot sign in, an existing session dies at its next refresh, and no new work
+  // routes to them.
+  //
+  // Distinct from `availableForAssignment` above, which is a rota switch — an
+  // unavailable agent is at lunch and still works their queue. This one is the
+  // door. Deactivating replaces deleting, which the schema cannot offer anyway:
+  // `Ticket.requesterId` is RESTRICT, so a person who ever raised a ticket can
+  // never be removed without erasing their history with them.
+  isActive               Boolean               @default(true) @map("is_active")
   ownedProjects          Project[]             @relation("ProjectOwner")
   backupForProjects      Project[]             @relation("ProjectBackupOwner")
   passwordHash           String?               @map("password_hash") // filled by the auth milestone

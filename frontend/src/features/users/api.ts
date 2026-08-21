@@ -40,6 +40,11 @@ export type UpdateUserInput = {
   /** Routing group; `null` detaches the user from any project. */
   projectId?: number | null;
   availableForAssignment?: boolean;
+  /**
+   * Close or reopen the account. The server refuses to close your own, or one
+   * that still holds unfinished tickets — hand the queue over first.
+   */
+  isActive?: boolean;
 };
 
 /**

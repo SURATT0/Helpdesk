@@ -354,6 +354,26 @@ export const ticketService = {
     user: AuthUser,
   ): Promise<Ticket> {
     await this.get(id, user); // row scope → 404 before any write
+    /**
+     * The same eligibility check the queue handover makes.
+     *
+     * This path used to assert only that the id existed, which let one ticket go
+     * somewhere a whole queue could not: to a requester, to another customer's
+     * staff, and — once accounts could be closed — to someone who had left. Two
+     * routes to the same outcome disagreeing about who may hold a ticket is the
+     * kind of gap that only shows up as a ticket nobody is working.
+     *
+     * `null` clears the assignee, which needs no candidate and stays allowed.
+     */
+    if (assigneeId != null) {
+      const candidate = await ticketRepository.findAssignmentCandidate(assigneeId);
+      if (!candidate) throw BadRequest(`Unknown user #${assigneeId}`);
+      if (!mayReceiveAssignment(user, candidate)) {
+        // Deliberately one message, as in `reassign` — distinguishing the reasons
+        // would leak the directory of tenants the actor cannot see.
+        throw Forbidden(`User #${assigneeId} cannot be assigned tickets`);
+      }
+    }
     const updated = await ticketRepository.updateAssignee(id, assigneeId, user.id);
     if (!updated) throw NotFound(`Ticket #${id} not found`);
     return updated;

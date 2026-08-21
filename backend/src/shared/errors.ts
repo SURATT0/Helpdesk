@@ -41,6 +41,19 @@ export const IllegalTransition = (from: string, to: string) =>
     `Cannot move ticket from "${from}" to "${to}"`,
   );
 
+/**
+ * Thrown when closing an account that still holds unfinished work.
+ *
+ * A 409 rather than a 400: the request is well formed and will succeed once the
+ * queue has been handed over, which is what the message points at.
+ */
+export const HasOpenQueue = (count: number) =>
+  new AppError(
+    409,
+    "USER_HAS_OPEN_QUEUE",
+    `This person still has ${count} unfinished ticket${count === 1 ? "" : "s"} assigned — hand the queue over first`,
+  );
+
 /** Thrown when reopening a ticket closed more than 30 days ago. */
 export const ReopenWindowExpired = (
   message = "Reopen window (30 days) has expired — open a new ticket instead",

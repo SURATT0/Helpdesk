@@ -1843,6 +1843,204 @@ describe("auth — refresh rotation & reuse detection", () => {
   });
 });
 
+/**
+ * Retiring an account.
+ *
+ * There is no `DELETE /users` and there cannot be: `Ticket.requesterId` is
+ * RESTRICT, so removing anyone who ever raised a ticket would mean erasing their
+ * history with them. `isActive: false` is the door instead — no sign-in, no
+ * session, no new work — and it is a different switch from
+ * `availableForAssignment`, which is only a rota.
+ */
+describe("users — deactivation", () => {
+  const patch = (token: string, id: number, body: Record<string, unknown>) =>
+    request(app).patch(`${API}/users/${id}`).set(bearer(token)).send(body);
+
+  /**
+   * Staff with no assignments of their own to get in the way.
+   *
+   * It has to be someone a queue genuinely could be handed to, or a refusal
+   * proves nothing about `isActive` — a requester is turned away on their role
+   * alone, whether their account is open or shut.
+   */
+  const spareStaff = () =>
+    prisma.user.findUniqueOrThrow({ where: { email: "morgan.lee@acme.com" } });
+
+  it("closes the door: no login, and the session dies at its next refresh", async () => {
+    const sam = await login("sam.rivera@acme.com"); // platform-wide
+    const target = await prisma.user.findUniqueOrThrow({
+      where: { email: "j.petrov@acme.com" },
+    });
+
+    // A live session first, so we can watch it end rather than just fail to start.
+    const before = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: target.email, password: "password123" });
+    expect(before.status).toBe(200);
+    const cookie = before.headers["set-cookie"];
+
+    const res = await patch(sam, target.id, { isActive: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isActive).toBe(false);
+
+    // Cannot sign in again…
+    const again = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: target.email, password: "password123" });
+    expect(again.status).toBe(401);
+    expect(again.body.error.message).toMatch(/deactivated/i);
+
+    // …and the refresh cookie they still hold is refused too, so the tab they
+    // left open stops working instead of running for another seven days.
+    const refreshed = await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", cookie);
+    expect(refreshed.status).toBe(401);
+  });
+
+  it("refuses to close an account that still holds unfinished work", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const holding = await prisma.ticket.count({
+      where: {
+        assigneeId: dana.id,
+        deletedAt: null,
+        status: { in: ["new", "open", "in_progress", "pending"] },
+      },
+    });
+    expect(holding).toBeGreaterThan(0);
+
+    const res = await patch(sam, dana.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("USER_HAS_OPEN_QUEUE");
+    // The message says how many, so the reader knows the size of the job.
+    expect(res.body.error.message).toContain(String(holding));
+
+    // And nothing changed.
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: dana.id },
+    });
+    expect(after.isActive).toBe(true);
+  });
+
+  it("accepts it once the queue has been handed over", async () => {
+    // The order the API insists on, end to end.
+    const sam = await login("sam.rivera@acme.com");
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const kai = await prisma.user.findUniqueOrThrow({
+      where: { email: "kai.t@acme.com" },
+    });
+
+    const handover = await request(app)
+      .post(`${API}/tickets/reassign`)
+      .set(bearer(sam))
+      .send({ fromUserId: dana.id, toUserId: kai.id });
+    expect(handover.status).toBe(200);
+
+    const res = await patch(sam, dana.id, { isActive: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isActive).toBe(false);
+  });
+
+  it("refuses to close your own account", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const me = await prisma.user.findUniqueOrThrow({
+      where: { email: "sam.rivera@acme.com" },
+    });
+    const res = await patch(sam, me.id, { isActive: false });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/your own account/i);
+  });
+
+  it("stops new work reaching a closed account", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const target = await spareStaff();
+    expect((await patch(sam, target.id, { isActive: false })).status).toBe(200);
+
+    // A single ticket…
+    const one = await request(app)
+      .patch(`${API}/tickets/1042/assignee`)
+      .set(bearer(sam))
+      .send({ assigneeId: target.id });
+    expect(one.status).toBe(403);
+
+    // …a whole queue…
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    const queue = await request(app)
+      .post(`${API}/tickets/reassign`)
+      .set(bearer(sam))
+      .send({ fromUserId: dana.id, toUserId: target.id });
+    expect(queue.status).toBe(403);
+
+    // …and owning a routing project, which hands them tickets without anyone
+    // choosing a name.
+    // `customerId` is explicit because Sam is platform-wide and has none of their
+    // own to infer — otherwise this 400s on the missing tenant and proves nothing.
+    const owning = await request(app)
+      .post(`${API}/projects`)
+      .set(bearer(sam))
+      .send({
+        name: "Closed owner check",
+        ownerId: target.id,
+        customerId: target.customerId,
+      });
+    expect(owning.status).toBe(403);
+  });
+
+  it("records the change in the audit trail", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const target = await spareStaff();
+    expect((await patch(sam, target.id, { isActive: false })).status).toBe(200);
+
+    const rows = await prisma.auditLog.findMany({
+      where: { entity: "user", entityId: target.id, action: "user.update" },
+      orderBy: { id: "desc" },
+      take: 1,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].meta).toMatchObject({ isActive: false });
+  });
+
+  it("can be reversed, and the account works again", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const target = await spareStaff();
+    await patch(sam, target.id, { isActive: false });
+    expect((await patch(sam, target.id, { isActive: true })).status).toBe(200);
+
+    const res = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: target.email, password: "password123" });
+    expect(res.status).toBe(200);
+  });
+
+  it("is not the same switch as availability", async () => {
+    // Marking someone unavailable must not shut them out, and must still let a
+    // queue be handed to them — they are at lunch, not gone.
+    const sam = await login("sam.rivera@acme.com");
+    const target = await spareStaff();
+    expect(
+      (await patch(sam, target.id, { availableForAssignment: false })).status,
+    ).toBe(200);
+
+    const stillIn = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: target.email, password: "password123" });
+    expect(stillIn.status).toBe(200);
+
+    const one = await request(app)
+      .patch(`${API}/tickets/1042/assignee`)
+      .set(bearer(sam))
+      .send({ assigneeId: target.id });
+    expect(one.status).toBe(200);
+  });
+});
+
 describe("users — directory & role management (RBAC)", () => {
   it("lets staff read the directory but blocks requesters (403)", async () => {
     const dana = await login("dana.reyes@acme.com");

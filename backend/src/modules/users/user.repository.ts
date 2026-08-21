@@ -4,6 +4,7 @@ import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { BadRequest } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
+import { ACTIVE_STATUSES } from "../tickets/ticket.validators";
 
 /**
  * Row-level scope for the user directory (multi-tenant): admins see/manage
@@ -34,6 +35,8 @@ export type UserDto = {
   project: { id: number; name: string } | null;
   /** False = project routing skips this person (they are away). */
   availableForAssignment: boolean;
+  /** False = the account is closed: no sign-in, no new work. See User.isActive. */
+  isActive: boolean;
   createdAt: string;
 };
 
@@ -46,6 +49,7 @@ function toDto(row: UserRow): UserDto {
     team: row.team,
     project: row.project,
     availableForAssignment: row.availableForAssignment,
+    isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -99,6 +103,27 @@ export const userRepository = {
     });
   },
 
+  /**
+   * How much unfinished work is still assigned to this person, within the
+   * caller's scope — what stands between an account and being closed.
+   *
+   * Counts assignments only, not tickets they raised: a requester's own history
+   * stays theirs and is no reason to keep the door open. Scoped like every other
+   * read here, so a manager cannot probe another customer's workload.
+   */
+  async countOpenAssigned(id: number, actor: AuthUser): Promise<number> {
+    return prisma.ticket.count({
+      where: {
+        assigneeId: id,
+        deletedAt: null,
+        status: { in: [...ACTIVE_STATUSES] },
+        ...(isPlatformWide(actor)
+          ? {}
+          : { customerId: actor.customerId ?? -1 }),
+      },
+    });
+  },
+
   async update(
     id: number,
     data: {
@@ -106,6 +131,7 @@ export const userRepository = {
       teamId?: number | null;
       projectId?: number | null;
       availableForAssignment?: boolean;
+      isActive?: boolean;
     },
     actor: AuthUser,
   ): Promise<UserDto | null> {
@@ -151,6 +177,9 @@ export const userRepository = {
             teamId: data.teamId,
             projectId: data.projectId,
             availableForAssignment: data.availableForAssignment,
+            // Retiring an account is the change most worth being able to point at
+            // later, so it goes in the trail like every other field here.
+            isActive: data.isActive,
           },
         },
         tx,

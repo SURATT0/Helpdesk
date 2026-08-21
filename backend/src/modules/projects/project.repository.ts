@@ -85,7 +85,7 @@ export const projectRepository = {
   async findOwnerCandidate(userId: number): Promise<AssignmentCandidate | null> {
     return prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, customerId: true },
+      select: { id: true, role: true, customerId: true, isActive: true },
     });
   },
 
@@ -108,23 +108,37 @@ export const projectRepository = {
         project: {
           select: {
             ownerId: true,
-            owner: { select: { availableForAssignment: true } },
+            owner: {
+              select: { availableForAssignment: true, isActive: true },
+            },
             backupOwnerId: true,
-            backupOwner: { select: { availableForAssignment: true } },
+            backupOwner: {
+              select: { availableForAssignment: true, isActive: true },
+            },
           },
         },
       },
     });
     const project = row?.project;
     if (!project) return null;
+    /**
+     * "Available" here means both switches: on the rota AND still employed. A
+     * closed account would otherwise keep collecting a project's incoming tickets
+     * — the one place routing happens without anyone choosing a name.
+     *
+     * Widened here rather than in `resolveRoutedAssignee`, which stays a pure
+     * function over "is this slot available"; what fills that word belongs with
+     * the query that reads it.
+     */
+    const usable = (u: { availableForAssignment: boolean; isActive: boolean } | null) =>
+      (u?.availableForAssignment ?? false) && (u?.isActive ?? false);
     return {
       ownerId: project.ownerId,
       // An empty slot is not available — resolveRoutedAssignee also guards on the
       // id, so this only has to be non-true.
-      ownerAvailable: project.owner?.availableForAssignment ?? false,
+      ownerAvailable: usable(project.owner),
       backupOwnerId: project.backupOwnerId,
-      backupOwnerAvailable:
-        project.backupOwner?.availableForAssignment ?? false,
+      backupOwnerAvailable: usable(project.backupOwner),
     };
   },
 
