@@ -19,6 +19,7 @@ import type { Role } from "@/features/auth/schemas";
 import { Logo } from "./logo";
 import { Avatar } from "@/components/ui/avatar";
 import { TOUCH_TARGET } from "@/components/ui/touch";
+import { REPORTING_ROLES } from "@/features/auth/landing";
 import { useMobileNav } from "./mobile-nav-context";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -35,7 +36,15 @@ const NAV: Array<{
   icon: typeof LayoutDashboard;
   roles?: readonly Role[];
 }> = [
-  { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
+  // Mirrors the server's dashboard:read grant. These are counts across a queue,
+  // not a reader's own rows, so a requester has nothing to see here — and now
+  // gets a 403 rather than an empty page if they ask.
+  {
+    href: "/dashboard",
+    key: "nav.dashboard",
+    icon: LayoutDashboard,
+    roles: REPORTING_ROLES,
+  },
   { href: "/tickets", key: "nav.tickets", icon: Ticket },
   // No `roles`: the closed-ticket log is a ticket read, so repository row
   // scoping already narrows it — a requester sees their own closed tickets.
@@ -49,7 +58,13 @@ const NAV: Array<{
     icon: FolderKanban,
     roles: ["super_admin"],
   },
-  { href: "/reports", key: "nav.reports", icon: BarChart3 },
+  // Mirrors the server's report:read grant, as above.
+  {
+    href: "/reports",
+    key: "nav.reports",
+    icon: BarChart3,
+    roles: REPORTING_ROLES,
+  },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
   // Mirrors the server's audit:read grant (manager + admin).
   { href: "/audit", key: "nav.audit", icon: ScrollText, roles: ["super_admin"] },

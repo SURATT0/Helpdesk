@@ -8,12 +8,13 @@ import { LanguageToggle } from "@/components/layout/language-toggle";
 import { Input, Label } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
+import { landingFor } from "@/features/auth/landing";
 import { useI18n } from "@/features/i18n/context";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
-  const { login, status } = useAuth();
+  const { login, status, user } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
@@ -23,17 +24,20 @@ export default function LoginPage() {
   const [email, setEmail] = React.useState("dana.reyes@acme.com");
   const [password, setPassword] = React.useState("");
 
-  // Already signed in (or just signed in) → leave the login screen.
+  // Already signed in (or just signed in) → leave the login screen, for the page
+  // this role actually has. Both cases run through here rather than redirecting
+  // again inside `signIn`, so there is one place that decides and it always has
+  // the user the context just stored.
   React.useEffect(() => {
-    if (status === "authenticated") router.replace("/dashboard");
-  }, [status, router]);
+    if (status === "authenticated") router.replace(landingFor(user?.role));
+  }, [status, user, router]);
 
   async function signIn(emailValue: string, passwordValue: string) {
     setError(null);
     setSubmitting(true);
     try {
       await login(emailValue, passwordValue);
-      router.replace("/dashboard");
+      // The effect above does the redirect, once the context holds the user.
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("login.error"));
     } finally {

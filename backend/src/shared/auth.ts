@@ -61,14 +61,22 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   super_admin: ["*"],
   // Exactly what the old agent role held — this tier is the rename, not a
   // promotion. Assigning a single ticket already rides on ticket:write; handing
-  // over a whole queue (ticket:assign), reading reports, the audit trail, user
-  // management and routing projects all stay above this line, as they were.
+  // over a whole queue (ticket:assign), the audit trail, user management and
+  // routing projects all stay above this line, as they were.
+  //
+  // Reporting is the exception, and a deliberate one: the spec put it at
+  // manager+, which after the role merge would mean super_admin only, but the
+  // people actually working the queue are admins and the aggregates are of their
+  // own work. Both surfaces are read-only and already row-scoped, so the grant
+  // widens who may look, never what they see.
   admin: [
     "ticket:read",
     "ticket:write",
     "ticket:create",
     "ticket:import",
     "user:read",
+    "dashboard:read",
+    "report:read",
     // Assets and problems are day-to-day desk work: an admin maintains the
     // registry and raises or links problems while working cases.
     "asset:write",

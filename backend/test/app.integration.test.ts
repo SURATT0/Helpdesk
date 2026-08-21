@@ -598,14 +598,92 @@ describe("tickets — list ordering", () => {
   });
 });
 
+/**
+ * The dashboard and the reports page are aggregates over a whole queue rather
+ * than over the reader's own rows, so they are gated by permission as well as by
+ * row scope. Everything else in the app gates reads by scope alone; these two are
+ * the exception, and the spec put them at manager+ from the start.
+ */
+describe("dashboard & reports — who may read an aggregate", () => {
+  const AGGREGATES = ["/dashboard/summary", "/reports/sla-summary"] as const;
+
+  it("refuses a requester on both, with 403", async () => {
+    const marcus = await login("marcus.chen@acme.com");
+    for (const path of AGGREGATES) {
+      const res = await request(app).get(`${API}${path}`).set(bearer(marcus));
+      expect(res.status, path).toBe(403);
+    }
+  });
+
+  it("still refuses without a token at all, with 401", async () => {
+    for (const path of AGGREGATES) {
+      const res = await request(app).get(`${API}${path}`);
+      expect(res.status, path).toBe(401);
+    }
+  });
+
+  it("admits an admin", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    for (const path of AGGREGATES) {
+      const res = await request(app).get(`${API}${path}`).set(bearer(dana));
+      expect(res.status, path).toBe(200);
+    }
+  });
+
+  it("admits a super admin", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    for (const path of AGGREGATES) {
+      const res = await request(app).get(`${API}${path}`).set(bearer(sam));
+      expect(res.status, path).toBe(200);
+    }
+  });
+
+  it("leaves row scoping doing its own job underneath", async () => {
+    // The permission decides who may ask; the scope still decides what comes
+    // back. An admin of one customer must not start seeing another's totals.
+    const owen = await login("owen.park@acme.com"); // Globex
+    const res = await request(app)
+      .get(`${API}/reports/sla-summary`)
+      .set(bearer(owen));
+    expect(res.status).toBe(200);
+    const agents: string[] = res.body.data.byAgent.map(
+      (a: { agent: string }) => a.agent,
+    );
+    expect(agents).not.toContain("Dana Reyes");
+  });
+});
+
 describe("reports — what the resolution clock measures", () => {
   /**
-   * Marcus raises tickets but is in nobody's closed history, and a requester's
-   * report is scoped to their own tickets — so a ticket built here is the only
-   * thing his figures are drawn from, and the arithmetic can be asserted exactly
-   * instead of "roughly, mixed in with the seed".
+   * These assert exact arithmetic, which needs a scope holding exactly one
+   * finished ticket.
+   *
+   * It used to get that by reading the report as Marcus: a requester's scope is
+   * their own tickets, and he is in nobody's closed history. Reports are now
+   * behind `report:read`, which he does not hold, so the isolation comes from the
+   * other end instead — hide the seed's finished tickets and read as an admin of
+   * the same customer. Soft delete rather than a real one because
+   * `ticketScopeWhere` already filters `deletedAt`, so nothing has to unpick the
+   * comments and history hanging off them. `resetDb()` runs before every test, so
+   * this never leaks out of the one that did it.
    */
   const HOUR = 3_600_000;
+
+  /** The reader: an admin, so the measured ticket is the only thing in scope. */
+  const ACME_ADMIN = "dana.reyes@acme.com";
+
+  beforeEach(async () => {
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: ACME_ADMIN },
+    });
+    await prisma.ticket.updateMany({
+      where: {
+        customerId: dana.customerId,
+        status: { in: ["resolved", "closed"] },
+      },
+      data: { deletedAt: new Date() },
+    });
+  });
 
   async function ticketFor(
     marcusId: number,
@@ -662,7 +740,7 @@ describe("reports — what the resolution clock measures", () => {
       closedAt: new Date(raised.getTime() + 24 * HOUR),
     });
 
-    const data = await summary(await login("marcus.chen@acme.com"));
+    const data = await summary(await login(ACME_ADMIN));
     // 4, not 24: the twenty hours before anyone looked at it were never work.
     expect(data.kpis.avgHandlingHours).toBe(4);
     expect(data.kpis.handledCount).toBe(1);
@@ -680,7 +758,7 @@ describe("reports — what the resolution clock measures", () => {
       closedAt: null,
     });
 
-    const data = await summary(await login("marcus.chen@acme.com"));
+    const data = await summary(await login(ACME_ADMIN));
     expect(data.kpis.handledCount).toBe(0);
     expect(data.kpis.avgHandlingHours).toBe(0);
   });
@@ -698,7 +776,7 @@ describe("reports — what the resolution clock measures", () => {
 
     // Nothing recorded the pickup, so there is no start — better to leave it out
     // than to fall back to the creation time and quietly reintroduce the queue.
-    const data = await summary(await login("marcus.chen@acme.com"));
+    const data = await summary(await login(ACME_ADMIN));
     expect(data.kpis.handledCount).toBe(0);
   });
 
@@ -714,7 +792,7 @@ describe("reports — what the resolution clock measures", () => {
     });
 
     // That wait is exactly what this KPI is for, so it keeps its own start.
-    const data = await summary(await login("marcus.chen@acme.com"));
+    const data = await summary(await login(ACME_ADMIN));
     expect(data.kpis.medianFirstResponseMin).toBe(20 * 60);
   });
 
@@ -735,7 +813,7 @@ describe("reports — what the resolution clock measures", () => {
       data: { resolvedAt: new Date(Date.now() - 4 * 24 * HOUR) },
     });
 
-    const data = await summary(await login("marcus.chen@acme.com"));
+    const data = await summary(await login(ACME_ADMIN));
     const trend = data.closureTrend as number[];
     expect(trend).toHaveLength(7);
     // Today is the last bar, and it holds the closure.
@@ -743,10 +821,20 @@ describe("reports — what the resolution clock measures", () => {
     expect(trend.slice(0, -1).every((n) => n === 0)).toBe(true);
   });
 
+});
+
+/**
+ * Deliberately outside the block above, which empties the scope to assert exact
+ * arithmetic — this one wants the seed's agents in it.
+ */
+describe("reports — the agent table against real data", () => {
   it("gives an agent's average the same clock as the headline", async () => {
     const dana = await login("dana.reyes@acme.com");
-    const data = await summary(dana);
-    const rows = data.byAgent as {
+    const res = await request(app)
+      .get(`${API}/reports/sla-summary`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const rows = res.body.data.byAgent as {
       agent: string;
       avgHandlingHours: number;
     }[];

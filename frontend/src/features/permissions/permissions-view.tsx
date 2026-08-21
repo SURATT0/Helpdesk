@@ -23,6 +23,9 @@ const CAPABILITIES: { key: string; roles: Role[] }[] = [
   { key: "cap.internalNote", roles: ["admin", "super_admin"] },
   { key: "cap.import", roles: ["admin", "super_admin"] },
   { key: "cap.viewUsers", roles: ["admin", "super_admin"] },
+  // The dashboard and the reports page are aggregates over a whole queue, not
+  // over the reader's own rows, so they are permissioned as well as row-scoped.
+  { key: "cap.viewReports", roles: ["admin", "super_admin"] },
   // Assigning one ticket rides on ticket:write, but handing over a whole queue
   // needs ticket:assign, which stops at the top tier.
   { key: "cap.assign", roles: ["super_admin"] },
