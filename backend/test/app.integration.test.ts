@@ -1934,6 +1934,23 @@ describe("users — deactivation", () => {
   const spareStaff = () =>
     prisma.user.findUniqueOrThrow({ where: { email: "morgan.lee@acme.com" } });
 
+  /**
+   * Morgan is also Acme's only super admin in the seed, so the last-admin guard
+   * would refuse to retire them before any of this got a chance to fail for the
+   * reason under test. Promoting Kai first is the order the product asks for
+   * anyway: someone else holds the role, then the leaver can go.
+   */
+  async function keepAnAdminBehind(token: string) {
+    const kai = await prisma.user.findUniqueOrThrow({
+      where: { email: "kai.t@acme.com" },
+    });
+    const res = await request(app)
+      .patch(`${API}/users/${kai.id}`)
+      .set(bearer(token))
+      .send({ role: "super_admin" });
+    expect(res.status).toBe(200);
+  }
+
   it("closes the door: no login, and the session dies at its next refresh", async () => {
     const sam = await login("sam.rivera@acme.com"); // platform-wide
     const target = await prisma.user.findUniqueOrThrow({
@@ -2026,6 +2043,7 @@ describe("users — deactivation", () => {
 
   it("stops new work reaching a closed account", async () => {
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     expect((await patch(sam, target.id, { isActive: false })).status).toBe(200);
 
@@ -2063,6 +2081,7 @@ describe("users — deactivation", () => {
 
   it("records the change in the audit trail", async () => {
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     expect((await patch(sam, target.id, { isActive: false })).status).toBe(200);
 
@@ -2077,6 +2096,7 @@ describe("users — deactivation", () => {
 
   it("can be reversed, and the account works again", async () => {
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     await patch(sam, target.id, { isActive: false });
     expect((await patch(sam, target.id, { isActive: true })).status).toBe(200);
@@ -2091,6 +2111,7 @@ describe("users — deactivation", () => {
     // Marking someone unavailable must not shut them out, and must still let a
     // queue be handed to them — they are at lunch, not gone.
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     expect(
       (await patch(sam, target.id, { availableForAssignment: false })).status,
@@ -2106,6 +2127,92 @@ describe("users — deactivation", () => {
       .set(bearer(sam))
       .send({ assigneeId: target.id });
     expect(one.status).toBe(200);
+  });
+});
+
+/**
+ * Nobody may remove the last person able to administer something.
+ *
+ * The seed has exactly one active super admin per group — one platform-wide, one
+ * per customer — so every one of them is "the last", which is what makes these
+ * assertions exact.
+ *
+ * The two cases are not equally bad and the guard says so: a customer left
+ * without a super admin can still be helped by platform staff, while the last
+ * platform-wide super admin is the end of the line, since only a platform-wide
+ * super admin may grant that role.
+ */
+describe("users — the last administrator", () => {
+  const patch = (token: string, id: number, body: Record<string, unknown>) =>
+    request(app).patch(`${API}/users/${id}`).set(bearer(token)).send(body);
+
+  const byEmail = (email: string) =>
+    prisma.user.findUniqueOrThrow({ where: { email } });
+
+  it("refuses to deactivate the only platform-wide super admin", async () => {
+    const sam = await byEmail("sam.rivera@acme.com"); // platform-wide
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await patch(morgan, sam.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+    expect(res.body.error.message).toMatch(/platform/i);
+    expect((await byEmail("sam.rivera@acme.com")).isActive).toBe(true);
+  });
+
+  it("refuses to demote them, which costs the same thing", async () => {
+    // Keying on the field sent rather than the effect would have missed this.
+    const sam = await byEmail("sam.rivera@acme.com");
+    const token = await login("sam.rivera@acme.com");
+    const res = await patch(token, sam.id, { role: "admin" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+    expect((await byEmail("sam.rivera@acme.com")).role).toBe("super_admin");
+  });
+
+  it("refuses to deactivate a customer's only super admin", async () => {
+    const morgan = await byEmail("morgan.lee@acme.com"); // super_admin, Acme
+    const sam = await login("sam.rivera@acme.com");
+    const res = await patch(sam, morgan.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+    // Recoverable, so the wording does not talk about the platform.
+    expect(res.body.error.message).not.toMatch(/platform/i);
+  });
+
+  it("allows it once someone else holds the role", async () => {
+    // The order the guard insists on: promote, then retire.
+    const sam = await login("sam.rivera@acme.com");
+    const kai = await byEmail("kai.t@acme.com"); // admin, Acme
+    const morgan = await byEmail("morgan.lee@acme.com");
+
+    expect((await patch(sam, kai.id, { role: "super_admin" })).status).toBe(200);
+    const res = await patch(sam, morgan.id, { isActive: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isActive).toBe(false);
+  });
+
+  it("does not let one customer's super admin stand in for another's", async () => {
+    // `customerId: null` is its own group, not a wildcard: Globex having a super
+    // admin says nothing about Acme, and neither covers the platform.
+    const sam = await login("sam.rivera@acme.com");
+    const nadia = await byEmail("nadia.kofi@acme.com"); // super_admin, Globex
+    const res = await patch(sam, nadia.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+  });
+
+  it("leaves ordinary edits alone", async () => {
+    // The guard must not fire on a change that costs nobody the role.
+    const sam = await login("sam.rivera@acme.com");
+    const morgan = await byEmail("morgan.lee@acme.com");
+    const res = await patch(sam, morgan.id, { availableForAssignment: false });
+    expect(res.status).toBe(200);
+  });
+
+  it("still allows deactivating someone who is not a super admin", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const petrov = await byEmail("j.petrov@acme.com"); // requester
+    expect((await patch(sam, petrov.id, { isActive: false })).status).toBe(200);
   });
 });
 
