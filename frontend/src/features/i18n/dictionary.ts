@@ -410,6 +410,10 @@ const en: Dict = {
   "import.err.email": "Invalid email",
   "import.err.priority": "Must be low / medium / high / critical",
   "import.err.category": "Unknown category",
+  // Rejections that only the server can decide, keyed by its reason code.
+  "import.srv.unknownCategory": "No category named “{category}”",
+  "import.srv.unknownRequester": "No user with the email {email}",
+  "import.srv.failed": "Couldn't create this ticket",
 
   "detail.loading": "Loading ticket #{id}…",
   "detail.notFound": "Ticket #{id} not found",
@@ -977,6 +981,9 @@ const th: Dict = {
   "import.err.email": "อีเมลไม่ถูกต้อง",
   "import.err.priority": "ต้องเป็น low / medium / high / critical",
   "import.err.category": "ไม่รู้จักหมวดหมู่นี้",
+  "import.srv.unknownCategory": "ไม่มีหมวดหมู่ชื่อ “{category}”",
+  "import.srv.unknownRequester": "ไม่พบผู้ใช้ที่ใช้อีเมล {email}",
+  "import.srv.failed": "สร้าง Ticket นี้ไม่สำเร็จ",
 
   "detail.loading": "กำลังโหลด Ticket #{id}…",
   "detail.notFound": "ไม่พบ Ticket #{id}",

@@ -13,6 +13,7 @@ import { useI18n } from "@/features/i18n/context";
 import { useCategories, useImportTickets } from "../queries";
 import { parseImportCsv, IMPORT_COLUMNS, type ImportColumn } from "../csv";
 import type { ImportTicketRow } from "../api";
+import type { ImportErrorReason } from "../schemas";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,6 +24,13 @@ type Draft = {
   priority: string;
   category: string;
   requesterEmail: string;
+  /**
+   * Why the server refused this row, as its code. The wording is built at render
+   * time from this app's dictionary — the server's own `error` string is written
+   * in English and would otherwise land in the middle of a Thai screen.
+   */
+  serverReason?: ImportErrorReason;
+  /** The server's English sentence, kept only as a fallback (see `reasonText`). */
   serverError?: string;
 };
 
@@ -165,6 +173,27 @@ export function ImportTicketsModal({
     }
   }
 
+  /**
+   * A server rejection in the reader's language.
+   *
+   * The offending value is taken from the row still on screen rather than from
+   * the response: it is the same string that was submitted, and reading it here
+   * keeps the message in step if the row is edited. Falls back to the server's
+   * own sentence only when the reason is one this bundle has no wording for.
+   */
+  function reasonText(d: Draft): string | null {
+    switch (d.serverReason) {
+      case "unknown_category":
+        return t("import.srv.unknownCategory", { category: d.category });
+      case "unknown_requester":
+        return t("import.srv.unknownRequester", { email: d.requesterEmail });
+      case "create_failed":
+        return t("import.srv.failed");
+      default:
+        return d.serverError ?? null;
+    }
+  }
+
   const rowValid = (d: Draft) => FIELDS.every((f) => !fieldError(d, f));
   const invalidCount = drafts.filter((d) => !rowValid(d)).length;
   const busy = importTickets.isPending;
@@ -173,7 +202,9 @@ export function ImportTicketsModal({
   function updateDraft(idx: number, patch: Partial<Draft>) {
     setDrafts((prev) =>
       prev.map((d, i) =>
-        i === idx ? { ...d, ...patch, serverError: undefined } : d,
+        i === idx
+          ? { ...d, ...patch, serverReason: undefined, serverError: undefined }
+          : d,
       ),
     );
   }
@@ -202,7 +233,11 @@ export function ImportTicketsModal({
       }
       // Keep only the rejected rows, tagged with the server's reason, for retry.
       setDrafts(
-        failed.map((r) => ({ ...drafts[r.index], serverError: r.error })),
+        failed.map((r) => ({
+          ...drafts[r.index],
+          serverReason: r.reason,
+          serverError: r.error,
+        })),
       );
       setBanner(t("import.serverRejected", { n: failed.length }));
     } catch {
@@ -354,7 +389,7 @@ export function ImportTicketsModal({
                 </thead>
                 <tbody>
                   {drafts.map((d, idx) => {
-                    const errored = !rowValid(d) || !!d.serverError;
+                    const errored = !rowValid(d) || !!reasonText(d);
                     return (
                       <tr
                         key={idx}
@@ -439,19 +474,19 @@ export function ImportTicketsModal({
                 </tbody>
               </table>
               {/* Per-row server rejection reasons */}
-              {drafts.some((d) => d.serverError) ? (
+              {drafts.some((d) => reasonText(d)) ? (
                 <div className="mt-2 flex flex-col gap-1 pb-2">
-                  {drafts.map((d, i) =>
-                    d.serverError ? (
+                  {drafts.map((d, i) => {
+                    const reason = reasonText(d);
+                    return reason ? (
                       <div
                         key={i}
                         className="text-[11px] text-[#b91c1c]"
                       >
-                        <span className="font-mono">#{i + 1}</span>{" "}
-                        {d.serverError}
+                        <span className="font-mono">#{i + 1}</span> {reason}
                       </div>
-                    ) : null,
-                  )}
+                    ) : null;
+                  })}
                 </div>
               ) : null}
             </div>

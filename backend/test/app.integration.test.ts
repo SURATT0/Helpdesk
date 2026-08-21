@@ -2036,6 +2036,51 @@ describe("tickets — CSV import (importMany)", () => {
   });
 
   /**
+   * Every rejection carries a machine-readable reason alongside its English
+   * sentence. The client translates the code — echoing `error` straight to the
+   * screen put an English sentence in the middle of a Thai page.
+   */
+  it("tags each rejection with a reason code the client can translate", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({
+        rows: [
+          row({ category: "Nonexistent" }),
+          row({ requesterEmail: "ghost@acme.com" }),
+          row({ requesterEmail: "priya.shah@acme.com" }), // another customer
+          row(), // the control: this one succeeds
+        ],
+      });
+
+    const results = res.body.data.results;
+    expect(results[0]).toMatchObject({
+      ok: false,
+      field: "category",
+      reason: "unknown_category",
+    });
+    // Both "no such address" and "not yours to file for" report the same reason,
+    // for the same anti-probing purpose the shared wording serves.
+    expect(results[1]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+      reason: "unknown_requester",
+    });
+    expect(results[2]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+      reason: "unknown_requester",
+    });
+    expect(results[3]).toMatchObject({ ok: true });
+    expect(results[3].reason).toBeUndefined();
+
+    // The prose stays for logs and API consumers with no dictionary to reach for.
+    expect(typeof results[0].error).toBe("string");
+    expect(results[0].error.length).toBeGreaterThan(0);
+  });
+
+  /**
    * The tenant boundary on the write path. `create` files a ticket under the
    * *requester's* customer, so a row naming an address outside the importer's own
    * customer used to write a ticket into someone else's tenant — counted as
