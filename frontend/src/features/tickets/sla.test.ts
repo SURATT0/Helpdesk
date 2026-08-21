@@ -12,7 +12,6 @@ const labels: SlaLabels = {
   over: "{d} over",
   left: "{d} left",
   missed: "missed by {d}",
-  paused: "paused",
   met: "met",
   none: "—",
 };
@@ -73,20 +72,27 @@ describe("assessSla — the seven states plus no target", () => {
     });
   });
 
-  it("paused: pending reports its headroom but stops counting down", () => {
-    // The deadline is never actually pushed out for a paused ticket, so the label
-    // says "paused" rather than dressing the remaining time up as a countdown.
+  it("pending is judged by its clock, exactly like any other open status", () => {
+    // There is no paused clock in the spec: `due_at` is set once at creation and
+    // never moved, so waiting on the requester spends the target like any other
+    // half hour. This used to report a flat "paused" instead.
     expect(judge({ status: "pending", dueAt: at(30 * MINUTE) })).toEqual({
-      state: "paused",
+      state: "at_risk",
       minutesDelta: 30,
-      label: "paused",
+      label: "30m left",
     });
+    expect(judge({ status: "pending", dueAt: at(9 * HOUR) }).state).toBe(
+      "on_track",
+    );
   });
 
-  it("paused wins even when the deadline has already gone by", () => {
+  it("pending shows a breach it has already run into, and by how much", () => {
+    // The case the old badge hid: five hours past the target, and the only clue
+    // was a grey "Paused" identical to a ticket with a day in hand.
     const p = judge({ status: "pending", dueAt: at(-5 * HOUR) });
-    expect(p.state).toBe("paused");
+    expect(p.state).toBe("breached_open");
     expect(p.minutesDelta).toBe(-300);
+    expect(p.label).toBe("5h over");
   });
 
   it("breached_closed: finished, but after the target", () => {
@@ -170,7 +176,7 @@ describe("compareSla — worst first", () => {
       judge({ status: "closed", dueAt: at(-HOUR), resolvedAt: at(-2 * HOUR) }), // met
       judge({ dueAt: at(-30 * MINUTE) }), // breached_open, a little
       judge({ dueAt: null }), // no_sla
-      judge({ status: "pending", dueAt: at(HOUR) }), // paused
+      judge({ status: "pending", dueAt: at(-6 * HOUR) }), // breached_open, pending
       judge({ dueAt: at(-5 * HOUR) }), // breached_open, badly
       judge({ dueAt: at(20 * MINUTE) }), // at_risk
       judge({
@@ -180,13 +186,15 @@ describe("compareSla — worst first", () => {
       }), // breached_closed
     ];
 
+    // The pending row is the worst overrun of the three, so it leads — it used to
+    // sink below the closed ticket, which buried the breach nobody was watching.
     expect([...rows].sort(compareSla).map((r) => r.state)).toEqual([
+      "breached_open",
       "breached_open",
       "breached_open",
       "at_risk",
       "on_track",
       "breached_closed",
-      "paused",
       "met",
       "no_sla",
     ]);

@@ -10,7 +10,7 @@ import type { Priority, TicketStatus } from "../../shared/domain";
  * reconcile against the SLA policy in the architecture design doc before this
  * is treated as authoritative.
  */
-export type SlaState = "danger" | "warn" | "ok" | "paused" | "met";
+export type SlaState = "danger" | "warn" | "ok" | "met";
 
 /** Resolution target in hours, by priority. */
 export const SLA_POLICY: Record<Priority, number> = {
@@ -31,11 +31,24 @@ const HOUR_MS = 60 * 60 * 1000;
 export const SLA_DANGER_MS = HOUR_MS;
 export const SLA_WARN_MS = 4 * HOUR_MS;
 
-/** Statuses whose SLA clock is running — the only ones an alert can apply to. */
+/**
+ * Statuses whose SLA clock is running — the only ones an alert can apply to.
+ *
+ * Everything that has not finished, `pending` included. The spec has no notion of
+ * a clock that stops: an SLA policy is `{ first_response_mins, resolution_mins }`
+ * with no pause or calendar, `due_at` is computed once at creation and never
+ * moved, and the spec's own sweep index is
+ * `(due_at) WHERE status NOT IN ('resolved','closed')` — which covers pending.
+ *
+ * Leaving pending out was the one place that disagreed, and it disagreed
+ * silently: a ticket parked on the requester sailed past its target with no
+ * alert, then turned red the moment somebody resumed it.
+ */
 export const SLA_ACTIVE_STATUSES = [
   "new",
   "open",
   "in_progress",
+  "pending",
 ] as const satisfies readonly TicketStatus[];
 
 /** Due timestamp for a ticket created at `createdAt` with the given priority. */
@@ -53,9 +66,13 @@ export function formatRemaining(ms: number): string {
 
 /**
  * Derive the display SLA fields from stored state.
- * - pending           → clock paused
- * - resolved / closed  → met if it was resolved on or before `due_at`, else breached
- * - active statuses    → time left until `due_at`, coloured by urgency
+ * - resolved / closed → met if it was resolved on or before `due_at`, else breached
+ * - anything else     → time left until `due_at`, coloured by urgency
+ *
+ * `pending` is deliberately not a case of its own. It used to report "paused",
+ * which read as though the deadline had stopped moving — it never did. Waiting on
+ * the requester is what the ticket's *status* says; what the SLA says is how it is
+ * doing against a target that keeps running either way.
  */
 export function deriveSla(
   status: TicketStatus,
@@ -63,7 +80,6 @@ export function deriveSla(
   now: Date,
   resolvedAt: Date | null = null,
 ): { slaDue: string; slaState: SlaState } {
-  if (status === "pending") return { slaDue: "paused", slaState: "paused" };
   if (status === "resolved" || status === "closed") {
     // Compare the actual resolution time to the target. Fall back to "met" only
     // when there's no target or no recorded resolution time to judge against.
@@ -98,8 +114,8 @@ export type SlaAlertKind = "warning" | "breach";
  * agree. Returns null when the clock is comfortable — the caller then writes
  * nothing.
  *
- * Callers must have already excluded paused (`pending`) and finished
- * (`resolved`/`closed`) tickets; see SLA_ACTIVE_STATUSES.
+ * Callers must have already excluded finished (`resolved`/`closed`) tickets; see
+ * SLA_ACTIVE_STATUSES.
  */
 export function slaAlertKind(
   dueAt: Date | null,
