@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { loginAs } from "./helpers";
 
 /**
@@ -15,7 +15,8 @@ import { loginAs } from "./helpers";
 const SUPER_ADMIN = "sam.rivera@acme.com";
 
 /** The facet chips carry a "＋" while inactive; the table's sort buttons do not. */
-const chipsOf = (page) => page.locator("button").filter({ hasText: /^＋/ });
+const chipsOf = (page: Page) =>
+  page.locator("button").filter({ hasText: /^＋/ });
 
 for (const width of [375, 768, 1024, 1440] as const) {
   test(`every facet menu opens fully on screen at ${width}px`, async ({ page }) => {
