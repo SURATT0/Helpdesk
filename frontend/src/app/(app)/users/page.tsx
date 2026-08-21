@@ -28,6 +28,16 @@ const ROLE_STYLE: Record<UserRole, { fg: string; bg: string }> = {
 const COLS =
   "grid-cols-[1.2fr_1.5fr_110px_140px_170px_120px_110px_120px_130px]";
 
+/**
+ * Width floor for the horizontal scroller, and it has to move with the columns.
+ *
+ * 900px of fixed columns + 32px of row padding, leaving ~178px for the two `fr`
+ * columns to share — enough that the name and email stay readable rather than
+ * becoming decoration. Adding the ACCOUNT column without raising this squeezed
+ * them to zero on a phone, which is exactly what the mobile-tables spec measures.
+ */
+const MIN_WIDTH = 1110;
+
 const formatDate = (iso: string, lang: string) =>
   new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-US", {
     month: "short",
@@ -80,7 +90,7 @@ export default function UsersPage() {
         ) : null}
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <TableScroll minWidth={1000}>
+          <TableScroll minWidth={MIN_WIDTH}>
           <div
             className={cn(
               "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
