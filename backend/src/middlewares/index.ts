@@ -15,6 +15,44 @@ export function notFound(_req: Request, res: Response) {
   res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });
 }
 
+/** `customer_id` → `customerId`, so the client sees the field it sent. */
+const toCamel = (column: string) =>
+  column.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+
+/**
+ * A uniqueness collision that only the database could see.
+ *
+ * Duck-typed on the error's own `code` rather than `instanceof
+ * Prisma.PrismaClientKnownRequestError`: the check then survives a client
+ * regenerated at a different version, and this middleware keeps knowing nothing
+ * about the ORM behind the repositories.
+ *
+ * Without this, P2002 fell through to the 500 branch — so creating a project
+ * whose name was taken answered "Something went wrong", with the actual reason
+ * visible only in the server log. Every unique constraint in the schema was in
+ * the same position; mapping it here fixes all of them at once rather than
+ * per-endpoint.
+ */
+function uniqueViolation(
+  err: unknown,
+): { fields: string[]; model: string | null } | null {
+  if (typeof err !== "object" || err === null) return null;
+  const e = err as {
+    code?: unknown;
+    meta?: { target?: unknown; modelName?: unknown };
+  };
+  if (e.code !== "P2002") return null;
+  // `target` is the column list for most connectors, occasionally a bare string.
+  const raw = e.meta?.target;
+  const fields = Array.isArray(raw)
+    ? raw.filter((c): c is string => typeof c === "string").map(toCamel)
+    : typeof raw === "string"
+      ? [toCamel(raw)]
+      : [];
+  const model = typeof e.meta?.modelName === "string" ? e.meta.modelName : null;
+  return { fields, model };
+}
+
 export function errorHandler(
   err: unknown,
   req: Request,
@@ -25,9 +63,29 @@ export function errorHandler(
 
   if (err instanceof AppError) {
     log.warn({ code: err.code, status: err.status }, err.message);
-    return res
-      .status(err.status)
-      .json({ error: { code: err.code, message: err.message } });
+    return res.status(err.status).json({
+      error: {
+        code: err.code,
+        message: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      },
+    });
+  }
+  const duplicate = uniqueViolation(err);
+  if (duplicate) {
+    const { fields, model } = duplicate;
+    const subject = model ? model.toLowerCase() : "record";
+    const message = fields.length
+      ? `A ${subject} with the same ${fields.join(" and ")} already exists`
+      : `That ${subject} already exists`;
+    log.warn({ code: "CONFLICT", model, fields }, message);
+    return res.status(409).json({
+      error: {
+        code: "CONFLICT",
+        message,
+        ...(fields.length ? { details: { fields } } : {}),
+      },
+    });
   }
   if (err instanceof ZodError) {
     log.warn({ code: "VALIDATION_ERROR", issues: err.issues }, "Invalid request");

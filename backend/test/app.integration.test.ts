@@ -301,6 +301,74 @@ describe("tickets — closed history log", () => {
  * Seeded: 1 = Acme Migration, 2 = Acme Facilities (customer 1), 3 = Globex Rollout
  * (customer 2).
  */
+/**
+ * A name already in use is the client's mistake, and the API has to say which
+ * one. Every unique constraint in the schema used to escape as a 500 with
+ * "Something went wrong" and the real reason buried in the server log — the
+ * middleware now maps Prisma's P2002. Projects are where it is reachable through
+ * the API, so they are where it is asserted.
+ */
+describe("duplicates answer 409, not 500", () => {
+  /**
+   * The owner is looked up rather than hardcoded: `resetDb()` truncates with
+   * RESTART IDENTITY, so ids are stable within a run but need not match any
+   * other database — and the owner has to be staff of the actor's customer or
+   * the request is refused before it ever reaches the constraint.
+   */
+  const acmeOwner = () =>
+    prisma.user.findUniqueOrThrow({ where: { email: "dana.reyes@acme.com" } });
+
+  const create = async (token: string, name: string) =>
+    request(app)
+      .post(`${API}/projects`)
+      .set(bearer(token))
+      .send({ name, ownerId: (await acmeOwner()).id });
+
+  it("refuses a second project with a name already used in that customer", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    const first = await create(morgan, "Duplicate check");
+    expect(first.status).toBe(201);
+
+    const second = await create(morgan, "Duplicate check");
+    expect(second.status).toBe(409);
+    expect(second.body.error.code).toBe("CONFLICT");
+    // Names the columns that collided, camelCased as the client sent them.
+    expect(second.body.error.details.fields).toEqual(["customerId", "name"]);
+    // And says something a person can act on.
+    expect(second.body.error.message).toMatch(/already exists/i);
+  });
+
+  it("refuses a rename onto an existing name", async () => {
+    const morgan = await login("morgan.lee@acme.com");
+    const created = await create(morgan, "Rename source");
+    expect(created.status).toBe(201);
+
+    const res = await request(app)
+      .patch(`${API}/projects/${created.body.data.id}`)
+      .set(bearer(morgan))
+      .send({ name: "Acme Migration" }); // seeded, same customer
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("CONFLICT");
+  });
+
+  it("allows the same name in a different customer", async () => {
+    // The constraint is (customerId, name), so this is not a collision — and a
+    // 409 here would be the fix over-reaching.
+    const sam = await login("sam.rivera@acme.com"); // platform-wide
+    const globex = await prisma.customer.findFirstOrThrow({
+      where: { name: "Globex Inc" },
+    });
+    const owen = await prisma.user.findUniqueOrThrow({
+      where: { email: "owen.park@acme.com" },
+    });
+    const res = await request(app)
+      .post(`${API}/projects`)
+      .set(bearer(sam))
+      .send({ name: "Acme Migration", ownerId: owen.id, customerId: globex.id });
+    expect(res.status).toBe(201);
+  });
+});
+
 describe("projects — permission level and row scope", () => {
   const list = (token: string) =>
     request(app).get(`${API}/projects`).set(bearer(token));
