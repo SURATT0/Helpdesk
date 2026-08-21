@@ -49,7 +49,10 @@ export const problemService = {
 
     // The KB reference is soft — no FK can reject a bad id, so check it here.
     // Rejecting on write is what keeps a dangling link from ever being stored.
-    if (input.kbArticleId != null && !kbService.exists(input.kbArticleId)) {
+    if (
+      input.kbArticleId != null &&
+      !(await kbService.exists(input.kbArticleId))
+    ) {
       throw BadRequest(`No knowledge-base article with id "${input.kbArticleId}"`);
     }
 
