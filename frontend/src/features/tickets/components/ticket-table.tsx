@@ -152,7 +152,8 @@ export function TicketTable() {
   const unassignedLabel = t("bulk.unassigned");
   const openRowLabel = (id: number) => t("tickets.openRow", { id });
   const selectRowLabel = (id: number) => t("tickets.selectRow", { id });
-  const { query, statuses, priorities, assignees, slaStates } = useSearch();
+  const { query, statuses, priorities, assignees, slaStates, activeCount } =
+    useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
   const [sort, setSort] = React.useState<SortState | null>(null);
@@ -284,8 +285,22 @@ export function TicketTable() {
 
       {isLoading ? <LoadingRow /> : null}
       {isError ? <ErrorState onRetry={() => refetch()} /> : null}
+      {/* Two different situations, and they used to share one sentence: a queue
+          filtered down to nothing, and a queue with nothing in it. A fresh install
+          read "no tickets match your filters" with no filter set, which sends the
+          reader looking for a filter to clear that was never there. */}
       {!isLoading && !isError && rows.length === 0 ? (
-        <EmptyState message={t("tickets.empty")} />
+        <EmptyState
+          message={
+            // `activeCount` counts the facets only, so the search box has to be
+            // asked separately — a query that matches nothing is still a filtered
+            // view, and answering "no tickets yet" to it would be the same lie in
+            // the other direction.
+            activeCount > 0 || query.trim() !== ""
+              ? t("tickets.noMatch")
+              : t("tickets.empty")
+          }
+        />
       ) : null}
 
       {/* rows */}

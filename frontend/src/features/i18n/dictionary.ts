@@ -103,7 +103,12 @@ const en: Dict = {
   "myTickets.shown": "{n} shown",
   "myTickets.viewAll": "View all →",
   "myTickets.empty": "No tickets assigned to you",
-  "tickets.empty": "No tickets match your filters",
+  // Two states, two sentences: nothing here yet, versus nothing left after
+  // narrowing. The second is the only one that should send anyone hunting for a
+  // filter to clear.
+  "tickets.empty": "No tickets yet",
+  "tickets.noMatch": "No tickets match your filters",
+  "filter.close": "Close filters",
   "tickets.list": "List",
   "tickets.board": "Board",
   "tickets.selectAll": "Select all tickets",
@@ -696,7 +701,9 @@ const th: Dict = {
   "myTickets.shown": "แสดง {n}",
   "myTickets.viewAll": "ดูทั้งหมด →",
   "myTickets.empty": "ไม่มี Ticket ที่มอบหมายให้คุณ",
-  "tickets.empty": "ไม่มี Ticket ที่ตรงกับตัวกรอง",
+  "tickets.empty": "ยังไม่มี Ticket",
+  "tickets.noMatch": "ไม่มี Ticket ที่ตรงกับตัวกรอง",
+  "filter.close": "ปิดตัวกรอง",
   "tickets.list": "รายการ",
   "tickets.board": "บอร์ด",
   "tickets.selectAll": "เลือก Ticket ทั้งหมด",
