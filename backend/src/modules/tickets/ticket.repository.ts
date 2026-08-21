@@ -401,9 +401,11 @@ export const ticketRepository = {
   /**
    * Tickets whose running SLA clock reaches `horizon` — i.e. already breached or
    * close enough to warn about. Deliberately unscoped by viewer: this feeds the
-   * background sweep, which acts on behalf of the system, not a session. Only
-   * statuses whose clock is actually running are considered, so a `pending`
-   * ticket (paused) never raises an alert.
+   * background sweep, which acts on behalf of the system, not a session.
+   *
+   * "Running" means everything that has not finished — `pending` included, since
+   * its deadline keeps moving whether or not anyone is waiting on the requester.
+   * See SLA_ACTIVE_STATUSES.
    */
   async findSlaRisk(horizon: Date): Promise<SlaRiskTicket[]> {
     return prisma.ticket.findMany({

@@ -33,7 +33,6 @@ const SLA_STATES: SlaState[] = [
   "at_risk",
   "due_soon",
   "on_track",
-  "paused",
   "breached_closed",
 ];
 

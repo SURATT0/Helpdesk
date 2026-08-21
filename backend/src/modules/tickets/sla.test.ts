@@ -28,11 +28,18 @@ describe("computeDueAt", () => {
 });
 
 describe("deriveSla", () => {
-  it("pauses the clock while pending", () => {
-    expect(deriveSla("pending", inHours(1), now)).toEqual({
-      slaDue: "paused",
-      slaState: "paused",
+  it("keeps counting while pending, and can breach there", () => {
+    // The spec has no paused clock: `due_at` is set once at creation and never
+    // moved, so waiting on the requester spends the target like any other hour.
+    // Reporting "paused" here hid an overdue ticket behind a calm badge.
+    expect(deriveSla("pending", inHours(0.5), now)).toEqual({
+      slaDue: "0h 30m",
+      slaState: "danger",
     });
+    expect(deriveSla("pending", inHours(2), now).slaState).toBe("warn");
+    expect(deriveSla("pending", inHours(6), now).slaState).toBe("ok");
+    // Already past the target while still waiting on the requester.
+    expect(deriveSla("pending", inHours(-3), now).slaState).toBe("danger");
   });
 
   it("marks a resolved/closed ticket met when resolved on or before due", () => {
@@ -135,12 +142,17 @@ describe("slaAlertKind", () => {
 });
 
 describe("SLA_ACTIVE_STATUSES", () => {
-  // A paused or finished ticket must never raise an alert; the sweep relies on
-  // this list rather than repeating the status logic in a query.
-  it("excludes paused and finished statuses", () => {
-    expect(SLA_ACTIVE_STATUSES).not.toContain("pending");
+  // A finished ticket must never raise an alert; the sweep relies on this list
+  // rather than repeating the status logic in a query.
+  it("excludes the finished statuses and nothing else", () => {
     expect(SLA_ACTIVE_STATUSES).not.toContain("resolved");
     expect(SLA_ACTIVE_STATUSES).not.toContain("closed");
+  });
+
+  it("includes pending, whose clock keeps running", () => {
+    // Matches the spec's sweep index, `WHERE status NOT IN ('resolved','closed')`.
+    // Omitting it let a ticket parked on the requester breach in silence.
+    expect(SLA_ACTIVE_STATUSES).toContain("pending");
   });
 
   it("covers every status whose clock deriveSla treats as running", () => {

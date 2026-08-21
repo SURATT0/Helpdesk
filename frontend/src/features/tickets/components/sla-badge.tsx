@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, Check, Clock, Minus, Pause } from "lucide-react";
+import { AlertTriangle, Check, Clock, Minus } from "lucide-react";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import type { SlaAssessment, SlaState } from "../sla";
@@ -29,7 +29,6 @@ const LOOK: Record<SlaState, Look> = {
   },
   due_soon: { icon: Clock, className: "font-medium text-sla-soon" },
   on_track: { icon: Clock, className: "text-sla-ok" },
-  paused: { icon: Pause, className: "text-sla-idle" },
   breached_closed: {
     icon: AlertTriangle,
     className:
@@ -71,7 +70,6 @@ const TEXT_TONE: Record<SlaState, string> = {
   at_risk: "text-sla-risk-line",
   due_soon: "text-sla-soon",
   on_track: "text-sla-ok",
-  paused: "text-sla-idle",
   breached_closed: "text-sla-breach-fg",
   met: "text-sla-met",
   no_sla: "text-sla-idle",

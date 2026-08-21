@@ -79,9 +79,33 @@ export type ImportRow = {
   requesterEmail: string;
 };
 
+/**
+ * Why a row was refused, as a code rather than a sentence.
+ *
+ * The client renders these through its own dictionary: `error` below is written
+ * in English by this service, and echoing it straight into the UI put an English
+ * sentence in the middle of an otherwise Thai screen. The code is what the client
+ * translates; the prose stays for API consumers and logs, which have no
+ * dictionary to reach for.
+ *
+ * Values that belong in the message — the category, the address — are NOT sent
+ * with the code. The client already holds the row it submitted, and sending them
+ * back would be two copies of the same string that can disagree.
+ */
+export type ImportErrorReason =
+  | "unknown_category"
+  | "unknown_requester"
+  | "create_failed";
+
 export type ImportRowResult =
   | { index: number; ok: true; ticketId: number }
-  | { index: number; ok: false; field: string | null; error: string };
+  | {
+      index: number;
+      ok: false;
+      field: string | null;
+      reason: ImportErrorReason;
+      error: string;
+    };
 
 export type ImportResult = {
   created: number;
@@ -203,6 +227,7 @@ export const ticketService = {
             index,
             ok: false,
             field: "category",
+            reason: "unknown_category",
             error: `Unknown category "${row.category}"`,
           });
           continue;
@@ -219,6 +244,7 @@ export const ticketService = {
             index,
             ok: false,
             field: "requesterEmail",
+            reason: "unknown_requester",
             error: `No user with email "${row.requesterEmail}"`,
           });
           continue;
@@ -237,6 +263,10 @@ export const ticketService = {
           index,
           ok: false,
           field: null,
+          // Whatever threw is not a case this service names, so the client gets
+          // the generic wording. The specific message still rides along in
+          // `error` for the logs.
+          reason: "create_failed",
           error: err instanceof Error ? err.message : "Failed to create ticket",
         });
       }

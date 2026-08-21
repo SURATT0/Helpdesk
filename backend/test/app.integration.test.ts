@@ -540,18 +540,21 @@ describe("tickets — SLA states the seed guarantees", () => {
     ).toBe(true);
   });
 
-  it("leaves paused tickets alone", async () => {
-    // A pending ticket shows its clock as stopped, so an overdue one would only
-    // read as a contradiction.
+  it("reports a pending ticket's clock rather than calling it stopped", async () => {
+    // `due_at` never moves while a ticket waits on its requester, so a pending
+    // ticket carries the same verdict any other unfinished one would — never the
+    // "paused" that used to hide an overrun behind a calm badge.
     const dana = await login("dana.reyes@acme.com");
     const res = await list(dana);
     const pending = res.body.data.filter(
       (t: { status: string }) => t.status === "pending",
     );
     expect(pending.length).toBeGreaterThan(0);
-    expect(
-      pending.every((t: { slaState: string }) => t.slaState === "paused"),
-    ).toBe(true);
+    for (const ticket of pending) {
+      expect(["ok", "warn", "danger", "met"]).toContain(ticket.slaState);
+      // And the countdown is a real one, not the literal string it used to be.
+      expect(ticket.slaDue).toMatch(/^\d+[dh] \d+[hm]$/);
+    }
   });
 });
 
@@ -1161,11 +1164,40 @@ describe("tickets — SLA alert sweep", () => {
     ]);
   });
 
-  it("ignores a paused (pending) ticket — the clock is stopped", async () => {
+  /**
+   * A pending ticket is waiting on the requester; its deadline is not waiting on
+   * anything. `due_at` is set once at creation and never moved, so skipping these
+   * meant the one ticket nobody was actively working could run hours past its
+   * target in silence and only surface when somebody resumed it.
+   */
+  it("alerts on a pending ticket whose clock has run out", async () => {
     // 1039 is seeded pending.
     await prisma.ticket.update({
       where: { id: 1039 },
       data: { dueAt: inHours(-5) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.breached).toBe(1);
+
+    const notes = await slaNotifications(1039);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("ticket.sla_breach");
+  });
+
+  it("warns a pending ticket that is merely close, like any other", async () => {
+    await prisma.ticket.update({
+      where: { id: 1039 },
+      data: { dueAt: inHours(2) },
+    });
+    const res = await ticketService.sweepSlaAlerts(now);
+    expect(res.warned).toBe(1);
+    expect((await slaNotifications(1039))[0].type).toBe("ticket.sla_warning");
+  });
+
+  it("still leaves a comfortable pending ticket alone", async () => {
+    await prisma.ticket.update({
+      where: { id: 1039 },
+      data: { dueAt: inHours(20) },
     });
     const res = await ticketService.sweepSlaAlerts(now);
     expect(res.warned + res.breached).toBe(0);
@@ -2145,6 +2177,51 @@ describe("tickets — CSV import (importMany)", () => {
       .set(bearer(dana))
       .send({ rows: [] });
     expect(res.status).toBe(400);
+  });
+
+  /**
+   * Every rejection carries a machine-readable reason alongside its English
+   * sentence. The client translates the code — echoing `error` straight to the
+   * screen put an English sentence in the middle of a Thai page.
+   */
+  it("tags each rejection with a reason code the client can translate", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({
+        rows: [
+          row({ category: "Nonexistent" }),
+          row({ requesterEmail: "ghost@acme.com" }),
+          row({ requesterEmail: "priya.shah@acme.com" }), // another customer
+          row(), // the control: this one succeeds
+        ],
+      });
+
+    const results = res.body.data.results;
+    expect(results[0]).toMatchObject({
+      ok: false,
+      field: "category",
+      reason: "unknown_category",
+    });
+    // Both "no such address" and "not yours to file for" report the same reason,
+    // for the same anti-probing purpose the shared wording serves.
+    expect(results[1]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+      reason: "unknown_requester",
+    });
+    expect(results[2]).toMatchObject({
+      ok: false,
+      field: "requesterEmail",
+      reason: "unknown_requester",
+    });
+    expect(results[3]).toMatchObject({ ok: true });
+    expect(results[3].reason).toBeUndefined();
+
+    // The prose stays for logs and API consumers with no dictionary to reach for.
+    expect(typeof results[0].error).toBe("string");
+    expect(results[0].error.length).toBeGreaterThan(0);
   });
 
   /**

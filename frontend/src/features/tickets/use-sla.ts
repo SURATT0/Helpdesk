@@ -36,7 +36,6 @@ export function useSlaLabels(): SlaLabels {
       over: t("sla.over"),
       left: t("sla.left"),
       missed: t("sla.missed"),
-      paused: t("sla.paused"),
       met: t("sla.met"),
       none: t("sla.none"),
     }),
