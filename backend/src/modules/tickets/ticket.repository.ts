@@ -1,7 +1,15 @@
 import { Prisma } from "@prisma/client";
-import type { Priority, TicketStatus } from "../../shared/domain";
+import {
+  canTransition,
+  type Priority,
+  type TicketStatus,
+} from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
-import { BadRequest } from "../../shared/errors";
+import {
+  BadRequest,
+  ConcurrentStatusChange,
+  IllegalTransition,
+} from "../../shared/errors";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
@@ -687,57 +695,103 @@ export const ticketRepository = {
     });
   },
 
+  /**
+   * Move a ticket to `status`, recording the history row the SLA is measured
+   * from. Returns null when the ticket does not exist.
+   *
+   * The transition is applied as a **compare-and-swap** on the status we
+   * validated against, not as a plain update. The service checks
+   * `canTransition` against a read taken outside this transaction, and Postgres
+   * runs us at READ COMMITTED — so another request can commit a different
+   * status in between, and its row lock is released before we get here.
+   * Re-reading inside the transaction does not help: that read can be just as
+   * stale. Pinning the old status in the WHERE makes the check and the write one
+   * atomic step, so losing the race updates nothing instead of writing a move
+   * the whitelist forbids. Two agents on the same `open` ticket could otherwise
+   * persist `open → resolved` and then `resolved → pending`, appending an
+   * illegal row to `ticket_status_history`.
+   */
   async updateStatus(
     id: number,
     status: TicketStatus,
     changedById?: number,
   ): Promise<Ticket | null> {
     return prisma.$transaction(async (tx) => {
-      const current = await tx.ticket.findUnique({ where: { id } });
+      const current = await tx.ticket.findUnique({
+        where: { id },
+        include: ticketInclude,
+      });
       if (!current) return null;
 
-      const updated = await tx.ticket.update({
-        where: { id },
+      // Already there — a double-submitted request, or two people choosing the
+      // same move. Nothing to validate and nothing to record, but not an error:
+      // the ticket is where the caller asked it to be.
+      if (current.status === status) return toTicketDto(current);
+
+      // The whitelist is enforced here as well as in the service: this is the
+      // only place that can check it against the row it is about to write.
+      if (!canTransition(current.status, status)) {
+        throw IllegalTransition(current.status, status);
+      }
+
+      const swap = await tx.ticket.updateMany({
+        where: { id, status: current.status },
         data: {
           status,
           ...(status === "resolved" ? { resolvedAt: new Date() } : {}),
           ...(status === "closed" ? { closedAt: new Date() } : {}),
         },
-        include: ticketInclude,
       });
-
-      // Append the SLA source-of-truth row + audit (skip pure no-op changes).
-      if (current.status !== status) {
-        await tx.ticketStatusHistory.create({
-          data: {
-            ticketId: id,
-            fromStatus: current.status,
-            toStatus: status,
-            changedById: changedById ?? null,
-          },
+      if (swap.count === 0) {
+        // Someone else moved it between our read and this write. Report what we
+        // found rather than retrying from it — see ConcurrentStatusChange.
+        const actual = await tx.ticket.findUnique({
+          where: { id },
+          select: { status: true },
         });
-        await auditRepository.record(
-          {
-            userId: changedById ?? null,
-            action: "ticket.status_change",
-            entity: "ticket",
-            entityId: id,
-            meta: { from: current.status, to: status },
-          },
-          tx,
-        );
-        await notificationRepository.createMany(
-          recipientsFor(current, changedById).map((userId) => ({
-            userId,
-            type: "ticket.status_change",
-            ticketId: id,
-            message: `Ticket #${id} moved to ${status.replace("_", " ")}`,
-          })),
-          tx,
+        throw ConcurrentStatusChange(
+          current.status,
+          status,
+          actual?.status ?? "unknown",
         );
       }
 
-      return toTicketDto(updated);
+      // Append the SLA source-of-truth row + audit. Reached only on a real
+      // change: the no-op case returned above.
+      await tx.ticketStatusHistory.create({
+        data: {
+          ticketId: id,
+          fromStatus: current.status,
+          toStatus: status,
+          changedById: changedById ?? null,
+        },
+      });
+      await auditRepository.record(
+        {
+          userId: changedById ?? null,
+          action: "ticket.status_change",
+          entity: "ticket",
+          entityId: id,
+          meta: { from: current.status, to: status },
+        },
+        tx,
+      );
+      await notificationRepository.createMany(
+        recipientsFor(current, changedById).map((userId) => ({
+          userId,
+          type: "ticket.status_change",
+          ticketId: id,
+          message: `Ticket #${id} moved to ${status.replace("_", " ")}`,
+        })),
+        tx,
+      );
+
+      // `updateMany` cannot return relations, so re-read for the DTO.
+      const updated = await tx.ticket.findUnique({
+        where: { id },
+        include: ticketInclude,
+      });
+      return updated ? toTicketDto(updated) : null;
     });
   },
 
