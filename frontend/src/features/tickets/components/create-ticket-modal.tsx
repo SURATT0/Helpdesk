@@ -112,6 +112,19 @@ export function CreateTicketModal({
     categoryId != null &&
     !busy;
 
+  /**
+   * Refuse to close while the request is in flight — the ticket may already
+   * exist, so there is nothing left to cancel, and letting the dialog go would
+   * leave `submit` to finish into a closed dialog and navigate to a ticket the
+   * person believed they had abandoned. Routed through here rather than only
+   * disabling the Cancel button because Escape and the backdrop reach `onClose`
+   * on their own.
+   */
+  function requestClose() {
+    if (busy) return;
+    onClose();
+  }
+
   async function submit() {
     if (categoryId == null) return;
     setAttachError(null);
@@ -152,7 +165,7 @@ export function CreateTicketModal({
   return (
     <Dialog
       open
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="create-ticket-title"
       align="start"
       backdrop="bg-ink/45"
@@ -170,9 +183,10 @@ export function CreateTicketModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
+            disabled={busy}
             className={cn(
-              "grid h-[30px] w-[30px] flex-none place-items-center rounded-md border border-line text-muted hover:bg-app",
+              "grid h-[30px] w-[30px] flex-none place-items-center rounded-md border border-line text-muted hover:bg-app disabled:opacity-40",
               TOUCH_TARGET,
             )}
             aria-label={t("create.close")}
@@ -382,7 +396,7 @@ export function CreateTicketModal({
         </div>
 
         <div className="flex justify-end gap-2.5 border-t border-[#eef1f5] bg-[#fafbfc] px-6 py-4">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={requestClose} disabled={busy}>
             {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={!canSubmit}>

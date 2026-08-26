@@ -5,6 +5,7 @@ import {
 } from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
 import {
+  AppError,
   BadRequest,
   Forbidden,
   IllegalTransition,
@@ -457,15 +458,33 @@ export const ticketService = {
    * Auto-close tickets left in `resolved` for more than 72h (no confirmation /
    * reopen). Runs as a system action (no actor) — reuses updateStatus so a
    * status-history row, audit entry, and notifications are written. Returns the
-   * number of tickets closed. Invoked by the scheduler in server.ts.
+   * number of tickets actually closed. Invoked by the scheduler in server.ts.
+   *
+   * A ticket the requester reopens between the scan and its write is skipped,
+   * not retried: `updateStatus` compare-and-swaps on `resolved`, so it raises a
+   * 409 rather than closing a ticket that is open again. That is the right
+   * outcome for one ticket and must not abort the sweep for the rest, so each
+   * write is isolated and the count reports what really closed.
    */
   async autoCloseStale(now: Date = new Date()): Promise<number> {
     const cutoff = new Date(now.getTime() - AUTO_CLOSE_MS);
     const ids = await ticketRepository.findStaleResolved(cutoff);
+    let closed = 0;
     for (const id of ids) {
-      await ticketRepository.updateStatus(id, "closed");
+      try {
+        if (await ticketRepository.updateStatus(id, "closed")) closed += 1;
+      } catch (err) {
+        if (
+          err instanceof AppError &&
+          (err.code === "CONCURRENT_STATUS_CHANGE" ||
+            err.code === "ILLEGAL_TRANSITION")
+        ) {
+          continue; // moved out of `resolved` under us — no longer ours to close
+        }
+        throw err;
+      }
     }
-    return ids.length;
+    return closed;
   },
 
   /**

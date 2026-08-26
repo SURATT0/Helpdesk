@@ -183,6 +183,7 @@ model User {
   affectedTickets        TicketAffectedUser[]
   ownedAssets            Asset[]               @relation("AssetOwner")
   createdProblems        Problem[]             @relation("ProblemCreatedBy")
+  kbArticles             KbArticle[]           @relation("KbAuthor")
   createdAt              DateTime              @default(now()) @map("created_at")
   updatedAt              DateTime              @updatedAt @map("updated_at")
 
@@ -213,6 +214,7 @@ model Category {
   defaultTeamId Int?     @map("default_team_id") // auto-assignment target
   defaultTeam   Team?    @relation(fields: [defaultTeamId], references: [id])
   tickets       Ticket[]
+  kbArticles    KbArticle[]
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -463,12 +465,18 @@ model Problem {
   workaround  String?
   // The knowledge-base article documenting this known error, e.g. "KB-042".
   //
-  // A SOFT reference on purpose: the KB has no domain table (it is a static,
-  // versioned dataset served by the kb module — see kb.data.ts), so there is no
-  // FK to enforce. The API validates the id against that dataset on write, and
-  // resolves it on read, returning null when an article has since been removed —
-  // so a stale link degrades to "not found" instead of a broken page. Widening
-  // this to a real relation later is a type change, not a data migration.
+  // A SOFT reference, still on purpose. `kb_articles` is now a real table with a
+  // matching String id, so this COULD be a foreign key — and is deliberately not.
+  // A real FK would have to either refuse to delete an article a problem cites or
+  // null the citation out; both are worse than what this does, which is keep the
+  // id and resolve it to null so the UI can say the article is gone. Articles are
+  // reference material that gets retired; the problem that cited one is a record
+  // of what happened and outlives it.
+  //
+  // Because there is no FK, the API validates the id on write (kbService.exists)
+  // and resolves it on read (kbService.referencesFor) — that pair is what keeps a
+  // dangling reference from ever being STORED, while tolerating one that goes
+  // stale afterwards.
   kbArticleId String?       @map("kb_article_id")
   customerId  Int?          @map("customer_id") // tenant; inherited from the source ticket
   customer    Customer?     @relation(fields: [customerId], references: [id])
@@ -481,4 +489,56 @@ model Problem {
   @@index([customerId])
   @@index([status])
   @@map("problems")
+}
+
+/**
+ * Whether an article is visible to everyone or still being written. Reads are
+ * filtered on it: anyone signed in sees `published`, and only someone who may
+ * write articles also sees `draft`.
+ */
+enum KbStatus {
+  draft
+  published
+}
+
+/**
+ * A knowledge-base article.
+ *
+ * The id is a human-readable code (`KB-042`), not an autoincrement, and that is
+ * load-bearing rather than decorative: `problems.kb_article_id` already stores
+ * these strings as a soft reference, so keeping the shape means every existing
+ * link keeps resolving and no row of `problems` has to be rewritten. It is also
+ * the id support staff say out loud.
+ *
+ * No `customerId`. Every tenant-scoped table here carries one and the spec's
+ * `kb_articles` deliberately does not — an article about resetting a password is
+ * the same article for everyone, which is also how the static dataset this
+ * replaces behaved.
+ */
+model KbArticle {
+  id         String    @id
+  title      String
+  /** One-paragraph summary, shown in the browse list without loading the body. */
+  excerpt    String
+  /** Markdown-lite: "## " headings, "- " bullets, blank line = new block. */
+  body       String
+  categoryId Int       @map("category_id")
+  category   Category  @relation(fields: [categoryId], references: [id])
+  tags       String[]
+  /** Rough reading time in minutes, written by the author rather than computed. */
+  readMin    Int       @map("read_min")
+  status     KbStatus  @default(published)
+  /**
+   * Who wrote it. Nullable because the articles that seeded this table predate
+   * the notion of an author, and `SetNull` because retiring the person who wrote
+   * an article must not take the article with them.
+   */
+  authorId   Int?      @map("author_id")
+  author     User?     @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@index([categoryId])
+  @@index([status])
+  @@map("kb_articles")
 }

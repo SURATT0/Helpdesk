@@ -59,6 +59,24 @@ export const IllegalTransition = (from: string, to: string) =>
   );
 
 /**
+ * Thrown when a change would leave nobody able to administer something.
+ *
+ * Two shapes of the same mistake, and only one of them is recoverable, which is
+ * why the message differs: a customer with no super admin left can still be
+ * helped by platform staff, whereas the last PLATFORM-WIDE super admin is the end
+ * of the line — only a platform-wide super admin may grant that role, so removing
+ * the last one cannot be undone from inside the product at all.
+ */
+export const LastAdmin = (scope: "platform" | "customer") =>
+  new AppError(
+    409,
+    "LAST_ADMIN",
+    scope === "platform"
+      ? "This is the only active platform super admin — promote another one first, or nobody will be able to grant that role again"
+      : "This is the only active super admin for their customer — promote another one first",
+  );
+
+/**
  * Thrown when closing an account that still holds unfinished work.
  *
  * A 409 rather than a 400: the request is well formed and will succeed once the
@@ -75,3 +93,26 @@ export const HasOpenQueue = (count: number) =>
 export const ReopenWindowExpired = (
   message = "Reopen window (30 days) has expired — open a new ticket instead",
 ) => new AppError(409, "REOPEN_WINDOW_EXPIRED", message);
+
+/**
+ * Thrown when a status change lost a race: the ticket moved between the read
+ * that validated the transition and the write that would have applied it.
+ *
+ * A 409 rather than a silent retry against the new status. The whitelist is
+ * defined over the status the client was looking at, so re-validating from
+ * wherever the ticket has since landed could apply a move the user never chose —
+ * "resolve this open ticket" is not consent to resolve an in-progress one. The
+ * message carries the status we actually found so the client can re-render and
+ * let the user decide again.
+ */
+export const ConcurrentStatusChange = (
+  attemptedFrom: string,
+  to: string,
+  actual: string,
+) =>
+  new AppError(
+    409,
+    "CONCURRENT_STATUS_CHANGE",
+    `Ticket moved to "${actual}" while you were changing it from "${attemptedFrom}" to "${to}" — reload and try again`,
+    { attemptedFrom, to, actual },
+  );

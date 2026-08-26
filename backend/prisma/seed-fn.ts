@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
+import { KB_ARTICLES } from "./kb-seed-data";
 
 // Every seeded user shares this demo password. Log in as e.g. dana.reyes@acme.com.
 export const DEMO_PASSWORD = "password123";
@@ -427,6 +428,40 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     categoryIds.set(c.name, row.id);
   }
 
+  // The knowledge base. `KB_ARTICLES` used to BE the knowledge base — served
+  // straight out of the module with no table behind it — and it is kept as the
+  // starting library rather than being retyped here: the ids in it are the ones
+  // `problems.kb_article_id` already points at.
+  //
+  // Authored by the platform-wide super admin because articles have no customer:
+  // one article about resetting a password serves every tenant, so attributing
+  // it to one customer's staff would misrepresent who it belongs to.
+  const kbAuthorId = userIds.get("Sam Rivera") ?? null;
+  for (const a of KB_ARTICLES) {
+    const categoryId = categoryIds.get(a.category);
+    if (categoryId == null) continue;
+    const fields = {
+      title: a.title,
+      excerpt: a.excerpt,
+      body: a.body,
+      categoryId,
+      tags: a.tags,
+      readMin: a.readMin,
+      status: "published" as const,
+      authorId: kbAuthorId,
+      // The editorial date the article carries, not the moment the seed ran.
+      // Prisma honours an explicit value for an `@updatedAt` column on write,
+      // and the browse list sorts on it — seeding `now()` would flatten six
+      // distinct revision dates into one.
+      updatedAt: new Date(`${a.updatedAt}T00:00:00Z`),
+    };
+    await prisma.kbArticle.upsert({
+      where: { id: a.id },
+      update: fields,
+      create: { id: a.id, ...fields },
+    });
+  }
+
   for (const t of TICKETS) {
     const requesterId = userIds.get(t.requester)!;
     const assigneeId = t.assignee ? userIds.get(t.assignee)! : null;
@@ -585,4 +620,5 @@ export const SEED_COUNTS = {
   tickets: TICKETS.length + CLOSED_HISTORY.length,
   closedHistory: CLOSED_HISTORY.length,
   assets: ASSETS.length,
+  kbArticles: KB_ARTICLES.length,
 };
