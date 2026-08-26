@@ -93,3 +93,26 @@ export const HasOpenQueue = (count: number) =>
 export const ReopenWindowExpired = (
   message = "Reopen window (30 days) has expired — open a new ticket instead",
 ) => new AppError(409, "REOPEN_WINDOW_EXPIRED", message);
+
+/**
+ * Thrown when a status change lost a race: the ticket moved between the read
+ * that validated the transition and the write that would have applied it.
+ *
+ * A 409 rather than a silent retry against the new status. The whitelist is
+ * defined over the status the client was looking at, so re-validating from
+ * wherever the ticket has since landed could apply a move the user never chose —
+ * "resolve this open ticket" is not consent to resolve an in-progress one. The
+ * message carries the status we actually found so the client can re-render and
+ * let the user decide again.
+ */
+export const ConcurrentStatusChange = (
+  attemptedFrom: string,
+  to: string,
+  actual: string,
+) =>
+  new AppError(
+    409,
+    "CONCURRENT_STATUS_CHANGE",
+    `Ticket moved to "${actual}" while you were changing it from "${attemptedFrom}" to "${to}" — reload and try again`,
+    { attemptedFrom, to, actual },
+  );

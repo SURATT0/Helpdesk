@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { env } from "../src/config/env";
+import { canTransition, type TicketStatus } from "../src/shared/domain";
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { notificationService } from "../src/modules/notifications/notification.service";
 import { authService } from "../src/modules/auth/auth.service";
@@ -1065,6 +1066,66 @@ describe("tickets — status transitions", () => {
       .send({ status: "closed" });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("ILLEGAL_TRANSITION");
+  });
+
+  it("never records an illegal transition when two agents race one ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    // 1035 is `open`, from which BOTH of these are legal — so both requests
+    // pass the service's guard against their own read. Only one may win:
+    // `resolved → pending` is not in the whitelist, and applying the loser on
+    // top of the winner is exactly what used to persist it.
+    const [a, b] = await Promise.all([
+      request(app)
+        .patch(`${API}/tickets/1035/status`)
+        .set(bearer(dana))
+        .send({ status: "resolved" }),
+      request(app)
+        .patch(`${API}/tickets/1035/status`)
+        .set(bearer(dana))
+        .send({ status: "pending" }),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const loser = a.status === 409 ? a : b;
+    // Which 409 depends on whether the loser read before or after the winner
+    // committed; both are correct refusals.
+    expect(["CONCURRENT_STATUS_CHANGE", "ILLEGAL_TRANSITION"]).toContain(
+      loser.body.error.code,
+    );
+
+    // The invariant that matters, and the one that is timing-independent: every
+    // transition on record is one the whitelist allows. `fromStatus: null` is
+    // the seeded opening row, which is not a transition.
+    const rows = await prisma.ticketStatusHistory.findMany({
+      where: { ticketId: 1035 },
+      orderBy: { id: "asc" },
+      select: { fromStatus: true, toStatus: true },
+    });
+    for (const row of rows) {
+      if (row.fromStatus == null) continue;
+      expect(
+        canTransition(
+          row.fromStatus as TicketStatus,
+          row.toStatus as TicketStatus,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("treats a re-sent identical status as a no-op, not a second history row", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const send = () =>
+      request(app)
+        .patch(`${API}/tickets/1035/status`) // open → in_progress
+        .set(bearer(dana))
+        .send({ status: "in_progress" });
+
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200); // double submit
+    const history = await prisma.ticketStatusHistory.count({
+      where: { ticketId: 1035 },
+    });
+    expect(history).toBe(2); // seeded row + one real change, not two
   });
 
   it("forbids a requester from changing status (403)", async () => {
