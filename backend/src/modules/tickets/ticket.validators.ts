@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { freeText, TEXT_MAX } from "../../shared/text";
 
 export const ticketStatus = z.enum([
   "new",
@@ -109,11 +110,21 @@ export const updatePriorityBody = z.object({
 });
 
 export const createTicketBody = z.object({
-  subject: z.string().min(3),
-  description: z.string().min(1),
+  subject: freeText({ min: 3, max: TEXT_MAX.SUBJECT }),
+  description: freeText({ max: TEXT_MAX.BODY }),
   categoryId: z.coerce.number().int().positive(),
   priority: priority.default("medium"),
 });
+
+/**
+ * The `Idempotency-Key` header, for clients that send one.
+ *
+ * The value is opaque here: all it has to be is stable across a retry of the
+ * same submission and unlikely to collide, which is the client's job — the web
+ * app uses a UUID per submission. This only bounds it, so a header cannot smuggle
+ * an unbounded (or NUL-bearing) string into a column.
+ */
+export const idempotencyKeyHeader = freeText({ max: 128 });
 
 /**
  * One row of a CSV import. The category is referenced by name and the requester
@@ -121,8 +132,8 @@ export const createTicketBody = z.object({
  * (unknown category / unknown requester) so the client can offer a fix.
  */
 export const importTicketRow = z.object({
-  subject: z.string().min(3),
-  description: z.string().min(1),
+  subject: freeText({ min: 3, max: TEXT_MAX.SUBJECT }),
+  description: freeText({ max: TEXT_MAX.BODY }),
   priority: priority.default("medium"),
   category: z.string().min(1),
   requesterEmail: z.string().email(),

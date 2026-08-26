@@ -14,7 +14,7 @@ import { uploadAttachment } from "@/features/attachments/api";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
 import { useCategories, useCreateTicket } from "../queries";
-import type { Priority } from "@/lib/domain";
+import { TEXT_MAX, type Priority } from "@/lib/domain";
 
 // Images + common help-desk data files (mirrors the backend allowlist).
 const ACCEPT =
@@ -51,6 +51,24 @@ export function CreateTicketModal({
   const [attaching, setAttaching] = React.useState(false);
   const [attachError, setAttachError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  /**
+   * De-duplication key for the submission being composed.
+   *
+   * Regenerated whenever the content changes, which is what makes it mean "this
+   * exact submission" rather than "this dialog session". The two cases it has
+   * to tell apart:
+   *
+   * - Submit fails, the person presses the button again unchanged. Same key, so
+   *   if the first attempt actually reached the server and only the response was
+   *   lost, they get that ticket back instead of a second one.
+   * - Submit fails, the person edits and sends again. New key, so the edit is a
+   *   new ticket rather than being silently answered with the original.
+   */
+  const [idempotencyKey, setIdempotencyKey] = React.useState("");
+  React.useEffect(() => {
+    setIdempotencyKey(crypto.randomUUID());
+  }, [subject, description, categoryId, priority]);
 
   // Live KB deflection: suggest articles from the subject once it's meaningful.
   const suggest = useKbSuggest(subject, subject.trim().length >= 3);
@@ -116,6 +134,7 @@ export function CreateTicketModal({
         description: description.trim(),
         categoryId,
         priority,
+        idempotencyKey,
       });
       // Ticket exists — upload any attachments (best-effort, sequential).
       if (files.length > 0) {
@@ -184,6 +203,7 @@ export function CreateTicketModal({
             <Input
               id="ticket-subject"
               autoFocus
+              maxLength={TEXT_MAX.SUBJECT}
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder={t("create.subjectPlaceholder")}
@@ -276,6 +296,7 @@ export function CreateTicketModal({
             <Textarea
               id="ticket-description"
               rows={3}
+              maxLength={TEXT_MAX.BODY}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("create.descriptionPlaceholder")}
