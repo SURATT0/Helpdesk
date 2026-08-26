@@ -8,7 +8,7 @@ import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
-import { STATUS_TRANSITIONS } from "@/lib/domain";
+import { isInternalThread, STATUS_TRANSITIONS } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -565,6 +565,7 @@ export function TicketDetailView({ id }: { id: number }) {
             requester={ticket.requester}
             requesterEmail={ticket.requesterEmail}
             canAddNote={canWrite}
+            internalOnly={isInternalThread(ticket.requesterRole)}
           />
           <div ref={bottomRef} aria-hidden />
         </div>

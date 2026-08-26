@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   bootstrapSession,
   login as apiLogin,
@@ -25,6 +26,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     status: "loading",
     user: null,
   });
+  const queryClient = useQueryClient();
+
+  /**
+   * Drop every cached query, because cached data belongs to the session that
+   * fetched it and to no other.
+   *
+   * No query key names the signed-in user — `["tickets","list",filter]` is the
+   * same key for everyone — so without this the next session reads the previous
+   * one's rows out of the cache. Signing out of an agent account and into a
+   * requester's in the same tab showed the agent's entire ticket list to someone
+   * whose row scope allows only their own tickets, and `staleTime: 30s` meant it
+   * was served for the first half-minute without so much as a refetch.
+   *
+   * Called on every identity change — sign in, sign out, and a session ending
+   * because the refresh token stopped working — and always BEFORE the new state
+   * is published, so no render can happen with the old cache under the new user.
+   * Clearing is safe for in-flight work: react-query cancels the queries it
+   * removes, and mounted components refetch under the new session.
+   */
+  const clearSessionCache = React.useCallback(() => {
+    queryClient.clear();
+  }, [queryClient]);
 
   // Bootstrap from the refresh cookie once on mount.
   React.useEffect(() => {
@@ -48,6 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () =>
       tokenStore.subscribe(() => {
         if (!tokenStore.get()) {
+          // Outside the updater: clearing is a side effect, and an updater can be
+          // called more than once. Idempotent, so clearing when the session had
+          // already ended costs nothing.
+          clearSessionCache();
           setState((s) =>
             s.status === "authenticated"
               ? { status: "unauthenticated", user: null }
@@ -55,18 +82,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
         }
       }),
-    [],
+    [clearSessionCache],
   );
 
-  const login = React.useCallback(async (email: string, password: string) => {
-    const user = await apiLogin(email, password);
-    setState({ status: "authenticated", user });
-  }, []);
+  const login = React.useCallback(
+    async (email: string, password: string) => {
+      const user = await apiLogin(email, password);
+      clearSessionCache();
+      setState({ status: "authenticated", user });
+    },
+    [clearSessionCache],
+  );
 
   const logout = React.useCallback(async () => {
     await apiLogout();
+    clearSessionCache();
     setState({ status: "unauthenticated", user: null });
-  }, []);
+  }, [clearSessionCache]);
 
   const patchUser = React.useCallback((partial: Partial<AuthUser>) => {
     setState((s) => (s.user ? { ...s, user: { ...s.user, ...partial } } : s));

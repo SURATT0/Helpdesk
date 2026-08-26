@@ -73,6 +73,21 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     // registry and raises or links problems while working cases.
     "asset:write",
     "problem:write",
+    // Reading a whole REGISTER is desk work too, and needs saying separately from
+    // the write grants above: browsing every asset (with its owner's name and
+    // email) or every open investigation is the desk's view of the customer, not
+    // a requester's. What a requester legitimately needs about their own ticket
+    // already rides on the ticket — `affectedAssets` inline, and the linked
+    // problem through `problemScopeWhere`, which reaches it via their ticket.
+    "asset:read",
+    "problem:read",
+    // Reading the routing table and the activity log. Both were super_admin-only,
+    // which left an admin working cases unable to see where their queue's work
+    // comes from or what happened to a ticket before they picked it up. The
+    // WRITES stay above this line: `project:write` (who owns a routing project)
+    // is management structure, and there is no audit write at all.
+    "project:read",
+    "audit:read",
     // Writing the knowledge base follows the same reasoning as problem:write —
     // the people who work the cases are the ones who know what the fix was. This
     // also decides who sees drafts, since an unpublished article is only visible

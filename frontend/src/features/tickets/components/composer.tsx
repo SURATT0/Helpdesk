@@ -29,16 +29,24 @@ export function Composer({
   requester,
   requesterEmail,
   canAddNote,
+  internalOnly = false,
 }: {
   ticketId: number;
   requester: string;
   requesterEmail: string;
   canAddNote: boolean;
+  /**
+   * This ticket has no external side — staff raised it and staff will close it
+   * (see `isInternalThread`). Chat and email have no counterparty, so the note is
+   * the only thing left to write, and the server agrees: it stores a comment on
+   * such a ticket as a note and refuses the email outright.
+   */
+  internalOnly?: boolean;
 }) {
   const { t } = useI18n();
   const { user } = useAuth();
   // Chat is the default: a quick public message posted straight to the thread.
-  const [tab, setTab] = React.useState<Tab>("chat");
+  const [chosenTab, setChosenTab] = React.useState<Tab>("chat");
   const [body, setBody] = React.useState("");
   const [to, setTo] = React.useState(requesterEmail);
   const [files, setFiles] = React.useState<File[]>([]);
@@ -66,6 +74,15 @@ export function Composer({
     }
   }
 
+  // On an internal thread the note is the only tab, so which tab is live is not a
+  // choice to remember — derived rather than held. That also covers moving from
+  // one ticket to another without a remount: the composer keeps its state, and a
+  // "chat" left over from the previous ticket would otherwise be the live tab on
+  // a ticket that has no chat. Guarded by canAddNote so a viewer who cannot write
+  // notes is never left with no composer at all (a requester cannot see a
+  // staff-raised ticket, so this is defensive rather than a case that happens).
+  const noteOnly = internalOnly && canAddNote;
+  const tab: Tab = noteOnly ? "note" : chosenTab;
   const isReply = tab === "reply";
   const isNote = tab === "note";
   const isChat = tab === "chat";
@@ -73,7 +90,7 @@ export function Composer({
   React.useEffect(() => setTo(requesterEmail), [requesterEmail]);
 
   function switchTab(next: Tab) {
-    setTab(next);
+    setChosenTab(next);
     setSentInfo(null);
     setError(null);
   }
@@ -177,19 +194,21 @@ export function Composer({
   return (
     <div className="mt-auto overflow-hidden rounded-lg border border-line bg-white">
       <div className="flex border-b border-[#eef1f5] text-[12.5px] font-semibold">
-        <button
-          onClick={() => switchTab("chat")}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2.5",
-            isChat
-              ? "border-b-2 border-brand text-brand-hover"
-              : "text-muted",
-          )}
-        >
-          <MessageSquare size={13} strokeWidth={2} />
-          {t("composer.chat")}
-        </button>
-        {canAddNote ? (
+        {noteOnly ? null : (
+          <button
+            onClick={() => switchTab("chat")}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2.5",
+              isChat
+                ? "border-b-2 border-brand text-brand-hover"
+                : "text-muted",
+            )}
+          >
+            <MessageSquare size={13} strokeWidth={2} />
+            {t("composer.chat")}
+          </button>
+        )}
+        {canAddNote && !noteOnly ? (
           <button
             onClick={() => switchTab("reply")}
             className={cn(
@@ -215,6 +234,13 @@ export function Composer({
           >
             {t("composer.note")}
           </button>
+        ) : null}
+        {/* Says why the other two tabs are missing, so their absence reads as a
+            rule about this ticket rather than something failing to load. */}
+        {noteOnly ? (
+          <span className="ml-auto self-center truncate px-4 text-[11.5px] font-normal text-faint">
+            {t("composer.internalOnly")}
+          </span>
         ) : null}
       </div>
 

@@ -26,6 +26,23 @@ describe("permissionsFor", () => {
     expect(p).not.toContain("user:write");
   });
 
+  it("admin reads the registers, the routing table and the trail — and writes none of them", () => {
+    // The read/write split is the whole point of these four: an admin browsing
+    // the asset register, the problem register, the routing table and the audit
+    // log is desk work; owning a routing project is not, and nothing writes audit.
+    const p = permissionsFor("admin");
+    for (const read of [
+      "asset:read",
+      "problem:read",
+      "project:read",
+      "audit:read",
+    ]) {
+      expect(p).toContain(read);
+    }
+    expect(p).not.toContain("project:write");
+    expect(p).not.toContain("ticket:assign");
+  });
+
   it("requester can only read + create tickets", () => {
     expect(permissionsFor("user")).toEqual(["ticket:read", "ticket:create"]);
   });

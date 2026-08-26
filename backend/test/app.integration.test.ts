@@ -404,11 +404,18 @@ describe("projects — permission level and row scope", () => {
     expect(namesOf(res)).toEqual(["Globex Rollout"]);
   });
 
-  it("refuses an agent: routing structure is management work, not desk work", async () => {
-    const dana = await login("dana.reyes@acme.com"); // agent, Acme
-    await list(dana).expect(403);
-    // Even a project they personally own — the grant is by level, not ownership.
-    await detail(dana, 2).expect(403);
+  it("lets an admin read the routing table, scoped to their own customer", async () => {
+    // Reading is desk work — it says where a queue's work comes from — so
+    // `project:read` reaches admin. Changing an owner is still management work and
+    // is refused below. Row scope applies as it does for a super admin.
+    const dana = await login("dana.reyes@acme.com"); // admin, Acme
+    const res = await list(dana);
+    expect(res.status).toBe(200);
+    expect(namesOf(res)).toContain("Acme Migration");
+    expect(namesOf(res)).not.toContain("Globex Rollout");
+
+    const own = await detail(dana, 2);
+    expect(own.status).toBe(200);
   });
 
   it("refuses a requester", async () => {
@@ -786,6 +793,61 @@ describe("scope — a requester sees only their own, except the KB", () => {
       .get(`${API}/reports/sla-summary`)
       .set(bearer(dana));
     expect(asAdmin.body.data.byAgent.length).toBeGreaterThan(0);
+  });
+
+  it("cannot browse the asset register", async () => {
+    // The register lists every machine in the customer with its holder's name and
+    // email. 403 rather than an empty list: this is a permission the role does not
+    // hold, not a scope that happens to match nothing — and what a requester needs
+    // about their own hardware is embedded in their ticket as `affectedAssets`.
+    const marcus = await login(REQUESTER);
+    await request(app).get(`${API}/assets`).set(bearer(marcus)).expect(403);
+    await request(app).get(`${API}/assets/1`).set(bearer(marcus)).expect(403);
+
+    const dana = await login("dana.reyes@acme.com");
+    const asAdmin = await request(app).get(`${API}/assets`).set(bearer(dana));
+    expect(asAdmin.status).toBe(200);
+    expect(asAdmin.body.data.length).toBeGreaterThan(0);
+  });
+
+  it("cannot browse the problem register", async () => {
+    const marcus = await login(REQUESTER);
+    await request(app).get(`${API}/problems`).set(bearer(marcus)).expect(403);
+
+    const dana = await login("dana.reyes@acme.com");
+    const asAdmin = await request(app).get(`${API}/problems`).set(bearer(dana));
+    expect(asAdmin.status).toBe(200);
+  });
+
+  it("still reads the problem their own ticket is linked to, and no other", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    // 1042 is Marcus's; 1001 is somebody else's in the same customer.
+    const mine = await request(app)
+      .post(`${API}/tickets/1042/problem`)
+      .set(bearer(dana))
+      .send({ title: "VPN gateway regression" });
+    expect(mine.status).toBe(201);
+    const theirs = await request(app)
+      .post(`${API}/tickets/${OTHERS_TICKET}/problem`)
+      .set(bearer(dana))
+      .send({ title: "Somebody else's cause" });
+    expect(theirs.status).toBe(201);
+
+    const marcus = await login(REQUESTER);
+    // Theirs: the workaround on the problem holding up their own ticket is the
+    // reason a requester may read one at all.
+    const own = await request(app)
+      .get(`${API}/problems/${mine.body.data.id}`)
+      .set(bearer(marcus));
+    expect(own.status).toBe(200);
+    expect(own.body.data.title).toBe("VPN gateway regression");
+
+    // Not theirs: same customer, same endpoint, but no ticket of Marcus's on it.
+    // 404, so the answer cannot confirm the problem exists either.
+    await request(app)
+      .get(`${API}/problems/${theirs.body.data.id}`)
+      .set(bearer(marcus))
+      .expect(404);
   });
 
   it("reads the same knowledge base as everyone else", async () => {
@@ -3635,9 +3697,16 @@ describe("audit trail read", () => {
     expect(entityIds(res)).not.toContain(1042);
   });
 
-  it("forbids an agent (403) — the trail is management work", async () => {
-    const dana = await login("dana.reyes@acme.com");
-    await request(app).get(ENDPOINT).set(bearer(dana)).expect(403);
+  it("lets an admin read their own customer's entries", async () => {
+    // `audit:read` reaches admin: someone working a case needs to see what
+    // happened to a ticket before they picked it up. The tenant boundary is
+    // unchanged — it is derived from the actor, not from the row.
+    await makeCrossCustomerActivity();
+    const dana = await login("dana.reyes@acme.com"); // admin, Acme
+    const res = await request(app).get(ENDPOINT).set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).not.toContain(2001);
   });
 
   it("forbids a requester (403)", async () => {

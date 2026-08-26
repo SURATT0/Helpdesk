@@ -40,19 +40,29 @@ const NAV: Array<{
   // No `roles`: the closed-ticket log is a ticket read, so repository row
   // scoping already narrows it — a requester sees their own closed tickets.
   { href: "/history", key: "nav.history", icon: Archive },
-  { href: "/users", key: "nav.users", icon: Users },
-  // Mirrors the server's project:read grant (manager + admin), like the audit
-  // entry below. Routing projects are management structure, not desk work.
+  // Mirrors the server's user:read grant. A requester was shown this and got a
+  // forbidden panel — the directory is the desk's list of who it serves, and the
+  // one account they can act on (their own away state) lives in Settings.
+  { href: "/users", key: "nav.users", icon: Users, roles: ["admin", "super_admin"] },
+  // Mirrors the server's project:read grant, like the audit entry below. Reading
+  // the routing table is desk work — it says where a queue's work comes from —
+  // while changing who owns a project stays with project:write, above admin.
   {
     href: "/projects",
     key: "nav.projects",
     icon: FolderKanban,
-    roles: ["super_admin"],
+    roles: ["admin", "super_admin"],
   },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
-  // Mirrors the server's audit:read grant (manager + admin).
-  { href: "/audit", key: "nav.audit", icon: ScrollText, roles: ["super_admin"] },
+  // Mirrors the server's audit:read grant. An admin working a case needs to see
+  // what happened to a ticket before they picked it up; nobody writes it.
+  {
+    href: "/audit",
+    key: "nav.audit",
+    icon: ScrollText,
+    roles: ["admin", "super_admin"],
+  },
   { href: "/permissions", key: "nav.permissions", icon: ShieldCheck },
   { href: "/settings", key: "nav.settings", icon: Settings },
 ];

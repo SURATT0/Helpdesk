@@ -31,25 +31,37 @@ function routesTo(project: Project): {
 }
 
 /**
- * One owner slot. Always editable: reading and changing projects are the same
- * grant (project:read and project:write are both held from manager up), and the
- * page itself refuses anyone without it — so there is no viewer who could reach
- * this cell but not act on it. If those grants are ever split, this needs a
- * read-only rendering again.
+ * One owner slot — a picker for someone who may change it, the name as plain text
+ * for someone who may only read it.
+ *
+ * The two grants are split: `project:read` reaches admin, `project:write` stops at
+ * super_admin. So there IS now a viewer who can reach this cell without being able
+ * to act on it, and a disabled picker would be the wrong rendering for them — it
+ * reads as "temporarily unavailable" rather than "not yours to change". `disabled`
+ * stays for the moment a save is in flight, which is a different thing.
  */
 function OwnerCell({
   owner,
   ariaLabel,
   users,
   saving,
+  canWrite,
   onChange,
 }: {
   owner: ProjectOwner;
   ariaLabel: string;
   users: ReturnType<typeof useUsers>["data"];
   saving: boolean;
+  canWrite: boolean;
   onChange: (id: number | null) => void;
 }) {
+  if (!canWrite) {
+    return (
+      <div className="truncate pr-3 text-[12.5px] text-[#475569]">
+        {owner?.name ?? "—"}
+      </div>
+    );
+  }
   return (
     <div className="pr-3">
       <OwnerSelect
@@ -66,12 +78,15 @@ function OwnerCell({
 export function ProjectsView() {
   const { t } = useI18n();
   const { user } = useAuth();
-  // Mirrors the server's project:read grant. The API is the real gate; this keeps
-  // a direct visit from firing a request that would only come back 403, and shows
-  // something better than an error for it.
-  const canRead = user?.role === "super_admin";
+  // Mirrors the server's grants, which are split: project:read from admin up,
+  // project:write only at the top. The API is the real gate; these keep a direct
+  // visit from firing a request that would only come back 403, and show something
+  // better than an error for it.
+  const canRead = user != null && user.role !== "user";
+  const canWrite = user?.role === "super_admin";
   const { data, isLoading, isError, refetch } = useProjects({ enabled: canRead });
-  const { data: users } = useUsers({ enabled: canRead });
+  // Only the pickers need the directory, so a read-only viewer doesn't fetch it.
+  const { data: users } = useUsers({ enabled: canWrite });
   const update = useUpdateProject();
 
   const projects = data?.projects ?? [];
@@ -105,7 +120,7 @@ export function ProjectsView() {
             <Info size={14} className="mt-[2px] flex-none text-faint" />
             {t("projects.explainer")}
           </p>
-          <NewProjectRow />
+          {canWrite ? <NewProjectRow /> : null}
         </div>
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
@@ -164,6 +179,7 @@ export function ProjectsView() {
                       ariaLabel={t("projects.col.owner")}
                       users={users}
                       saving={savingId === p.id}
+                      canWrite={canWrite}
                       onChange={(ownerId) =>
                         update.mutate({ id: p.id, input: { ownerId } })
                       }
@@ -174,6 +190,7 @@ export function ProjectsView() {
                       ariaLabel={t("projects.col.backup")}
                       users={users}
                       saving={savingId === p.id}
+                      canWrite={canWrite}
                       onChange={(backupOwnerId) =>
                         update.mutate({ id: p.id, input: { backupOwnerId } })
                       }

@@ -35,6 +35,25 @@ export function roleAtLeast(role: Role, minimum: Role): boolean {
   return ROLE_ORDER.indexOf(role) <= ROLE_ORDER.indexOf(minimum);
 }
 
+/**
+ * Does this ticket's conversation have an external side at all?
+ *
+ * A ticket raised by a `user` has two sides: the requester, who reads the public
+ * thread and gets the emails, and the desk, which also has internal notes the
+ * requester never sees. A ticket raised by staff has only one — they opened it,
+ * they work it, they close it. There is nobody on the other end to chat with or
+ * mail, so every message on such a ticket is an internal note and the two-sided
+ * composer is asking the reader to pick an audience that does not exist.
+ *
+ * Keyed on the REQUESTER's role, never the viewer's: if it were the viewer's, a
+ * second admin picking up the case would see a chat box while the requesting
+ * admin saw notes only, and one of them would be writing into a tab the other
+ * cannot answer from. The property belongs to the ticket, so both sides agree.
+ */
+export function isInternalThread(requesterRole: Role): boolean {
+  return requesterRole !== "user";
+}
+
 /** Allowed status transitions (whitelist). Anything else → 409. */
 export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   new: ["open", "in_progress"],

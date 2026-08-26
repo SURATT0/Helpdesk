@@ -1,4 +1,6 @@
 import type { AuthUser } from "../../shared/auth";
+import { isInternalThread } from "../../shared/domain";
+import { BadRequest } from "../../shared/errors";
 import { env } from "../../config/env";
 import { logger } from "../../shared/logger";
 import { auditRepository } from "../audit/audit.repository";
@@ -38,6 +40,18 @@ export const replyService = {
   ): Promise<ReplyResult> {
     // ticketService.get enforces row scope (404 if out of scope).
     const ticket = await ticketService.get(ticketId, user);
+
+    // Nobody to write to. A ticket raised by staff is worked as an internal
+    // thread (see isInternalThread), so this would mail the desk its own message
+    // — and, worse, invite a reply that the inbound webhook would thread back
+    // onto the ticket as if a requester had answered. Refused rather than
+    // silently downgraded to a note: sending mail is what the caller asked for,
+    // and quietly not sending it is the failure mode an agent would not notice.
+    if (isInternalThread(ticket.requesterRole)) {
+      throw BadRequest(
+        `Ticket #${ticketId} was raised by the desk itself, so there is no requester to email — add an internal note instead`,
+      );
+    }
 
     const comment = await commentService.create(
       ticketId,

@@ -15,7 +15,7 @@ const ROLES: Role[] = ["user", "admin", "super_admin"];
 // A capability → the roles that hold it. Mirrors the enforced permission checks in
 // the backend's ROLE_PERMISSIONS: ticket:write (reply/status/notes), ticket:import,
 // ticket:assign (handing over a whole queue), user:read, user:write, audit:read,
-// project:read/write.
+// project:read/write, asset:read, problem:read.
 const CAPABILITIES: { key: string; roles: Role[] }[] = [
   { key: "cap.viewTickets", roles: ["user", "admin", "super_admin"] },
   { key: "cap.createTicket", roles: ["user", "admin", "super_admin"] },
@@ -23,12 +23,19 @@ const CAPABILITIES: { key: string; roles: Role[] }[] = [
   { key: "cap.internalNote", roles: ["admin", "super_admin"] },
   { key: "cap.import", roles: ["admin", "super_admin"] },
   { key: "cap.viewUsers", roles: ["admin", "super_admin"] },
+  // asset:read / problem:read. Browsing a whole register is the desk's view of
+  // the customer; a requester still sees the assets on their own ticket and the
+  // problem it is linked to, which reach them through the ticket rather than here.
+  { key: "cap.registers", roles: ["admin", "super_admin"] },
   // Assigning one ticket rides on ticket:write, but handing over a whole queue
   // needs ticket:assign, which stops at the top tier.
   { key: "cap.assign", roles: ["super_admin"] },
   { key: "cap.manageUsers", roles: ["super_admin"] },
+  // project:read and audit:read reach admin; project:write does not. Two rows,
+  // because one row saying "view & manage" can only be right about one of them.
+  { key: "cap.viewRoutingProjects", roles: ["admin", "super_admin"] },
   { key: "cap.routingProjects", roles: ["super_admin"] },
-  { key: "cap.audit", roles: ["super_admin"] },
+  { key: "cap.audit", roles: ["admin", "super_admin"] },
 ];
 
 /**
