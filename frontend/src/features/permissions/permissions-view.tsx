@@ -31,8 +31,11 @@ const CAPABILITIES: { key: string; roles: Role[] }[] = [
   // needs ticket:assign, which stops at the top tier.
   { key: "cap.assign", roles: ["super_admin"] },
   { key: "cap.manageUsers", roles: ["super_admin"] },
+  // project:read and audit:read reach admin; project:write does not. Two rows,
+  // because one row saying "view & manage" can only be right about one of them.
+  { key: "cap.viewRoutingProjects", roles: ["admin", "super_admin"] },
   { key: "cap.routingProjects", roles: ["super_admin"] },
-  { key: "cap.audit", roles: ["super_admin"] },
+  { key: "cap.audit", roles: ["admin", "super_admin"] },
 ];
 
 /**

@@ -132,9 +132,10 @@ export function AuditView() {
   const [action, setAction] = React.useState("");
   const [offset, setOffset] = React.useState(0);
 
-  // Mirrors the server's audit:read grant. The API is the real gate; this only
-  // avoids firing a request that would be refused.
-  const canRead = user?.role === "super_admin";
+  // Mirrors the server's audit:read grant, which reaches admin: someone working a
+  // case needs to see what happened to a ticket before they picked it up. The API
+  // is the real gate; this only avoids firing a request that would be refused.
+  const canRead = user != null && user.role !== "user";
 
   const filter = React.useMemo(
     () => ({ action: action || undefined, limit: PAGE_SIZE, offset }),

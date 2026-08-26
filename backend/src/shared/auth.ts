@@ -81,6 +81,13 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     // problem through `problemScopeWhere`, which reaches it via their ticket.
     "asset:read",
     "problem:read",
+    // Reading the routing table and the activity log. Both were super_admin-only,
+    // which left an admin working cases unable to see where their queue's work
+    // comes from or what happened to a ticket before they picked it up. The
+    // WRITES stay above this line: `project:write` (who owns a routing project)
+    // is management structure, and there is no audit write at all.
+    "project:read",
+    "audit:read",
   ],
   // Deliberately narrow: raise a ticket, follow it, read the knowledge base.
   // Reading the KB needs no permission — it is open to any authenticated user —

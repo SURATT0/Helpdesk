@@ -19,8 +19,9 @@ import { loginAs } from "./helpers";
  *
  * Asserted structurally rather than by column name, so it keeps working in
  * either language and survives a header being relabelled. Signed in as a
- * super_admin because Projects and the activity log are gated on that role and
- * would otherwise render a forbidden state with no table in it.
+ * super_admin because the user directory and the routing table's owner pickers
+ * need the top tier — an admin reads Projects but gets plain names in those two
+ * columns, and this suite measures the table, not who may edit it.
  */
 
 const SUPER_ADMIN = "morgan.lee@acme.com";

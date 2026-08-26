@@ -43,7 +43,8 @@ const en: Dict = {
   "cap.viewUsers": "View user directory",
   "cap.registers": "Browse the asset & problem registers",
   "cap.manageUsers": "Manage users & roles",
-  "cap.routingProjects": "View & manage routing projects",
+  "cap.viewRoutingProjects": "View routing projects",
+  "cap.routingProjects": "Manage routing projects",
   "cap.audit": "Read the activity log",
   "perm.userScopeNote":
     "A super admin who belongs to a customer manages only that customer's users. A super admin with no customer of their own is platform-wide and manages everyone.",
@@ -643,7 +644,8 @@ const th: Dict = {
   "cap.viewUsers": "ดูรายชื่อผู้ใช้",
   "cap.registers": "ดูทะเบียนทรัพย์สิน & ทะเบียนปัญหา",
   "cap.manageUsers": "จัดการผู้ใช้ & บทบาท",
-  "cap.routingProjects": "ดูและจัดการโปรเจกต์สำหรับจ่ายงาน",
+  "cap.viewRoutingProjects": "ดูโปรเจกต์สำหรับจ่ายงาน",
+  "cap.routingProjects": "จัดการโปรเจกต์สำหรับจ่ายงาน",
   "cap.audit": "อ่านประวัติการใช้งาน",
   "perm.userScopeNote":
     "ผู้ดูแลระบบสูงสุดที่สังกัดลูกค้าใด จะจัดการผู้ใช้เฉพาะของลูกค้านั้น · ถ้าไม่สังกัดลูกค้าใดเลยจะเป็นระดับแพลตฟอร์ม จัดการได้ทุกคน",

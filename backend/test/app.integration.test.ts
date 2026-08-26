@@ -403,11 +403,18 @@ describe("projects — permission level and row scope", () => {
     expect(namesOf(res)).toEqual(["Globex Rollout"]);
   });
 
-  it("refuses an agent: routing structure is management work, not desk work", async () => {
-    const dana = await login("dana.reyes@acme.com"); // agent, Acme
-    await list(dana).expect(403);
-    // Even a project they personally own — the grant is by level, not ownership.
-    await detail(dana, 2).expect(403);
+  it("lets an admin read the routing table, scoped to their own customer", async () => {
+    // Reading is desk work — it says where a queue's work comes from — so
+    // `project:read` reaches admin. Changing an owner is still management work and
+    // is refused below. Row scope applies as it does for a super admin.
+    const dana = await login("dana.reyes@acme.com"); // admin, Acme
+    const res = await list(dana);
+    expect(res.status).toBe(200);
+    expect(namesOf(res)).toContain("Acme Migration");
+    expect(namesOf(res)).not.toContain("Globex Rollout");
+
+    const own = await detail(dana, 2);
+    expect(own.status).toBe(200);
   });
 
   it("refuses a requester", async () => {
@@ -3520,9 +3527,16 @@ describe("audit trail read", () => {
     expect(entityIds(res)).not.toContain(1042);
   });
 
-  it("forbids an agent (403) — the trail is management work", async () => {
-    const dana = await login("dana.reyes@acme.com");
-    await request(app).get(ENDPOINT).set(bearer(dana)).expect(403);
+  it("lets an admin read their own customer's entries", async () => {
+    // `audit:read` reaches admin: someone working a case needs to see what
+    // happened to a ticket before they picked it up. The tenant boundary is
+    // unchanged — it is derived from the actor, not from the row.
+    await makeCrossCustomerActivity();
+    const dana = await login("dana.reyes@acme.com"); // admin, Acme
+    const res = await request(app).get(ENDPOINT).set(bearer(dana));
+    expect(res.status).toBe(200);
+    expect(entityIds(res)).toContain(1042);
+    expect(entityIds(res)).not.toContain(2001);
   });
 
   it("forbids a requester (403)", async () => {
