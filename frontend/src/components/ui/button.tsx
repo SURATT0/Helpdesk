@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type Variant = "primary" | "secondary" | "ghost" | "outline";
+type Variant = "primary" | "secondary" | "ghost" | "outline" | "danger";
 type Size = "sm" | "md";
 
 const base =
@@ -12,6 +12,9 @@ const variants: Record<Variant, string> = {
   secondary: "bg-white text-[#475569] border border-line hover:bg-app",
   outline: "border border-line text-[#475569] bg-white hover:bg-app",
   ghost: "text-[#475569] hover:bg-app",
+  // For the button that confirms something irreversible, and nothing else — a
+  // red button on a step you can walk back teaches people to ignore red ones.
+  danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
 };
 
 const sizes: Record<Size, string> = {
