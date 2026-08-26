@@ -73,6 +73,11 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     // registry and raises or links problems while working cases.
     "asset:write",
     "problem:write",
+    // Writing the knowledge base follows the same reasoning as problem:write —
+    // the people who work the cases are the ones who know what the fix was. This
+    // also decides who sees drafts, since an unpublished article is only visible
+    // to whoever may edit it.
+    "kb:write",
   ],
   // Deliberately narrow: raise a ticket, follow it, read the knowledge base.
   // Reading the KB needs no permission — it is open to any authenticated user —

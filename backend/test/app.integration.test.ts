@@ -788,8 +788,10 @@ describe("scope — a requester sees only their own, except the KB", () => {
   });
 
   it("reads the same knowledge base as everyone else", async () => {
-    // The one surface that is deliberately not scoped: an article is the same
-    // article whoever opens it.
+    // The one surface that is deliberately not scoped: articles carry no
+    // customer, so an article is the same article whoever opens it. Status is the
+    // only thing that narrows the list, and the seeded library is all published —
+    // drafts are covered in the knowledge base suite below.
     const marcus = await login(REQUESTER);
     const dana = await login("dana.reyes@acme.com");
 
@@ -4345,5 +4347,271 @@ describe("notifications — email delivery sweep", () => {
     expect(feed.status).toBe(200);
     expect(feed.body.data.length).toBeGreaterThan(0);
     expect(feed.body.meta.unread).toBeGreaterThan(0);
+  });
+});
+
+describe("knowledge base — authoring", () => {
+  const AUTHOR = "dana.reyes@acme.com"; // admin: holds kb:write
+  const READER = "marcus.chen@acme.com"; // user: read-only
+
+  const draft = (over: Record<string, unknown> = {}) => ({
+    title: "Reset a stuck print spooler",
+    excerpt:
+      "The spooler service wedges after a driver update and the queue stops moving.",
+    body: "## Symptoms\n\n- Jobs pile up and never print\n\n## Fix\n\nRestart the spooler service, then clear the queue directory.",
+    categoryId: 0, // replaced per-test with a real id
+    tags: ["printer", "spooler"],
+    readMin: 3,
+    ...over,
+  });
+
+  /** Turn a ticket into a problem, so there is something to link an article to. */
+  async function convert(token: string, ticketId: number, title: string) {
+    const res = await request(app)
+      .post(`${API}/tickets/${ticketId}/problem`)
+      .set(bearer(token))
+      .send({ title });
+    expect(res.status).toBe(201);
+    return res.body.data.id as number;
+  }
+
+  async function post(token: string, over: Record<string, unknown> = {}) {
+    const body = draft(over);
+    if (body.categoryId === 0) body.categoryId = await categoryId("Hardware");
+    return request(app).post(`${API}/kb`).set(bearer(token)).send(body);
+  }
+
+  it("assigns the next id in the KB-nnn series", async () => {
+    const token = await login(AUTHOR);
+    const first = await post(token);
+    expect(first.status).toBe(201);
+    // The seeded library tops out at KB-118, so the next code continues from it
+    // rather than restarting — support staff quote these ids at each other.
+    expect(first.body.data.id).toBe("KB-119");
+    const second = await post(token, { title: "A second new article" });
+    expect(second.body.data.id).toBe("KB-120");
+  });
+
+  it("defaults a new article to draft, and hides it from readers", async () => {
+    const token = await login(AUTHOR);
+    const created = await post(token);
+    expect(created.body.data.status).toBe("draft");
+    const id = created.body.data.id as string;
+
+    const reader = await login(READER);
+    const hidden = await request(app)
+      .get(`${API}/kb/${id}`)
+      .set(bearer(reader));
+    // 404, not 403: telling a reader the id is taken by something they may not
+    // read is more than they need to know.
+    expect(hidden.status).toBe(404);
+
+    const list = await request(app).get(`${API}/kb`).set(bearer(reader));
+    expect(list.body.data.map((a: { id: string }) => a.id)).not.toContain(id);
+
+    const asAuthor = await request(app).get(`${API}/kb`).set(bearer(token));
+    expect(asAuthor.body.data.map((a: { id: string }) => a.id)).toContain(id);
+  });
+
+  it("publishes with a status patch, and then everyone sees it", async () => {
+    const token = await login(AUTHOR);
+    const id = (await post(token)).body.data.id as string;
+
+    const published = await request(app)
+      .patch(`${API}/kb/${id}`)
+      .set(bearer(token))
+      .send({ status: "published" });
+    expect(published.status).toBe(200);
+    expect(published.body.data.status).toBe("published");
+
+    const reader = await login(READER);
+    const visible = await request(app)
+      .get(`${API}/kb/${id}`)
+      .set(bearer(reader));
+    expect(visible.status).toBe(200);
+    expect(visible.body.data.title).toBe("Reset a stuck print spooler");
+  });
+
+  it("stamps who wrote it", async () => {
+    const token = await login(AUTHOR);
+    const created = await post(token);
+    expect(created.body.data.author).toMatchObject({ name: "Dana Reyes" });
+  });
+
+  it("refuses a reader trying to write or delete their way in", async () => {
+    const reader = await login(READER);
+    const cat = await categoryId("Hardware");
+    const create = await request(app)
+      .post(`${API}/kb`)
+      .set(bearer(reader))
+      .send(draft({ categoryId: cat }));
+    expect(create.status).toBe(403);
+
+    const patch = await request(app)
+      .patch(`${API}/kb/KB-042`)
+      .set(bearer(reader))
+      .send({ title: "Rewritten by a requester" });
+    expect(patch.status).toBe(403);
+
+    const del = await request(app)
+      .delete(`${API}/kb/KB-042`)
+      .set(bearer(reader));
+    expect(del.status).toBe(403);
+
+    // And nothing changed.
+    const after = await request(app).get(`${API}/kb/KB-042`).set(bearer(reader));
+    expect(after.body.data.title).not.toBe("Rewritten by a requester");
+  });
+
+  it("normalises tags rather than rejecting a sloppy list", async () => {
+    const token = await login(AUTHOR);
+    const created = await post(token, {
+      tags: ["Printer", "printer", "  SPOOLER ", ""],
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data.tags).toEqual(["printer", "spooler"]);
+  });
+
+  it("rejects a category that does not exist", async () => {
+    const token = await login(AUTHOR);
+    const res = await post(token, { categoryId: 99_999 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an empty edit instead of writing nothing", async () => {
+    const token = await login(AUTHOR);
+    const res = await request(app)
+      .patch(`${API}/kb/KB-042`)
+      .set(bearer(token))
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("404s an edit or delete of an id that never existed", async () => {
+    const token = await login(AUTHOR);
+    const patch = await request(app)
+      .patch(`${API}/kb/KB-nope`)
+      .set(bearer(token))
+      .send({ readMin: 4 });
+    expect(patch.status).toBe(404);
+    const del = await request(app)
+      .delete(`${API}/kb/KB-nope`)
+      .set(bearer(token));
+    expect(del.status).toBe(404);
+  });
+
+  it("finds an article by a phrase that only appears in its body", async () => {
+    const token = await login(AUTHOR);
+    await post(token, { status: "published" });
+    // "queue directory" is in the body and in no title, excerpt or tag — the
+    // search reaches the full text now that it lives in the database.
+    const res = await request(app)
+      .get(`${API}/kb?q=queue%20directory`)
+      .set(bearer(token));
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((a: { id: string }) => a.id)).toContain("KB-119");
+  });
+
+  it("lists only categories that have something in them", async () => {
+    const reader = await login(READER);
+    const res = await request(app).get(`${API}/kb`).set(bearer(reader));
+    const categories: string[] = res.body.meta.categories;
+    expect(categories.length).toBeGreaterThan(0);
+    // Every category offered as a filter returns something — an empty filter
+    // would be a dead end in the browse UI.
+    for (const name of categories) {
+      const filtered = await request(app)
+        .get(`${API}/kb?category=${encodeURIComponent(name)}`)
+        .set(bearer(reader));
+      expect(filtered.body.data.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("writes an audit row for create, publish and delete", async () => {
+    const token = await login(AUTHOR);
+    const id = (await post(token)).body.data.id as string;
+    await request(app)
+      .patch(`${API}/kb/${id}`)
+      .set(bearer(token))
+      .send({ status: "published" });
+    await request(app).delete(`${API}/kb/${id}`).set(bearer(token));
+
+    const rows = await prisma.auditLog.findMany({
+      where: { entity: "kb_article" },
+      orderBy: { id: "asc" },
+    });
+    expect(rows.map((r) => r.action)).toEqual([
+      "kb.create",
+      "kb.update",
+      "kb.delete",
+    ]);
+    // The id is a code, so it rides in meta — `audit_logs.entity_id` is an int.
+    for (const row of rows) {
+      expect((row.meta as { articleId: string }).articleId).toBe(id);
+    }
+    const publish = rows[1].meta as { statusFrom: string; statusTo: string };
+    expect(publish.statusFrom).toBe("draft");
+    expect(publish.statusTo).toBe("published");
+  });
+
+  it("leaves a problem loadable after its article is deleted", async () => {
+    const token = await login(AUTHOR);
+    const problem = await convert(token, 1042, "Outlives its article");
+    const linked = await request(app)
+      .patch(`${API}/problems/${problem}`)
+      .set(bearer(token))
+      .send({ kbArticleId: "KB-042" });
+    expect(linked.status).toBe(200);
+    expect(linked.body.data.kbArticle).toMatchObject({ id: "KB-042" });
+
+    const del = await request(app)
+      .delete(`${API}/kb/KB-042`)
+      .set(bearer(token));
+    expect(del.status).toBe(204);
+
+    const after = await request(app)
+      .get(`${API}/problems/${problem}`)
+      .set(bearer(token));
+    // The whole reason the reference is left soft: the problem still loads, and
+    // says the link is now unavailable instead of 404-ing.
+    expect(after.status).toBe(200);
+    expect(after.body.data.kbArticleId).toBe("KB-042");
+    expect(after.body.data.kbArticle).toBeNull();
+
+    const row = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "kb.delete" },
+    });
+    expect((row.meta as { orphanedProblems: number }).orphanedProblems).toBe(1);
+  });
+
+  it("still refuses to store a link to an article that does not exist", async () => {
+    const token = await login(AUTHOR);
+    const problem = await convert(token, 1042, "Bad link");
+    const res = await request(app)
+      .patch(`${API}/problems/${problem}`)
+      .set(bearer(token))
+      .send({ kbArticleId: "KB-not-a-thing" });
+    expect(res.status).toBe(400);
+  });
+
+  it("suggests by the words of what a requester is typing", async () => {
+    const reader = await login(READER);
+    const res = await request(app)
+      .get(`${API}/kb/suggest?q=${encodeURIComponent("my vpn keeps dropping")}`)
+      .set(bearer(reader));
+    expect(res.status).toBe(200);
+    // KB-118 is tagged `vpn`; "vpn" is one of the typed words.
+    expect(res.body.data.map((a: { id: string }) => a.id)).toContain("KB-118");
+    expect(res.body.data.length).toBeLessThanOrEqual(3);
+  });
+
+  it("never offers a draft as a suggestion to a requester", async () => {
+    const token = await login(AUTHOR);
+    const id = (await post(token, { tags: ["printer"] })).body.data.id;
+    const reader = await login(READER);
+    const res = await request(app)
+      .get(`${API}/kb/suggest?q=printer%20problem`)
+      .set(bearer(reader));
+    expect(res.body.data.map((a: { id: string }) => a.id)).not.toContain(id);
   });
 });

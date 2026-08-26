@@ -11,9 +11,17 @@ export type KbArticle = {
 };
 
 /**
- * Curated knowledge-base articles. KB has no domain DB table (it isn't part of
- * the ticket schema), so it lives as a static, versioned dataset served by the
- * kb module — same shape a CMS-backed store would return.
+ * The starting knowledge-base library — SEED DATA, not the knowledge base.
+ *
+ * This file used to be the knowledge base: articles were served straight out of
+ * it with no table behind them. They live in `kb_articles` now and are edited
+ * through the API, so what is left here is the library a fresh database starts
+ * with, read once by seed-fn.ts alongside it. Nothing at runtime reads
+ * it, and editing an article in the app does not change it.
+ *
+ * The ids are kept as they were on purpose: `problems.kb_article_id` already
+ * points at these codes, so preserving them meant the move to a table needed no
+ * data migration on `problems`.
  */
 export const KB_ARTICLES: KbArticle[] = [
   {

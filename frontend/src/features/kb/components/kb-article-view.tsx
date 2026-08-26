@@ -6,10 +6,11 @@ import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
 import { useI18n } from "@/features/i18n/context";
 import { useKbArticle } from "../queries";
+import { formatUpdated } from "../format";
 import { KbBody } from "../render";
 
 export function KbArticleView({ id }: { id: string }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { data: a, isLoading, isError, error, refetch } = useKbArticle(id);
 
   if (isLoading) return <LoadingRow label={`Loading ${id}…`} />;
@@ -50,7 +51,7 @@ export function KbArticleView({ id }: { id: string }) {
         {a.title}
       </h1>
       <div className="text-[11.5px] text-faint">
-        {t("kb.updated")} {a.updatedAt}
+        {t("kb.updated")} {formatUpdated(a.updatedAt, lang)}
       </div>
 
       <div className="rounded-lg border border-line bg-panel p-5">
