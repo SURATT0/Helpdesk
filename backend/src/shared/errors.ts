@@ -59,6 +59,24 @@ export const IllegalTransition = (from: string, to: string) =>
   );
 
 /**
+ * Thrown when a change would leave nobody able to administer something.
+ *
+ * Two shapes of the same mistake, and only one of them is recoverable, which is
+ * why the message differs: a customer with no super admin left can still be
+ * helped by platform staff, whereas the last PLATFORM-WIDE super admin is the end
+ * of the line — only a platform-wide super admin may grant that role, so removing
+ * the last one cannot be undone from inside the product at all.
+ */
+export const LastAdmin = (scope: "platform" | "customer") =>
+  new AppError(
+    409,
+    "LAST_ADMIN",
+    scope === "platform"
+      ? "This is the only active platform super admin — promote another one first, or nobody will be able to grant that role again"
+      : "This is the only active super admin for their customer — promote another one first",
+  );
+
+/**
  * Thrown when closing an account that still holds unfinished work.
  *
  * A 409 rather than a 400: the request is well formed and will succeed once the

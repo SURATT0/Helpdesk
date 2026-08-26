@@ -124,6 +124,38 @@ export const userRepository = {
     });
   },
 
+  /**
+   * The target's own role and tenant, plus how many OTHER active super admins
+   * share that tenant — everything the last-admin check needs, in one read.
+   *
+   * Deliberately unscoped by actor. This is a system invariant rather than a
+   * directory read: the answer is a count about a user the caller is already
+   * editing, and scoping it would make the guard weaker for exactly the actor
+   * whose reach is narrowest.
+   *
+   * `customerId: null` is its own group, not a wildcard. A platform-wide super
+   * admin is not a member of any customer, so a customer's own super admin does
+   * not stand in for them — nor the reverse.
+   */
+  async findAdminStanding(
+    id: number,
+  ): Promise<{ role: Role; customerId: number | null; others: number } | null> {
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true, customerId: true },
+    });
+    if (!target) return null;
+    const others = await prisma.user.count({
+      where: {
+        id: { not: id },
+        role: "super_admin",
+        isActive: true,
+        customerId: target.customerId,
+      },
+    });
+    return { ...target, others };
+  },
+
   async update(
     id: number,
     data: {

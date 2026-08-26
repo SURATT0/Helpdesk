@@ -1,4 +1,10 @@
-import { BadRequest, Forbidden, HasOpenQueue, NotFound } from "../../shared/errors";
+import {
+  BadRequest,
+  Forbidden,
+  HasOpenQueue,
+  LastAdmin,
+  NotFound,
+} from "../../shared/errors";
 import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import type { Role } from "../../shared/domain";
 import { userRepository, type UserDto } from "./user.repository";
@@ -34,13 +40,36 @@ export const userService = {
     if (data.role === "super_admin" && !isPlatformWide(actor)) {
       throw Forbidden("Only a platform super admin can grant the super admin role");
     }
-    if (data.isActive === false) {
-      // Closing your own account is never the intent — it is a locked-out
-      // administrator and a support call. Refused before the scope check so the
-      // message is the real reason rather than a 404.
-      if (id === actor.id) {
-        throw BadRequest("You cannot deactivate your own account");
+    // Closing your own account is never the intent — it is a locked-out
+    // administrator and a support call. Answered first because it is the most
+    // specific thing wrong with the request: true whoever you are, and actionable
+    // without knowing anything about who else holds the role.
+    if (data.isActive === false && id === actor.id) {
+      throw BadRequest("You cannot deactivate your own account");
+    }
+
+    /**
+     * Don't let the last person who can administer something be taken away.
+     *
+     * Both a deactivation and a demotion do it, so the check keys on the effect
+     * rather than on which field was sent. It runs before the queue check below
+     * because it is the more expensive mistake: a queue can be handed over
+     * afterwards, whereas the platform losing its only super admin cannot be
+     * undone from inside the product — only a platform-wide super admin may grant
+     * that role.
+     */
+    const losesTheRole =
+      data.isActive === false ||
+      (data.role !== undefined && data.role !== "super_admin");
+    if (losesTheRole) {
+      const standing = await userRepository.findAdminStanding(id);
+      // A missing target is the repository's 404 to report, not this check's.
+      if (standing?.role === "super_admin" && standing.others === 0) {
+        throw LastAdmin(standing.customerId == null ? "platform" : "customer");
       }
+    }
+
+    if (data.isActive === false) {
       // Work still on their desk has to go somewhere first. The handover queue
       // exists for exactly this, and doing it silently here would either strand
       // the tickets on a closed account or move them without anyone choosing
