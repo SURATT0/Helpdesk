@@ -26,6 +26,19 @@ describe("problemScopeWhere", () => {
     });
   });
 
+  it("reaches a requester only through a ticket they can see", () => {
+    // Not "their own customer": that is the desk's reach. A requester's arm is
+    // the ticket relation, and it carries `ticketScopeWhere`'s own clause so the
+    // two cannot drift — whatever they may see on the ticket list is exactly what
+    // can bring a problem into reach.
+    expect(problemScopeWhere(user({ role: "user", id: 42, customerId: 7 }))).toEqual({
+      AND: [
+        { customerId: 7 },
+        { tickets: { some: { deletedAt: null, requesterId: 42 } } },
+      ],
+    });
+  });
+
   it("matches nothing for a non-admin with no customer", () => {
     expect(problemScopeWhere(user({ role: "admin", customerId: null }))).toEqual({
       id: -1,

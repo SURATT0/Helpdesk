@@ -73,6 +73,14 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     // registry and raises or links problems while working cases.
     "asset:write",
     "problem:write",
+    // Reading a whole REGISTER is desk work too, and needs saying separately from
+    // the write grants above: browsing every asset (with its owner's name and
+    // email) or every open investigation is the desk's view of the customer, not
+    // a requester's. What a requester legitimately needs about their own ticket
+    // already rides on the ticket — `affectedAssets` inline, and the linked
+    // problem through `problemScopeWhere`, which reaches it via their ticket.
+    "asset:read",
+    "problem:read",
   ],
   // Deliberately narrow: raise a ticket, follow it, read the knowledge base.
   // Reading the KB needs no permission — it is open to any authenticated user —

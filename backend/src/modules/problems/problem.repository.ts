@@ -11,13 +11,26 @@ import type { UpdateProblemInput } from "./problem.validators";
 
 /**
  * Row-level problem visibility, mirroring `ticketScopeWhere`: a platform-wide
- * principal sees every customer, everyone else only their own. Staff without a
- * customer who are not platform-wide match nothing (defensive).
+ * principal sees every customer, staff only their own. Staff without a customer
+ * who are not platform-wide match nothing (defensive).
+ *
+ * A requester reaches a problem only THROUGH a ticket they can see. The register
+ * itself is somebody else's work — other people's incidents, grouped by a cause
+ * they have no part in — but the problem attached to their own ticket is the
+ * answer to why it is waiting, and it carries the workaround.
+ *
+ * That arm is expressed with `ticketScopeWhere` rather than a second copy of
+ * "their own tickets", so the two can never disagree: whatever a requester may
+ * see on the ticket list is exactly what can carry a problem into their reach.
  */
 export function problemScopeWhere(user: AuthUser): Prisma.ProblemWhereInput {
   if (isPlatformWide(user)) return {};
   if (user.customerId == null) return { id: -1 };
-  return { customerId: user.customerId };
+  const ownCustomer = { customerId: user.customerId };
+  if (user.role !== "user") return ownCustomer;
+  return {
+    AND: [ownCustomer, { tickets: { some: ticketScopeWhere(user) } }],
+  };
 }
 
 const problemInclude = {
