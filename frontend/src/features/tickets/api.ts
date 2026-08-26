@@ -155,12 +155,32 @@ export type CreateTicketInput = {
   description: string;
   categoryId: number;
   priority: Priority;
+  /**
+   * De-duplication key for this submission. Optional so other callers need not
+   * mint one; the create dialog always does, because it is the surface where a
+   * retry after a failed submit is a normal thing to do.
+   */
+  idempotencyKey?: string;
 };
 
-export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
+/**
+ * Raise a ticket.
+ *
+ * `idempotencyKey` rides as a header rather than in the body: it is about the
+ * request, not the ticket, and the server never stores it as ticket content.
+ * Sending the same key again returns the ticket the first attempt created, so a
+ * retry after a lost response cannot leave two.
+ */
+export async function createTicket({
+  idempotencyKey,
+  ...input
+}: CreateTicketInput): Promise<Ticket> {
   const body = await apiRequest("/tickets", {
     method: "POST",
     body: JSON.stringify(input),
+    ...(idempotencyKey
+      ? { headers: { "Idempotency-Key": idempotencyKey } }
+      : {}),
   });
   return ticketEnvelopeSchema.parse(body).data;
 }

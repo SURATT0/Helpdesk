@@ -52,6 +52,24 @@ export function CreateTicketModal({
   const [attachError, setAttachError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  /**
+   * De-duplication key for the submission being composed.
+   *
+   * Regenerated whenever the content changes, which is what makes it mean "this
+   * exact submission" rather than "this dialog session". The two cases it has
+   * to tell apart:
+   *
+   * - Submit fails, the person presses the button again unchanged. Same key, so
+   *   if the first attempt actually reached the server and only the response was
+   *   lost, they get that ticket back instead of a second one.
+   * - Submit fails, the person edits and sends again. New key, so the edit is a
+   *   new ticket rather than being silently answered with the original.
+   */
+  const [idempotencyKey, setIdempotencyKey] = React.useState("");
+  React.useEffect(() => {
+    setIdempotencyKey(crypto.randomUUID());
+  }, [subject, description, categoryId, priority]);
+
   // Live KB deflection: suggest articles from the subject once it's meaningful.
   const suggest = useKbSuggest(subject, subject.trim().length >= 3);
   const suggestions = suggest.data ?? [];
@@ -103,6 +121,7 @@ export function CreateTicketModal({
         description: description.trim(),
         categoryId,
         priority,
+        idempotencyKey,
       });
       // Ticket exists — upload any attachments (best-effort, sequential).
       if (files.length > 0) {

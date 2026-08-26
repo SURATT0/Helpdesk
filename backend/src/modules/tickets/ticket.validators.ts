@@ -117,6 +117,16 @@ export const createTicketBody = z.object({
 });
 
 /**
+ * The `Idempotency-Key` header, for clients that send one.
+ *
+ * The value is opaque here: all it has to be is stable across a retry of the
+ * same submission and unlikely to collide, which is the client's job — the web
+ * app uses a UUID per submission. This only bounds it, so a header cannot smuggle
+ * an unbounded (or NUL-bearing) string into a column.
+ */
+export const idempotencyKeyHeader = freeText({ max: 128 });
+
+/**
  * One row of a CSV import. The category is referenced by name and the requester
  * by email — the service resolves both to ids, reporting per-row which failed
  * (unknown category / unknown requester) so the client can offer a fix.

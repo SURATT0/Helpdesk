@@ -5,6 +5,7 @@ import {
   closedHistoryQuery,
   closedPeriodsQuery,
   createTicketBody,
+  idempotencyKeyHeader,
   importTicketsBody,
   listTicketsQuery,
   setAffectedAssetsBody,
@@ -97,7 +98,17 @@ export const ticketController = {
 
   async create(req: Request, res: Response) {
     const input = createTicketBody.parse(req.body);
-    const ticket = await ticketService.create(input, currentUser(req));
+    // Optional, and deliberately so: a client that sends a key gets its retries
+    // collapsed onto one ticket, and one that doesn't keeps the old behaviour.
+    const header = req.get("Idempotency-Key");
+    const idempotencyKey =
+      header == null ? undefined : idempotencyKeyHeader.parse(header);
+    const ticket = await ticketService.create(
+      { ...input, idempotencyKey },
+      currentUser(req),
+    );
+    // 201 on a replay too. The point of an idempotent create is that the client
+    // cannot tell the retry apart from the original, so it takes the same path.
     res.status(201).json({ data: ticket });
   },
 

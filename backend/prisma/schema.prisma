@@ -247,6 +247,15 @@ model Ticket {
   // should never have existed (spam, a mis-filed import). The row and its history
   // stay on disk — `ticketScopeWhere` filters it out of every read.
   deletedAt      DateTime?             @map("deleted_at")
+  // De-duplication key for the create request, from the `Idempotency-Key`
+  // header. Null for every ticket raised without one — CSV import, email
+  // intake, an older client — and many nulls per requester are fine, which is
+  // why this is a nullable unique rather than a required one.
+  //
+  // Scoped to the requester, NOT globally unique: the key is minted client-side
+  // with no coordination, so two people can pick the same string, and a global
+  // constraint would hand one person's ticket back to the other as a "replay".
+  idempotencyKey String?               @map("idempotency_key")
   // Problem this incident is linked to (many tickets → one problem). Optional.
   problemId      Int?                  @map("problem_id")
   problem        Problem?              @relation(fields: [problemId], references: [id])
@@ -271,6 +280,11 @@ model Ticket {
   // Every read pairs the tenant filter with `deletedAt IS NULL` (ticketScopeWhere),
   // so the two travel together rather than as two separate indexes.
   @@index([customerId, deletedAt])
+  // What makes a repeated create idempotent: the second insert loses on this
+  // constraint instead of producing a second ticket, and the loser answers with
+  // the row that won. Doing it with a constraint rather than a check-then-insert
+  // is deliberate — two requests in flight together would both pass the check.
+  @@unique([requesterId, idempotencyKey])
   @@map("tickets")
 }
 
