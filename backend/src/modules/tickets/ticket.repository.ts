@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { Priority, TicketStatus } from "../../shared/domain";
+import type { Priority, Role, TicketStatus } from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
 import { BadRequest } from "../../shared/errors";
 import { prisma } from "../../shared/db";
@@ -58,6 +58,13 @@ export type Ticket = {
   priority: Priority;
   requester: string;
   requesterEmail: string;
+  /**
+   * The requester's role, which decides whether this ticket has an external side
+   * — see `isInternalThread`. A ticket raised by staff is worked as an internal
+   * thread, so the client needs the role to know which composer to offer; the
+   * name and email alone cannot tell it apart from a requester's ticket.
+   */
+  requesterRole: Role;
   assignee: string | null;
   /**
    * The assignee's id alongside their display name. The client filters and
@@ -164,6 +171,7 @@ function toTicketDto(row: TicketRow): Ticket {
     priority: row.priority,
     requester: row.requester.name,
     requesterEmail: row.requester.email,
+    requesterRole: row.requester.role,
     assignee: row.assignee?.name ?? null,
     assigneeId: row.assigneeId,
     category: row.category.name,

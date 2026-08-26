@@ -1,5 +1,6 @@
 import { Forbidden, NotFound } from "../../shared/errors";
 import { hasPermission, type AuthUser } from "../../shared/auth";
+import { isInternalThread } from "../../shared/domain";
 import { bus } from "../../shared/events";
 import { ticketService } from "../tickets/ticket.service";
 import {
@@ -27,15 +28,24 @@ export const commentService = {
     input: { body: string; internal: boolean },
     user: AuthUser,
   ): Promise<CommentDto> {
-    await ticketService.get(ticketId, user); // must be able to see the ticket
+    const ticket = await ticketService.get(ticketId, user); // must see the ticket
     if (input.internal && !hasPermission(user, "ticket:write")) {
       throw Forbidden("Only agents can add internal notes");
     }
+    // A ticket raised by staff has no external side (see isInternalThread), so a
+    // public comment on one has no audience a note doesn't already reach: the row
+    // scope shows it to the desk either way. Stored as a note rather than refused
+    // because refusing would only strand a client that still has the old composer
+    // open, and the message it is trying to send is a note by every other measure.
+    // The permission check above stays keyed on what the CLIENT asked for — a
+    // caller who may not write notes is not made to fail here by our own coercion.
+    const internal =
+      input.internal || isInternalThread(ticket.requesterRole);
     const comment = await commentRepository.create({
       ticketId,
       authorId: user.id,
       body: input.body,
-      internal: input.internal,
+      internal,
     });
     // Real-time fan-out to SSE subscribers on this ticket.
     bus.emit("comment.created", { ticketId, comment });

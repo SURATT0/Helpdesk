@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roleSchema } from "@/features/auth/schemas";
 
 export const ticketStatusSchema = z.enum([
   "new",
@@ -19,6 +20,13 @@ export const ticketSchema = z.object({
   priority: prioritySchema,
   requester: z.string(),
   requesterEmail: z.string(),
+  /**
+   * The requester's role. Read for one decision — `isInternalThread`, which
+   * decides whether the thread has an external side to chat with and mail at all
+   * — and deliberately not for permissions: what the VIEWER may do comes from
+   * their own session, never from a field on the row.
+   */
+  requesterRole: roleSchema,
   assignee: z.string().nullable(),
   /** Filtering keys on this, not the display name — names are not unique. */
   assigneeId: z.number().nullable(),
