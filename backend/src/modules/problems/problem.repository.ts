@@ -60,7 +60,13 @@ export type ProblemDto = {
   createdAt: string;
 };
 
-function toDto(row: ProblemRow, ticketCount = 0): ProblemDto {
+type KbLink = ProblemDto["kbArticle"];
+
+function toDto(
+  row: ProblemRow,
+  ticketCount: number,
+  kbArticle: KbLink,
+): ProblemDto {
   return {
     id: row.id,
     title: row.title,
@@ -69,12 +75,36 @@ function toDto(row: ProblemRow, ticketCount = 0): ProblemDto {
     rootCause: row.rootCause,
     workaround: row.workaround,
     kbArticleId: row.kbArticleId,
-    // Free to resolve: the KB dataset is in-process, so this costs no query.
-    kbArticle: kbService.reference(row.kbArticleId),
+    kbArticle,
     createdBy: row.createdBy,
     ticketCount,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * Map rows to DTOs, resolving their knowledge-base links in ONE query for the
+ * whole batch.
+ *
+ * The link used to be free — the KB was an in-process dataset — and is now a
+ * table, so resolving it inside the per-row mapper would mean a query per row on
+ * a page of problems. Batching keeps it at one regardless of page size.
+ */
+async function toDtos(
+  rows: (ProblemRow & { ticketCount: number })[],
+): Promise<ProblemDto[]> {
+  const refs = await kbService.referencesFor(rows.map((r) => r.kbArticleId));
+  return rows.map((r) =>
+    toDto(r, r.ticketCount, (r.kbArticleId && refs.get(r.kbArticleId)) || null),
+  );
+}
+
+async function toOneDto(
+  row: ProblemRow,
+  ticketCount: number,
+): Promise<ProblemDto> {
+  const [dto] = await toDtos([{ ...row, ticketCount }]);
+  return dto;
 }
 
 export const problemRepository = {
@@ -96,7 +126,7 @@ export const problemRepository = {
       orderBy: { createdAt: "desc" },
       take: opts.limit ?? 100,
     });
-    return rows.map((r) => toDto(r, r._count.tickets));
+    return toDtos(rows.map((r) => ({ ...r, ticketCount: r._count.tickets })));
   },
 
   async findById(id: number, actor: AuthUser): Promise<ProblemDto | null> {
@@ -104,7 +134,7 @@ export const problemRepository = {
       where: { AND: [{ id }, problemScopeWhere(actor)] },
       include: { ...problemInclude, _count: { select: { tickets: true } } },
     });
-    return row ? toDto(row, row._count.tickets) : null;
+    return row ? toOneDto(row, row._count.tickets) : null;
   },
 
   /** The fields the edit rules need, scoped — null when out of scope. */
@@ -134,7 +164,7 @@ export const problemRepository = {
     actor: AuthUser,
     announce: boolean,
   ): Promise<ProblemDto> {
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       const updated = await tx.problem.update({
         where: { id },
         data: {
@@ -191,8 +221,9 @@ export const problemRepository = {
         );
       }
 
-      return toDto(updated, updated._count.tickets);
+      return updated;
     });
+    return toOneDto(updated, updated._count.tickets);
   },
 
   /**
@@ -209,7 +240,7 @@ export const problemRepository = {
     },
     actor: AuthUser,
   ): Promise<ProblemDto> {
-    return prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const created = await tx.problem.create({
         data: {
           title: data.title,
@@ -233,8 +264,9 @@ export const problemRepository = {
         },
         tx,
       );
-      return toDto(created, 1);
+      return created;
     });
+    return toOneDto(created, 1);
   },
 
   /** Point a ticket at an existing problem (or clear it when `problemId` null). */

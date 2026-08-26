@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { env } from "../src/config/env";
+import { canTransition, type TicketStatus } from "../src/shared/domain";
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { notificationService } from "../src/modules/notifications/notification.service";
 import { authService } from "../src/modules/auth/auth.service";
@@ -850,8 +851,10 @@ describe("scope — a requester sees only their own, except the KB", () => {
   });
 
   it("reads the same knowledge base as everyone else", async () => {
-    // The one surface that is deliberately not scoped: an article is the same
-    // article whoever opens it.
+    // The one surface that is deliberately not scoped: articles carry no
+    // customer, so an article is the same article whoever opens it. Status is the
+    // only thing that narrows the list, and the seeded library is all published —
+    // drafts are covered in the knowledge base suite below.
     const marcus = await login(REQUESTER);
     const dana = await login("dana.reyes@acme.com");
 
@@ -1125,6 +1128,66 @@ describe("tickets — status transitions", () => {
       .send({ status: "closed" });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("ILLEGAL_TRANSITION");
+  });
+
+  it("never records an illegal transition when two agents race one ticket", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    // 1035 is `open`, from which BOTH of these are legal — so both requests
+    // pass the service's guard against their own read. Only one may win:
+    // `resolved → pending` is not in the whitelist, and applying the loser on
+    // top of the winner is exactly what used to persist it.
+    const [a, b] = await Promise.all([
+      request(app)
+        .patch(`${API}/tickets/1035/status`)
+        .set(bearer(dana))
+        .send({ status: "resolved" }),
+      request(app)
+        .patch(`${API}/tickets/1035/status`)
+        .set(bearer(dana))
+        .send({ status: "pending" }),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const loser = a.status === 409 ? a : b;
+    // Which 409 depends on whether the loser read before or after the winner
+    // committed; both are correct refusals.
+    expect(["CONCURRENT_STATUS_CHANGE", "ILLEGAL_TRANSITION"]).toContain(
+      loser.body.error.code,
+    );
+
+    // The invariant that matters, and the one that is timing-independent: every
+    // transition on record is one the whitelist allows. `fromStatus: null` is
+    // the seeded opening row, which is not a transition.
+    const rows = await prisma.ticketStatusHistory.findMany({
+      where: { ticketId: 1035 },
+      orderBy: { id: "asc" },
+      select: { fromStatus: true, toStatus: true },
+    });
+    for (const row of rows) {
+      if (row.fromStatus == null) continue;
+      expect(
+        canTransition(
+          row.fromStatus as TicketStatus,
+          row.toStatus as TicketStatus,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("treats a re-sent identical status as a no-op, not a second history row", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const send = () =>
+      request(app)
+        .patch(`${API}/tickets/1035/status`) // open → in_progress
+        .set(bearer(dana))
+        .send({ status: "in_progress" });
+
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200); // double submit
+    const history = await prisma.ticketStatusHistory.count({
+      where: { ticketId: 1035 },
+    });
+    expect(history).toBe(2); // seeded row + one real change, not two
   });
 
   it("forbids a requester from changing status (403)", async () => {
@@ -1996,6 +2059,23 @@ describe("users — deactivation", () => {
   const spareStaff = () =>
     prisma.user.findUniqueOrThrow({ where: { email: "morgan.lee@acme.com" } });
 
+  /**
+   * Morgan is also Acme's only super admin in the seed, so the last-admin guard
+   * would refuse to retire them before any of this got a chance to fail for the
+   * reason under test. Promoting Kai first is the order the product asks for
+   * anyway: someone else holds the role, then the leaver can go.
+   */
+  async function keepAnAdminBehind(token: string) {
+    const kai = await prisma.user.findUniqueOrThrow({
+      where: { email: "kai.t@acme.com" },
+    });
+    const res = await request(app)
+      .patch(`${API}/users/${kai.id}`)
+      .set(bearer(token))
+      .send({ role: "super_admin" });
+    expect(res.status).toBe(200);
+  }
+
   it("closes the door: no login, and the session dies at its next refresh", async () => {
     const sam = await login("sam.rivera@acme.com"); // platform-wide
     const target = await prisma.user.findUniqueOrThrow({
@@ -2088,6 +2168,7 @@ describe("users — deactivation", () => {
 
   it("stops new work reaching a closed account", async () => {
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     expect((await patch(sam, target.id, { isActive: false })).status).toBe(200);
 
@@ -2125,6 +2206,7 @@ describe("users — deactivation", () => {
 
   it("records the change in the audit trail", async () => {
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     expect((await patch(sam, target.id, { isActive: false })).status).toBe(200);
 
@@ -2139,6 +2221,7 @@ describe("users — deactivation", () => {
 
   it("can be reversed, and the account works again", async () => {
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     await patch(sam, target.id, { isActive: false });
     expect((await patch(sam, target.id, { isActive: true })).status).toBe(200);
@@ -2153,6 +2236,7 @@ describe("users — deactivation", () => {
     // Marking someone unavailable must not shut them out, and must still let a
     // queue be handed to them — they are at lunch, not gone.
     const sam = await login("sam.rivera@acme.com");
+    await keepAnAdminBehind(sam);
     const target = await spareStaff();
     expect(
       (await patch(sam, target.id, { availableForAssignment: false })).status,
@@ -2168,6 +2252,92 @@ describe("users — deactivation", () => {
       .set(bearer(sam))
       .send({ assigneeId: target.id });
     expect(one.status).toBe(200);
+  });
+});
+
+/**
+ * Nobody may remove the last person able to administer something.
+ *
+ * The seed has exactly one active super admin per group — one platform-wide, one
+ * per customer — so every one of them is "the last", which is what makes these
+ * assertions exact.
+ *
+ * The two cases are not equally bad and the guard says so: a customer left
+ * without a super admin can still be helped by platform staff, while the last
+ * platform-wide super admin is the end of the line, since only a platform-wide
+ * super admin may grant that role.
+ */
+describe("users — the last administrator", () => {
+  const patch = (token: string, id: number, body: Record<string, unknown>) =>
+    request(app).patch(`${API}/users/${id}`).set(bearer(token)).send(body);
+
+  const byEmail = (email: string) =>
+    prisma.user.findUniqueOrThrow({ where: { email } });
+
+  it("refuses to deactivate the only platform-wide super admin", async () => {
+    const sam = await byEmail("sam.rivera@acme.com"); // platform-wide
+    const morgan = await login("morgan.lee@acme.com");
+    const res = await patch(morgan, sam.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+    expect(res.body.error.message).toMatch(/platform/i);
+    expect((await byEmail("sam.rivera@acme.com")).isActive).toBe(true);
+  });
+
+  it("refuses to demote them, which costs the same thing", async () => {
+    // Keying on the field sent rather than the effect would have missed this.
+    const sam = await byEmail("sam.rivera@acme.com");
+    const token = await login("sam.rivera@acme.com");
+    const res = await patch(token, sam.id, { role: "admin" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+    expect((await byEmail("sam.rivera@acme.com")).role).toBe("super_admin");
+  });
+
+  it("refuses to deactivate a customer's only super admin", async () => {
+    const morgan = await byEmail("morgan.lee@acme.com"); // super_admin, Acme
+    const sam = await login("sam.rivera@acme.com");
+    const res = await patch(sam, morgan.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+    // Recoverable, so the wording does not talk about the platform.
+    expect(res.body.error.message).not.toMatch(/platform/i);
+  });
+
+  it("allows it once someone else holds the role", async () => {
+    // The order the guard insists on: promote, then retire.
+    const sam = await login("sam.rivera@acme.com");
+    const kai = await byEmail("kai.t@acme.com"); // admin, Acme
+    const morgan = await byEmail("morgan.lee@acme.com");
+
+    expect((await patch(sam, kai.id, { role: "super_admin" })).status).toBe(200);
+    const res = await patch(sam, morgan.id, { isActive: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isActive).toBe(false);
+  });
+
+  it("does not let one customer's super admin stand in for another's", async () => {
+    // `customerId: null` is its own group, not a wildcard: Globex having a super
+    // admin says nothing about Acme, and neither covers the platform.
+    const sam = await login("sam.rivera@acme.com");
+    const nadia = await byEmail("nadia.kofi@acme.com"); // super_admin, Globex
+    const res = await patch(sam, nadia.id, { isActive: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("LAST_ADMIN");
+  });
+
+  it("leaves ordinary edits alone", async () => {
+    // The guard must not fire on a change that costs nobody the role.
+    const sam = await login("sam.rivera@acme.com");
+    const morgan = await byEmail("morgan.lee@acme.com");
+    const res = await patch(sam, morgan.id, { availableForAssignment: false });
+    expect(res.status).toBe(200);
+  });
+
+  it("still allows deactivating someone who is not a super admin", async () => {
+    const sam = await login("sam.rivera@acme.com");
+    const petrov = await byEmail("j.petrov@acme.com"); // requester
+    expect((await patch(sam, petrov.id, { isActive: false })).status).toBe(200);
   });
 });
 
@@ -4307,5 +4477,271 @@ describe("notifications — email delivery sweep", () => {
     expect(feed.status).toBe(200);
     expect(feed.body.data.length).toBeGreaterThan(0);
     expect(feed.body.meta.unread).toBeGreaterThan(0);
+  });
+});
+
+describe("knowledge base — authoring", () => {
+  const AUTHOR = "dana.reyes@acme.com"; // admin: holds kb:write
+  const READER = "marcus.chen@acme.com"; // user: read-only
+
+  const draft = (over: Record<string, unknown> = {}) => ({
+    title: "Reset a stuck print spooler",
+    excerpt:
+      "The spooler service wedges after a driver update and the queue stops moving.",
+    body: "## Symptoms\n\n- Jobs pile up and never print\n\n## Fix\n\nRestart the spooler service, then clear the queue directory.",
+    categoryId: 0, // replaced per-test with a real id
+    tags: ["printer", "spooler"],
+    readMin: 3,
+    ...over,
+  });
+
+  /** Turn a ticket into a problem, so there is something to link an article to. */
+  async function convert(token: string, ticketId: number, title: string) {
+    const res = await request(app)
+      .post(`${API}/tickets/${ticketId}/problem`)
+      .set(bearer(token))
+      .send({ title });
+    expect(res.status).toBe(201);
+    return res.body.data.id as number;
+  }
+
+  async function post(token: string, over: Record<string, unknown> = {}) {
+    const body = draft(over);
+    if (body.categoryId === 0) body.categoryId = await categoryId("Hardware");
+    return request(app).post(`${API}/kb`).set(bearer(token)).send(body);
+  }
+
+  it("assigns the next id in the KB-nnn series", async () => {
+    const token = await login(AUTHOR);
+    const first = await post(token);
+    expect(first.status).toBe(201);
+    // The seeded library tops out at KB-118, so the next code continues from it
+    // rather than restarting — support staff quote these ids at each other.
+    expect(first.body.data.id).toBe("KB-119");
+    const second = await post(token, { title: "A second new article" });
+    expect(second.body.data.id).toBe("KB-120");
+  });
+
+  it("defaults a new article to draft, and hides it from readers", async () => {
+    const token = await login(AUTHOR);
+    const created = await post(token);
+    expect(created.body.data.status).toBe("draft");
+    const id = created.body.data.id as string;
+
+    const reader = await login(READER);
+    const hidden = await request(app)
+      .get(`${API}/kb/${id}`)
+      .set(bearer(reader));
+    // 404, not 403: telling a reader the id is taken by something they may not
+    // read is more than they need to know.
+    expect(hidden.status).toBe(404);
+
+    const list = await request(app).get(`${API}/kb`).set(bearer(reader));
+    expect(list.body.data.map((a: { id: string }) => a.id)).not.toContain(id);
+
+    const asAuthor = await request(app).get(`${API}/kb`).set(bearer(token));
+    expect(asAuthor.body.data.map((a: { id: string }) => a.id)).toContain(id);
+  });
+
+  it("publishes with a status patch, and then everyone sees it", async () => {
+    const token = await login(AUTHOR);
+    const id = (await post(token)).body.data.id as string;
+
+    const published = await request(app)
+      .patch(`${API}/kb/${id}`)
+      .set(bearer(token))
+      .send({ status: "published" });
+    expect(published.status).toBe(200);
+    expect(published.body.data.status).toBe("published");
+
+    const reader = await login(READER);
+    const visible = await request(app)
+      .get(`${API}/kb/${id}`)
+      .set(bearer(reader));
+    expect(visible.status).toBe(200);
+    expect(visible.body.data.title).toBe("Reset a stuck print spooler");
+  });
+
+  it("stamps who wrote it", async () => {
+    const token = await login(AUTHOR);
+    const created = await post(token);
+    expect(created.body.data.author).toMatchObject({ name: "Dana Reyes" });
+  });
+
+  it("refuses a reader trying to write or delete their way in", async () => {
+    const reader = await login(READER);
+    const cat = await categoryId("Hardware");
+    const create = await request(app)
+      .post(`${API}/kb`)
+      .set(bearer(reader))
+      .send(draft({ categoryId: cat }));
+    expect(create.status).toBe(403);
+
+    const patch = await request(app)
+      .patch(`${API}/kb/KB-042`)
+      .set(bearer(reader))
+      .send({ title: "Rewritten by a requester" });
+    expect(patch.status).toBe(403);
+
+    const del = await request(app)
+      .delete(`${API}/kb/KB-042`)
+      .set(bearer(reader));
+    expect(del.status).toBe(403);
+
+    // And nothing changed.
+    const after = await request(app).get(`${API}/kb/KB-042`).set(bearer(reader));
+    expect(after.body.data.title).not.toBe("Rewritten by a requester");
+  });
+
+  it("normalises tags rather than rejecting a sloppy list", async () => {
+    const token = await login(AUTHOR);
+    const created = await post(token, {
+      tags: ["Printer", "printer", "  SPOOLER ", ""],
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data.tags).toEqual(["printer", "spooler"]);
+  });
+
+  it("rejects a category that does not exist", async () => {
+    const token = await login(AUTHOR);
+    const res = await post(token, { categoryId: 99_999 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an empty edit instead of writing nothing", async () => {
+    const token = await login(AUTHOR);
+    const res = await request(app)
+      .patch(`${API}/kb/KB-042`)
+      .set(bearer(token))
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("404s an edit or delete of an id that never existed", async () => {
+    const token = await login(AUTHOR);
+    const patch = await request(app)
+      .patch(`${API}/kb/KB-nope`)
+      .set(bearer(token))
+      .send({ readMin: 4 });
+    expect(patch.status).toBe(404);
+    const del = await request(app)
+      .delete(`${API}/kb/KB-nope`)
+      .set(bearer(token));
+    expect(del.status).toBe(404);
+  });
+
+  it("finds an article by a phrase that only appears in its body", async () => {
+    const token = await login(AUTHOR);
+    await post(token, { status: "published" });
+    // "queue directory" is in the body and in no title, excerpt or tag — the
+    // search reaches the full text now that it lives in the database.
+    const res = await request(app)
+      .get(`${API}/kb?q=queue%20directory`)
+      .set(bearer(token));
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((a: { id: string }) => a.id)).toContain("KB-119");
+  });
+
+  it("lists only categories that have something in them", async () => {
+    const reader = await login(READER);
+    const res = await request(app).get(`${API}/kb`).set(bearer(reader));
+    const categories: string[] = res.body.meta.categories;
+    expect(categories.length).toBeGreaterThan(0);
+    // Every category offered as a filter returns something — an empty filter
+    // would be a dead end in the browse UI.
+    for (const name of categories) {
+      const filtered = await request(app)
+        .get(`${API}/kb?category=${encodeURIComponent(name)}`)
+        .set(bearer(reader));
+      expect(filtered.body.data.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("writes an audit row for create, publish and delete", async () => {
+    const token = await login(AUTHOR);
+    const id = (await post(token)).body.data.id as string;
+    await request(app)
+      .patch(`${API}/kb/${id}`)
+      .set(bearer(token))
+      .send({ status: "published" });
+    await request(app).delete(`${API}/kb/${id}`).set(bearer(token));
+
+    const rows = await prisma.auditLog.findMany({
+      where: { entity: "kb_article" },
+      orderBy: { id: "asc" },
+    });
+    expect(rows.map((r) => r.action)).toEqual([
+      "kb.create",
+      "kb.update",
+      "kb.delete",
+    ]);
+    // The id is a code, so it rides in meta — `audit_logs.entity_id` is an int.
+    for (const row of rows) {
+      expect((row.meta as { articleId: string }).articleId).toBe(id);
+    }
+    const publish = rows[1].meta as { statusFrom: string; statusTo: string };
+    expect(publish.statusFrom).toBe("draft");
+    expect(publish.statusTo).toBe("published");
+  });
+
+  it("leaves a problem loadable after its article is deleted", async () => {
+    const token = await login(AUTHOR);
+    const problem = await convert(token, 1042, "Outlives its article");
+    const linked = await request(app)
+      .patch(`${API}/problems/${problem}`)
+      .set(bearer(token))
+      .send({ kbArticleId: "KB-042" });
+    expect(linked.status).toBe(200);
+    expect(linked.body.data.kbArticle).toMatchObject({ id: "KB-042" });
+
+    const del = await request(app)
+      .delete(`${API}/kb/KB-042`)
+      .set(bearer(token));
+    expect(del.status).toBe(204);
+
+    const after = await request(app)
+      .get(`${API}/problems/${problem}`)
+      .set(bearer(token));
+    // The whole reason the reference is left soft: the problem still loads, and
+    // says the link is now unavailable instead of 404-ing.
+    expect(after.status).toBe(200);
+    expect(after.body.data.kbArticleId).toBe("KB-042");
+    expect(after.body.data.kbArticle).toBeNull();
+
+    const row = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "kb.delete" },
+    });
+    expect((row.meta as { orphanedProblems: number }).orphanedProblems).toBe(1);
+  });
+
+  it("still refuses to store a link to an article that does not exist", async () => {
+    const token = await login(AUTHOR);
+    const problem = await convert(token, 1042, "Bad link");
+    const res = await request(app)
+      .patch(`${API}/problems/${problem}`)
+      .set(bearer(token))
+      .send({ kbArticleId: "KB-not-a-thing" });
+    expect(res.status).toBe(400);
+  });
+
+  it("suggests by the words of what a requester is typing", async () => {
+    const reader = await login(READER);
+    const res = await request(app)
+      .get(`${API}/kb/suggest?q=${encodeURIComponent("my vpn keeps dropping")}`)
+      .set(bearer(reader));
+    expect(res.status).toBe(200);
+    // KB-118 is tagged `vpn`; "vpn" is one of the typed words.
+    expect(res.body.data.map((a: { id: string }) => a.id)).toContain("KB-118");
+    expect(res.body.data.length).toBeLessThanOrEqual(3);
+  });
+
+  it("never offers a draft as a suggestion to a requester", async () => {
+    const token = await login(AUTHOR);
+    const id = (await post(token, { tags: ["printer"] })).body.data.id;
+    const reader = await login(READER);
+    const res = await request(app)
+      .get(`${API}/kb/suggest?q=printer%20problem`)
+      .set(bearer(reader));
+    expect(res.body.data.map((a: { id: string }) => a.id)).not.toContain(id);
   });
 });

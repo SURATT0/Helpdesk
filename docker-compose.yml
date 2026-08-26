@@ -26,6 +26,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: "4000"
+      # The calendar the server reckons periods in. Every date bucket in the app
+      # is computed in JS from the process timezone — the closed-ticket log's
+      # week/month windows (history.period.ts) and the reports trend's daily
+      # buckets — so an unset TZ meant the container silently used UTC while the
+      # UI printed each date in the viewer's zone. In UTC+7 that put everything
+      # closed between 00:00 and 07:00 local into the PREVIOUS month, where the
+      # month picker (the only way to reach a closed ticket) could not find it.
+      # Override per deployment; it must match the calendar the users read.
+      TZ: ${TZ:-Asia/Bangkok}
       DATABASE_URL: postgresql://deskly:deskly@postgres:5432/deskly?schema=public
       WEB_ORIGIN: http://localhost:3000
       # Attachment files live on a named volume so they survive image rebuilds

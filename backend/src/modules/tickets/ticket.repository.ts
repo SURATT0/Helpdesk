@@ -1,7 +1,16 @@
 import { Prisma } from "@prisma/client";
-import type { Priority, Role, TicketStatus } from "../../shared/domain";
+import {
+  canTransition,
+  type Priority,
+  type Role,
+  type TicketStatus,
+} from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
-import { BadRequest } from "../../shared/errors";
+import {
+  BadRequest,
+  ConcurrentStatusChange,
+  IllegalTransition,
+} from "../../shared/errors";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
@@ -126,6 +135,13 @@ export type CreateTicketInput = {
    * (self-service). On CSV import the importer differs from the requester.
    */
   actorId?: number;
+  /**
+   * Client-supplied de-duplication key (the `Idempotency-Key` header). When
+   * present, repeating the same create returns the ticket the first attempt
+   * made instead of raising a second. Absent for callers with no retry to
+   * collapse — CSV import, email intake.
+   */
+  idempotencyKey?: string;
 };
 
 const ticketInclude = {
@@ -489,85 +505,120 @@ export const ticketRepository = {
     });
   },
 
+  /**
+   * Raise a ticket.
+   *
+   * With an `idempotencyKey`, repeating the request returns the ticket the first
+   * attempt created rather than raising a second one. Two layers, because they
+   * cover different things: the lookup up front collapses a *sequential* retry
+   * cheaply — the ordinary case, where the response was lost and the person
+   * pressed the button again — while the unique constraint collapses the
+   * *simultaneous* case, where both requests sail past that lookup together.
+   * Only the constraint is authoritative; the lookup is an optimisation.
+   */
   async create(input: CreateTicketInput): Promise<Ticket> {
     const actorId = input.actorId ?? input.requesterId;
-    return prisma.$transaction(async (tx) => {
-      const category = await tx.category.findUnique({
-        where: { id: input.categoryId },
-      });
-      if (!category) throw BadRequest("Unknown category");
 
-      // A ticket belongs to its requester's customer (the tenant boundary).
-      const requester = await tx.user.findUnique({
-        where: { id: input.requesterId },
-        select: { customerId: true },
-      });
+    if (input.idempotencyKey) {
+      const replayed = await findByIdempotencyKey(
+        input.requesterId,
+        input.idempotencyKey,
+      );
+      if (replayed) return replayed;
+    }
 
-      // Refuse rather than file the ticket outside every tenant. users.customerId is
-      // nullable on purpose (null = platform staff, what isPlatformWide keys on), but
-      // tickets.customerId is not: ticketScopeWhere matches staff on customerId
-      // equality, so a tenant-less ticket is invisible to every customer-bound admin
-      // and only a platform-wide super_admin would ever find it. Same stance the email
-      // intake takes when it cannot name a tenant for an unknown sender.
-      if (requester?.customerId == null) {
-        throw BadRequest(
-          "The requester belongs to no customer, so there is no tenant to file this ticket under. " +
-            "Platform staff should raise it on behalf of a user inside the customer it concerns.",
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const category = await tx.category.findUnique({
+          where: { id: input.categoryId },
+        });
+        if (!category) throw BadRequest("Unknown category");
+
+        // A ticket belongs to its requester's customer (the tenant boundary).
+        const requester = await tx.user.findUnique({
+          where: { id: input.requesterId },
+          select: { customerId: true },
+        });
+
+        // Refuse rather than file the ticket outside every tenant. users.customerId is
+        // nullable on purpose (null = platform staff, what isPlatformWide keys on), but
+        // tickets.customerId is not: ticketScopeWhere matches staff on customerId
+        // equality, so a tenant-less ticket is invisible to every customer-bound admin
+        // and only a platform-wide super_admin would ever find it. Same stance the email
+        // intake takes when it cannot name a tenant for an unknown sender.
+        if (requester?.customerId == null) {
+          throw BadRequest(
+            "The requester belongs to no customer, so there is no tenant to file this ticket under. " +
+              "Platform staff should raise it on behalf of a user inside the customer it concerns.",
+          );
+        }
+
+        // Auto-assignment. If the requester belongs to a project, the ticket goes
+        // to that project's caseworker — its owner, or the backup when the owner is
+        // unavailable. Read inside this transaction so the routing decision sees
+        // the same snapshot as the insert.
+        //
+        // Falling through to null is the pre-existing behaviour and a fine outcome:
+        // an unassigned ticket sits in the queue where the category's default team
+        // picks it up (implicitly, via the repository scope), which is better than
+        // parking it on someone who is away.
+        const assigneeId = resolveRoutedAssignee(
+          await projectRepository.findRoutingForRequester(input.requesterId, tx),
         );
-      }
 
-      // Auto-assignment. If the requester belongs to a project, the ticket goes
-      // to that project's caseworker — its owner, or the backup when the owner is
-      // unavailable. Read inside this transaction so the routing decision sees
-      // the same snapshot as the insert.
-      //
-      // Falling through to null is the pre-existing behaviour and a fine outcome:
-      // an unassigned ticket sits in the queue where the category's default team
-      // picks it up (implicitly, via the repository scope), which is better than
-      // parking it on someone who is away.
-      const assigneeId = resolveRoutedAssignee(
-        await projectRepository.findRoutingForRequester(input.requesterId, tx),
-      );
-
-      const now = new Date();
-      const created = await tx.ticket.create({
-        data: {
-          subject: input.subject,
-          description: input.description,
-          status: "new",
-          priority: input.priority,
-          requesterId: input.requesterId,
-          customerId: requester.customerId,
-          assigneeId,
-          categoryId: input.categoryId,
-          dueAt: computeDueAt(input.priority, now),
-          createdAt: now,
-        },
-        include: ticketInclude,
-      });
-
-      await tx.ticketStatusHistory.create({
-        data: { ticketId: created.id, fromStatus: null, toStatus: "new", changedById: actorId },
-      });
-      await auditRepository.record(
-        {
-          userId: actorId,
-          action: "ticket.create",
-          entity: "ticket",
-          entityId: created.id,
-          meta: {
+        const now = new Date();
+        const created = await tx.ticket.create({
+          data: {
+            subject: input.subject,
+            description: input.description,
+            status: "new",
             priority: input.priority,
+            requesterId: input.requesterId,
+            customerId: requester.customerId,
+            assigneeId,
             categoryId: input.categoryId,
-            ...(input.actorId && input.actorId !== input.requesterId
-              ? { via: "import", requesterId: input.requesterId }
-              : {}),
+            dueAt: computeDueAt(input.priority, now),
+            createdAt: now,
+            idempotencyKey: input.idempotencyKey ?? null,
           },
-        },
-        tx,
-      );
+          include: ticketInclude,
+        });
 
-      return toTicketDto(created);
-    });
+        await tx.ticketStatusHistory.create({
+          data: { ticketId: created.id, fromStatus: null, toStatus: "new", changedById: actorId },
+        });
+        await auditRepository.record(
+          {
+            userId: actorId,
+            action: "ticket.create",
+            entity: "ticket",
+            entityId: created.id,
+            meta: {
+              priority: input.priority,
+              categoryId: input.categoryId,
+              ...(input.actorId && input.actorId !== input.requesterId
+                ? { via: "import", requesterId: input.requesterId }
+                : {}),
+            },
+          },
+          tx,
+        );
+
+        return toTicketDto(created);
+      });
+    } catch (err) {
+      // Lost the insert race with a request carrying the same key. The winner's
+      // row IS the answer — that is what idempotent means. Anything else, and
+      // any unique violation on another constraint, still throws.
+      if (input.idempotencyKey && isIdempotencyConflict(err)) {
+        const winner = await findByIdempotencyKey(
+          input.requesterId,
+          input.idempotencyKey,
+        );
+        if (winner) return winner;
+      }
+      throw err;
+    }
   },
 
   /** Resolve a category name to its id (case-insensitive). Null if unknown. */
@@ -695,57 +746,103 @@ export const ticketRepository = {
     });
   },
 
+  /**
+   * Move a ticket to `status`, recording the history row the SLA is measured
+   * from. Returns null when the ticket does not exist.
+   *
+   * The transition is applied as a **compare-and-swap** on the status we
+   * validated against, not as a plain update. The service checks
+   * `canTransition` against a read taken outside this transaction, and Postgres
+   * runs us at READ COMMITTED — so another request can commit a different
+   * status in between, and its row lock is released before we get here.
+   * Re-reading inside the transaction does not help: that read can be just as
+   * stale. Pinning the old status in the WHERE makes the check and the write one
+   * atomic step, so losing the race updates nothing instead of writing a move
+   * the whitelist forbids. Two agents on the same `open` ticket could otherwise
+   * persist `open → resolved` and then `resolved → pending`, appending an
+   * illegal row to `ticket_status_history`.
+   */
   async updateStatus(
     id: number,
     status: TicketStatus,
     changedById?: number,
   ): Promise<Ticket | null> {
     return prisma.$transaction(async (tx) => {
-      const current = await tx.ticket.findUnique({ where: { id } });
+      const current = await tx.ticket.findUnique({
+        where: { id },
+        include: ticketInclude,
+      });
       if (!current) return null;
 
-      const updated = await tx.ticket.update({
-        where: { id },
+      // Already there — a double-submitted request, or two people choosing the
+      // same move. Nothing to validate and nothing to record, but not an error:
+      // the ticket is where the caller asked it to be.
+      if (current.status === status) return toTicketDto(current);
+
+      // The whitelist is enforced here as well as in the service: this is the
+      // only place that can check it against the row it is about to write.
+      if (!canTransition(current.status, status)) {
+        throw IllegalTransition(current.status, status);
+      }
+
+      const swap = await tx.ticket.updateMany({
+        where: { id, status: current.status },
         data: {
           status,
           ...(status === "resolved" ? { resolvedAt: new Date() } : {}),
           ...(status === "closed" ? { closedAt: new Date() } : {}),
         },
-        include: ticketInclude,
       });
-
-      // Append the SLA source-of-truth row + audit (skip pure no-op changes).
-      if (current.status !== status) {
-        await tx.ticketStatusHistory.create({
-          data: {
-            ticketId: id,
-            fromStatus: current.status,
-            toStatus: status,
-            changedById: changedById ?? null,
-          },
+      if (swap.count === 0) {
+        // Someone else moved it between our read and this write. Report what we
+        // found rather than retrying from it — see ConcurrentStatusChange.
+        const actual = await tx.ticket.findUnique({
+          where: { id },
+          select: { status: true },
         });
-        await auditRepository.record(
-          {
-            userId: changedById ?? null,
-            action: "ticket.status_change",
-            entity: "ticket",
-            entityId: id,
-            meta: { from: current.status, to: status },
-          },
-          tx,
-        );
-        await notificationRepository.createMany(
-          recipientsFor(current, changedById).map((userId) => ({
-            userId,
-            type: "ticket.status_change",
-            ticketId: id,
-            message: `Ticket #${id} moved to ${status.replace("_", " ")}`,
-          })),
-          tx,
+        throw ConcurrentStatusChange(
+          current.status,
+          status,
+          actual?.status ?? "unknown",
         );
       }
 
-      return toTicketDto(updated);
+      // Append the SLA source-of-truth row + audit. Reached only on a real
+      // change: the no-op case returned above.
+      await tx.ticketStatusHistory.create({
+        data: {
+          ticketId: id,
+          fromStatus: current.status,
+          toStatus: status,
+          changedById: changedById ?? null,
+        },
+      });
+      await auditRepository.record(
+        {
+          userId: changedById ?? null,
+          action: "ticket.status_change",
+          entity: "ticket",
+          entityId: id,
+          meta: { from: current.status, to: status },
+        },
+        tx,
+      );
+      await notificationRepository.createMany(
+        recipientsFor(current, changedById).map((userId) => ({
+          userId,
+          type: "ticket.status_change",
+          ticketId: id,
+          message: `Ticket #${id} moved to ${status.replace("_", " ")}`,
+        })),
+        tx,
+      );
+
+      // `updateMany` cannot return relations, so re-read for the DTO.
+      const updated = await tx.ticket.findUnique({
+        where: { id },
+        include: ticketInclude,
+      });
+      return updated ? toTicketDto(updated) : null;
     });
   },
 
@@ -855,3 +952,40 @@ export const ticketRepository = {
     });
   },
 };
+
+/**
+ * The ticket a previous request with this key already created, if any.
+ *
+ * Scoped to the requester because the key is minted client-side with no
+ * coordination: two people can pick the same string, and an unscoped lookup
+ * would hand one person's ticket to the other. A soft-deleted row is not a
+ * replay to return — it is gone, and the retry should raise a fresh ticket.
+ */
+async function findByIdempotencyKey(
+  requesterId: number,
+  idempotencyKey: string,
+): Promise<Ticket | null> {
+  const row = await prisma.ticket.findFirst({
+    where: { requesterId, idempotencyKey, deletedAt: null },
+    include: ticketInclude,
+  });
+  return row ? toTicketDto(row) : null;
+}
+
+/**
+ * Is this the unique violation on `(requesterId, idempotencyKey)` specifically?
+ * Matched on the target columns rather than the P2002 code alone, so a
+ * collision on some unrelated constraint is never quietly answered with the
+ * wrong ticket.
+ */
+function isIdempotencyConflict(err: unknown): boolean {
+  if (
+    !(err instanceof Prisma.PrismaClientKnownRequestError) ||
+    err.code !== "P2002"
+  ) {
+    return false;
+  }
+  const target = err.meta?.target;
+  const fields = Array.isArray(target) ? target : [String(target ?? "")];
+  return fields.some((f) => String(f).includes("idempotency_key"));
+}

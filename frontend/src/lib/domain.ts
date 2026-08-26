@@ -61,6 +61,20 @@ export const PRIORITY_META: Record<
 };
 
 /**
+ * Length caps on the free-text fields, mirroring `TEXT_MAX` in the API's
+ * `shared/text.ts`. The server is the authority and refuses anything longer
+ * with a 400; these exist so a person finds out while typing rather than after
+ * submitting, where the only feedback is a flat "Invalid request".
+ *
+ * Keep the two in step: raising one without the other turns into either a
+ * field that refuses what the API accepts, or the vague rejection again.
+ */
+export const TEXT_MAX = {
+  SUBJECT: 200,
+  BODY: 20_000,
+} as const;
+
+/**
  * Allowed status transitions (whitelist). The service layer would return
  * 409 ILLEGAL_TRANSITION for anything not listed here.
  */
