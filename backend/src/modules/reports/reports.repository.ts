@@ -85,9 +85,11 @@ export const reportsRepository = {
   async getSlaSummary(now: Date, user: AuthUser): Promise<ReportsSummary> {
     // Scope every figure to the tickets this user may see.
     const scope = ticketScopeWhere(user);
-    const [terminal, firstTransitions] = await Promise.all([
+    const [terminal, firstReplies] = await Promise.all([
       prisma.ticket.findMany({
-        where: { AND: [scope, { status: { in: ["resolved", "closed"] } }] },
+        // Finished work. `pending` counts: the desk is done with it and the
+        // resolution clock has stopped — only the requester has yet to confirm.
+        where: { AND: [scope, { status: { in: ["pending", "closed"] } }] },
         select: {
           id: true,
           priority: true,
@@ -99,11 +101,28 @@ export const reportsRepository = {
           assignee: { select: { name: true } },
         },
       }),
-      // First status transition per ticket = the moment someone picked it up. It
-      // is both the proxy for "first response" and the start of the handling
-      // clock below.
-      prisma.ticketStatusHistory.findMany({
-        where: { fromStatus: { not: null }, ticket: scope },
+      /**
+       * The first PUBLIC reply from the desk on each ticket — the moment someone
+       * actually answered the person who asked.
+       *
+       * This used to be the first status transition, on the grounds that moving a
+       * ticket off `new` was the moment it was picked up. That stopped being true
+       * when In Progress became a derived state: taking a ticket is an assignment
+       * now, which writes no history row, so the first transition on a ticket is
+       * the one that FINISHES it — measuring to that would have reported the
+       * handling time as nearly zero and the first response as the whole job.
+       *
+       * A reply is also the better answer to the question either figure asks. An
+       * internal note is the desk talking to itself, and a note or a status move
+       * is not something the requester ever sees, so neither is a response.
+       */
+      prisma.comment.findMany({
+        where: {
+          internal: false,
+          deletedAt: null,
+          author: { role: { not: "user" } },
+          ticket: scope,
+        },
         orderBy: { createdAt: "asc" },
         select: {
           ticketId: true,
@@ -113,9 +132,9 @@ export const reportsRepository = {
       }),
     ]);
 
-    /** When each ticket was first picked up, by ticket id. */
+    /** When the desk first replied on each ticket, by ticket id. */
     const openedAt = new Map<number, Date>();
-    for (const h of firstTransitions) {
+    for (const h of firstReplies) {
       if (!openedAt.has(h.ticketId)) openedAt.set(h.ticketId, h.createdAt);
     }
 
@@ -207,7 +226,7 @@ export const reportsRepository = {
       .sort((a, b) => b.handled - a.handled);
 
     const firstByTicket = new Map<number, number>();
-    for (const h of firstTransitions) {
+    for (const h of firstReplies) {
       if (!firstByTicket.has(h.ticketId)) {
         firstByTicket.set(
           h.ticketId,

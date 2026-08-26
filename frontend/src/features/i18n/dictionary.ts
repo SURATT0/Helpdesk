@@ -291,7 +291,7 @@ const en: Dict = {
   "bulk.result": "{ok} updated · {failed} failed",
 
   "detail.tickets": "Tickets",
-  "detail.markResolved": "Mark resolved",
+  "detail.markResolved": "Done — ask requester",
   "detail.saving": "Saving…",
   // Deleting a ticket is super-admin only. Closing is the normal end of the line,
   // so the wording says what this is for rather than just "Are you sure?".
@@ -370,9 +370,9 @@ const en: Dict = {
   // Measured from the ticket being picked up to it reaching closed, so the
   // sub-line counts closed tickets rather than resolved ones.
   "report.kpi.avgRes": "Average Handling Time",
-  "report.kpi.avgRes.sub": "opened to closed, across {n} tickets",
+  "report.kpi.avgRes.sub": "first reply to closed, across {n} tickets",
   "report.kpi.firstResp": "First Response Time",
-  "report.kpi.firstResp.sub": "time to first status change",
+  "report.kpi.firstResp.sub": "time to the desk's first reply",
   "report.kpi.sla": "SLA compliance",
   "report.kpi.sla.sub": "{n} tickets judged",
   "report.trend.title": "Tickets per day",
@@ -916,7 +916,7 @@ const th: Dict = {
   "bulk.result": "สำเร็จ {ok} · ล้มเหลว {failed}",
 
   "detail.tickets": "Ticket",
-  "detail.markResolved": "ทำเป็นแก้ไขแล้ว",
+  "detail.markResolved": "เสร็จแล้ว — ส่งให้ผู้แจ้งยืนยัน",
   "detail.saving": "กำลังบันทึก…",
   "detail.delete": "ลบ ticket",
   "detail.deleteConfirm": "ลบ ticket นี้? จะหายจากทุกรายการและทุกรายงาน",
@@ -987,9 +987,9 @@ const th: Dict = {
   "report.export": "ส่งออก CSV",
   "report.loadError": "โหลดรายงานไม่สำเร็จ",
   "report.kpi.avgRes": "เวลาดำเนินการเฉลี่ย",
-  "report.kpi.avgRes.sub": "ตั้งแต่เปิดอ่านถึงปิด จาก {n} Ticket",
+  "report.kpi.avgRes.sub": "ตั้งแต่ตอบกลับครั้งแรกถึงปิด จาก {n} Ticket",
   "report.kpi.firstResp": "เวลาตอบกลับเฉลี่ย",
-  "report.kpi.firstResp.sub": "เวลาถึงการเปลี่ยนสถานะครั้งแรก",
+  "report.kpi.firstResp.sub": "เวลาถึงการตอบกลับครั้งแรกของเจ้าหน้าที่",
   "report.kpi.sla": "ปฏิบัติตาม SLA",
   "report.kpi.sla.sub": "ตัดสินจาก {n} Ticket",
   "report.trend.title": "จำนวน Ticket ต่อวัน",
