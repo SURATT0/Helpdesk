@@ -2,12 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, Clock, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Clock, Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
+import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 import { useKbArticles } from "../queries";
+import { KbEditorModal } from "./kb-editor-modal";
+import { DraftBadge } from "./draft-badge";
 
 function CategoryChip({
   label,
@@ -36,26 +41,41 @@ function CategoryChip({
 
 export function KbBrowser() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const router = useRouter();
+  const [writing, setWriting] = React.useState(false);
   const [q, setQ] = React.useState("");
   const [category, setCategory] = React.useState<string | null>(null);
   const { data, isLoading, isError, refetch } = useKbArticles(q, category);
+
+  // Mirrors the server’s kb:write grant (admin and up). A requester sees the
+  // library read-only, which is the whole point of having one.
+  const canWrite = user != null && user.role !== "user";
 
   const categories = data?.categories ?? [];
   const articles = data?.articles ?? [];
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
-      <div className="flex w-full min-w-0 max-w-[420px] items-center gap-2 rounded-md border border-line bg-white px-3 py-2 focus-within:border-brand">
-        <Search size={14} strokeWidth={2} className="flex-none text-faint" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("kb.search")}
-          className={cn(
-            "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
-            FIELD_TEXT_13,
-          )}
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-line bg-white px-3 py-2 focus-within:border-brand sm:max-w-[420px]">
+          <Search size={14} strokeWidth={2} className="flex-none text-faint" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("kb.search")}
+            className={cn(
+              "w-full min-w-0 bg-transparent text-ink placeholder:text-faint focus:outline-none",
+              FIELD_TEXT_13,
+            )}
+          />
+        </div>
+        {canWrite ? (
+          <Button onClick={() => setWriting(true)}>
+            <Plus size={14} strokeWidth={2.5} />
+            {t("kb.new")}
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -95,6 +115,7 @@ export function KbBrowser() {
                 <span className="rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-medium text-[#475569]">
                   {a.category}
                 </span>
+                {a.status === "draft" ? <DraftBadge /> : null}
                 <span className="ml-auto flex items-center gap-1 text-[11px] text-faint">
                   <Clock size={11} strokeWidth={2} />
                   {t("kb.readMin", { n: a.readMin })}
@@ -112,6 +133,15 @@ export function KbBrowser() {
           ))}
         </div>
       )}
+
+      {writing ? (
+        <KbEditorModal
+          onClose={() => setWriting(false)}
+          // Straight to what was just written: an author almost always wants to
+          // read it back, and a new draft is invisible in the list they came from.
+          onCreated={(id) => router.push(`/kb/${id}`)}
+        />
+      ) : null}
     </div>
   );
 }
