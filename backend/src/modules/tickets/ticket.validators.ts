@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { freeText, TEXT_MAX } from "../../shared/text";
 
 export const ticketStatus = z.enum([
   "new",
@@ -109,8 +110,8 @@ export const updatePriorityBody = z.object({
 });
 
 export const createTicketBody = z.object({
-  subject: z.string().min(3),
-  description: z.string().min(1),
+  subject: freeText({ min: 3, max: TEXT_MAX.SUBJECT }),
+  description: freeText({ max: TEXT_MAX.BODY }),
   categoryId: z.coerce.number().int().positive(),
   priority: priority.default("medium"),
 });
@@ -121,8 +122,8 @@ export const createTicketBody = z.object({
  * (unknown category / unknown requester) so the client can offer a fix.
  */
 export const importTicketRow = z.object({
-  subject: z.string().min(3),
-  description: z.string().min(1),
+  subject: freeText({ min: 3, max: TEXT_MAX.SUBJECT }),
+  description: freeText({ max: TEXT_MAX.BODY }),
   priority: priority.default("medium"),
   category: z.string().min(1),
   requesterEmail: z.string().email(),

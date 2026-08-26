@@ -14,7 +14,7 @@ import { uploadAttachment } from "@/features/attachments/api";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
 import { useCategories, useCreateTicket } from "../queries";
-import type { Priority } from "@/lib/domain";
+import { TEXT_MAX, type Priority } from "@/lib/domain";
 
 // Images + common help-desk data files (mirrors the backend allowlist).
 const ACCEPT =
@@ -170,6 +170,7 @@ export function CreateTicketModal({
             <Input
               id="ticket-subject"
               autoFocus
+              maxLength={TEXT_MAX.SUBJECT}
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder={t("create.subjectPlaceholder")}
@@ -262,6 +263,7 @@ export function CreateTicketModal({
             <Textarea
               id="ticket-description"
               rows={3}
+              maxLength={TEXT_MAX.BODY}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("create.descriptionPlaceholder")}
