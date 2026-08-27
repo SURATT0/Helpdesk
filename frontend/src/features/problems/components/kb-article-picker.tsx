@@ -32,9 +32,9 @@ export function KbArticlePicker({
   return (
     <div className="flex flex-col gap-1.5">
       {value ? (
-        <div className="flex items-center gap-2 rounded-md border border-line bg-[#fafbfc] px-2.5 py-2">
+        <div className="flex items-center gap-2 rounded-md border border-line bg-wash px-2.5 py-2">
           <BookOpen size={13} className="flex-none text-brand" />
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">
+          <span className="min-w-0 flex-1 truncate text-body text-ink">
             {/* The title may not be in the current search results; fall back to
                 the id so the selection is never rendered as blank. */}
             {selected ? selected.title : value}
@@ -43,7 +43,7 @@ export function KbArticlePicker({
             type="button"
             onClick={() => onChange(null)}
             aria-label={t("problem.kbClear")}
-            className="grid h-5 w-5 flex-none place-items-center rounded text-[#475569] hover:bg-app"
+            className="grid h-5 w-5 flex-none place-items-center rounded text-subtle hover:bg-app"
           >
             <X size={12} />
           </button>
@@ -65,12 +65,12 @@ export function KbArticlePicker({
 
       <div className="max-h-[132px] overflow-y-auto rounded-md border border-line">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 p-3 text-[12px] text-faint">
+          <div className="flex items-center justify-center gap-2 p-3 text-dense text-faint">
             <Loader2 size={12} className="animate-spin" />
             {t("common.loading")}
           </div>
         ) : articles.length === 0 ? (
-          <div className="p-3 text-center text-[12px] text-faint">
+          <div className="p-3 text-center text-dense text-faint">
             {t("problem.kbNoneFound")}
           </div>
         ) : (
@@ -83,23 +83,23 @@ export function KbArticlePicker({
                 onClick={() => onChange(active ? null : a.id)}
                 className={cn(
                   "flex w-full items-start gap-2 px-2.5 py-2 text-left hover:bg-app",
-                  i < articles.length - 1 && "border-b border-[#f1f4f8]",
-                  active && "bg-[#e4f2ea]",
+                  i < articles.length - 1 && "border-b border-rule",
+                  active && "bg-accent-soft",
                 )}
               >
                 <span
                   className={cn(
                     "mt-[3px] grid h-3.5 w-3.5 flex-none place-items-center rounded-[4px] border",
-                    active ? "border-brand bg-brand text-white" : "border-[#cbd5e1]",
+                    active ? "border-brand bg-brand text-white" : "border-dim",
                   )}
                 >
                   {active ? <Check size={10} strokeWidth={3.5} /> : null}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] text-ink">
+                  <span className="block truncate text-body text-ink">
                     {a.title}
                   </span>
-                  <span className="block text-[11px] text-faint">
+                  <span className="block text-meta text-faint">
                     {a.id} · {a.category}
                   </span>
                 </span>

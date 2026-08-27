@@ -142,10 +142,10 @@ export function KbEditorModal({
       <div className="flex max-h-[88dvh] flex-col overflow-y-auto rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[14.5px] font-semibold text-ink">
+            <div className="text-dialog font-semibold text-ink">
               {editing ? t("kb.editTitle") : t("kb.newTitle")}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-[#475569]">
+            <div className="mt-0.5 text-body text-subtle">
               {editing
                 ? t("kb.editNote", { id: article.id })
                 : t("kb.newNote")}
@@ -156,7 +156,7 @@ export function KbEditorModal({
             onClick={onClose}
             aria-label={t("kb.close")}
             className={cn(
-              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-subtle hover:bg-app",
               TOUCH_TARGET,
             )}
           >
@@ -166,7 +166,7 @@ export function KbEditorModal({
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-faint" htmlFor="kb-title">
+            <label className="text-dense font-medium text-faint" htmlFor="kb-title">
               {t("kb.titleLabel")}
             </label>
             <input
@@ -182,7 +182,7 @@ export function KbEditorModal({
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex flex-1 flex-col gap-1.5">
               <label
-                className="text-[12px] font-medium text-faint"
+                className="text-dense font-medium text-faint"
                 htmlFor="kb-category"
               >
                 {t("kb.categoryLabel")}
@@ -202,7 +202,7 @@ export function KbEditorModal({
             </div>
             <div className="flex w-full flex-col gap-1.5 sm:w-[140px]">
               <label
-                className="text-[12px] font-medium text-faint"
+                className="text-dense font-medium text-faint"
                 htmlFor="kb-readmin"
               >
                 {t("kb.readMinLabel")}
@@ -222,7 +222,7 @@ export function KbEditorModal({
 
           <div className="flex flex-col gap-1.5">
             <label
-              className="text-[12px] font-medium text-faint"
+              className="text-dense font-medium text-faint"
               htmlFor="kb-excerpt"
             >
               {t("kb.excerptLabel")}
@@ -236,13 +236,13 @@ export function KbEditorModal({
               placeholder={t("kb.excerptPlaceholder")}
               className={cn(FIELD, "resize-none py-2")}
             />
-            <span className="text-[11.5px] text-faint">
+            <span className="text-caption text-faint">
               {t("kb.excerptHelp")}
             </span>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-faint" htmlFor="kb-body">
+            <label className="text-dense font-medium text-faint" htmlFor="kb-body">
               {t("kb.bodyLabel")}
             </label>
             <textarea
@@ -251,13 +251,13 @@ export function KbEditorModal({
               onChange={(e) => setBody(e.target.value)}
               rows={12}
               placeholder={t("kb.bodyPlaceholder")}
-              className={cn(FIELD, "resize-y py-2 font-mono text-[12.5px]")}
+              className={cn(FIELD, "resize-y py-2 font-mono text-body")}
             />
-            <span className="text-[11.5px] text-faint">{t("kb.bodyHelp")}</span>
+            <span className="text-caption text-faint">{t("kb.bodyHelp")}</span>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-faint" htmlFor="kb-tags">
+            <label className="text-dense font-medium text-faint" htmlFor="kb-tags">
               {t("kb.tagsLabel")}
             </label>
             <input
@@ -271,12 +271,12 @@ export function KbEditorModal({
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-medium text-[#475569]"
+                  className="rounded-full bg-fill px-2 py-0.5 text-meta font-medium text-subtle"
                 >
                   {tag}
                 </span>
               ))}
-              <span className="text-[11.5px] text-faint">
+              <span className="text-caption text-faint">
                 {t("kb.tagsHelp", { n: LIMITS.tags })}
               </span>
             </div>
@@ -284,7 +284,7 @@ export function KbEditorModal({
         </div>
 
         {error ? (
-          <div className="mt-2.5 text-[12.5px] font-medium text-[#dc2626]">
+          <div className="mt-2.5 text-body font-medium text-danger">
             {error}
           </div>
         ) : null}

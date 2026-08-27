@@ -63,10 +63,10 @@ function Row({ ticket, lang }: { ticket: Ticket; lang: string }) {
     >
       <span className={cn("h-2 w-2 flex-none rounded-full", DOT[ticket.priority])} />
       <span className="sr-only">{t(`priority.${ticket.priority}`)}</span>
-      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
+      <span className="min-w-0 flex-1 truncate text-control font-medium text-ink">
         {ticket.subject}
       </span>
-      <span className="flex-none whitespace-nowrap text-[11.5px] text-faint">
+      <span className="flex-none whitespace-nowrap text-caption text-faint">
         #{ticket.id} · {formatClosedAt(ticket.closedAt, lang)}
       </span>
     </Link>
@@ -92,7 +92,7 @@ function GapMarker({ gap }: { gap: Gap }) {
   return (
     <div className="flex items-center gap-3 bg-app px-3 py-2 sm:px-4">
       <span className="h-px flex-1 bg-line" />
-      <span className="text-[11px] font-medium tracking-[0.02em] text-faint">
+      <span className="text-meta font-medium tracking-[0.02em] text-faint">
         {t(key, { n: gap.amount })}
       </span>
       <span className="h-px flex-1 bg-line" />
@@ -149,7 +149,7 @@ function FiltersButton({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className={cn(
-          "inline-flex flex-none items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
+          "inline-flex flex-none items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-body font-medium",
           active
             ? "border-brand bg-accent-soft text-brand-hover"
             : "border-line bg-panel text-muted hover:bg-app",
@@ -175,7 +175,7 @@ function FiltersButton({
             className="fixed inset-x-0 bottom-0 z-40 rounded-t-lg border border-line bg-panel p-4 shadow-modal sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-1 sm:w-56 sm:rounded-lg sm:p-1.5 sm:shadow-card"
           >
             <div className="mb-2 flex items-center justify-between sm:hidden">
-              <span className="text-[13px] font-semibold text-ink">
+              <span className="text-control font-semibold text-ink">
                 {t("closedLog.filters")}
               </span>
               <button
@@ -187,7 +187,7 @@ function FiltersButton({
                 <X size={16} />
               </button>
             </div>
-            <div className="mb-1 px-1 text-[11px] font-semibold tracking-[0.02em] text-faint">
+            <div className="mb-1 px-1 text-meta font-semibold tracking-[0.02em] text-faint">
               {t("closedLog.col.priority")}
             </div>
             {(["", ...PRIORITIES] as (Priority | "")[]).map((value) => {
@@ -202,7 +202,7 @@ function FiltersButton({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] sm:py-1.5",
+                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-body sm:py-1.5",
                     selected
                       ? "bg-accent-soft font-semibold text-brand-hover"
                       : "text-ink hover:bg-app",
@@ -497,7 +497,7 @@ export function TicketHistoryView() {
                   onClick={() => jumpTo(y)}
                   aria-current={activeYear === y}
                   className={cn(
-                    "flex-none rounded-md px-2 py-1 text-[12px] font-semibold",
+                    "flex-none rounded-md px-2 py-1 text-dense font-semibold",
                     activeYear === y
                       ? "bg-accent-soft text-brand-hover"
                       : "text-faint hover:bg-panel hover:text-muted",
@@ -511,7 +511,7 @@ export function TicketHistoryView() {
         </div>
       </div>
 
-      <p className="mb-3 flex items-center gap-2 text-[12px] text-muted">
+      <p className="mb-3 flex items-center gap-2 text-dense text-muted">
         {t("closedLog.explainer")}
         <span
           title={t("closedLog.scopeNote")}
@@ -541,20 +541,20 @@ export function TicketHistoryView() {
           <div className="px-4 py-10 text-center">
             {debouncedQuery ? (
               <>
-                <p className="text-[13px] text-muted">
+                <p className="text-control text-muted">
                   {t("closedLog.noMatch", { q: debouncedQuery })}
                 </p>
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-app"
+                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-body font-semibold text-brand hover:bg-app"
                 >
                   {t("closedLog.clearSearch")}
                 </button>
               </>
             ) : range ? (
               <>
-                <p className="text-[13px] text-muted">
+                <p className="text-control text-muted">
                   {t("closedLog.noMatchRange", {
                     range: formatRangeLabel(range, lang),
                   })}
@@ -562,20 +562,20 @@ export function TicketHistoryView() {
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-app"
+                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-body font-semibold text-brand hover:bg-app"
                 >
                   {t("closedLog.clearFilters")}
                 </button>
               </>
             ) : priority ? (
               <>
-                <p className="text-[13px] text-muted">
+                <p className="text-control text-muted">
                   {t("closedLog.noMatchFilter")}
                 </p>
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-app"
+                  className="mt-3 rounded-md border border-line px-3 py-1.5 text-body font-semibold text-brand hover:bg-app"
                 >
                   {t("closedLog.clearFilters")}
                 </button>
@@ -583,7 +583,7 @@ export function TicketHistoryView() {
             ) : (
               // Nothing has ever been closed: a statement, not a call to action.
               // There is nothing the reader could do from here anyway.
-              <p className="text-[13px] text-muted">
+              <p className="text-control text-muted">
                 {t("closedLog.emptyArchive")}
               </p>
             )}
@@ -598,11 +598,11 @@ export function TicketHistoryView() {
               style={{ top: stickyTop, scrollMarginTop: stickyTop + 8 }}
               className="sticky z-10 flex items-center justify-between border-y border-line bg-panel px-3 py-2 sm:px-4"
             >
-              <span className="text-[12px] font-semibold text-ink">
+              <span className="text-dense font-semibold text-ink">
                 {heading(group)}
               </span>
               <span
-                className="text-[11.5px] font-medium text-faint"
+                className="text-caption font-medium text-faint"
                 aria-label={t("closedLog.groupCount", { n: group.items.length })}
               >
                 {group.items.length}
@@ -621,7 +621,7 @@ export function TicketHistoryView() {
       </div>
 
       {filtering && tickets.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-dense text-muted">
           {/* With a range on, the server's total counts the whole archive — the
               narrowing happened here, so the count has to come from here too. */}
           <span>

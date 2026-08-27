@@ -51,7 +51,7 @@ export function Topbar({
         onClick={toggleNav}
         aria-label={t("nav.menu")}
         className={cn(
-          "grid h-9 w-9 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app lg:hidden",
+          "grid h-9 w-9 flex-none place-items-center rounded-md border border-line text-subtle hover:bg-app lg:hidden",
           TOUCH_TARGET,
         )}
       >
@@ -63,7 +63,7 @@ export function Topbar({
         // defaults to `min-width: auto`, so without it the heading holds its
         // full width and pushes the controls on the right off the header
         // instead of clipping itself. Long Thai page names hit this first.
-        <h1 className="min-w-0 truncate text-[17px] font-bold text-ink">
+        <h1 className="min-w-0 truncate text-page font-bold text-ink">
           {heading}
         </h1>
       ) : null}
@@ -89,7 +89,7 @@ export function Topbar({
           />
           {/* Hidden where there is no keyboard to press it with — on a phone the
               hint is both untrue and 30px of the search box's width. */}
-          <span className="ml-auto hidden flex-none rounded border border-[#e2e8f0] bg-white px-1.5 py-px font-mono text-[10.5px] font-medium text-faint lg:inline">
+          <span className="ml-auto hidden flex-none rounded border border-edge bg-white px-1.5 py-px font-mono text-eyebrow font-medium text-faint lg:inline">
             ⌘K
           </span>
         </div>
@@ -107,7 +107,7 @@ export function Topbar({
           <button
             type="button"
             onClick={open}
-            className="flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-brand-hover"
+            className="flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-2 text-control font-semibold text-white hover:bg-brand-hover"
           >
             <Plus size={14} strokeWidth={2.4} />
             {t("topbar.newTicket")}

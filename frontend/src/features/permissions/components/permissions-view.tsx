@@ -75,21 +75,21 @@ export function PermissionsView() {
       {/* Your access */}
       <Card className="p-5">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-[#e4f2ea] text-brand-hover">
+          <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-accent-soft text-brand-hover">
             <Shield size={18} strokeWidth={2} />
           </span>
           <div>
-            <div className="text-[14px] font-semibold text-ink">
+            <div className="text-section font-semibold text-ink">
               {t("perm.yourAccess")}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-muted">
+            <div className="mt-0.5 text-body text-muted">
               {myRole
                 ? t("perm.yourRole", { role: t(`role.${myRole}`) })
                 : "—"}
             </div>
           </div>
           {myRole ? (
-            <span className="ml-auto rounded-full bg-[#e4f2ea] px-3 py-1 text-[12.5px] font-semibold text-brand-hover">
+            <span className="ml-auto rounded-full bg-accent-soft px-3 py-1 text-body font-semibold text-brand-hover">
               {t(`role.${myRole}`)}
             </span>
           ) : null}
@@ -99,16 +99,16 @@ export function PermissionsView() {
       {/* Permission matrix */}
       <Card className="p-5">
         <div className="mb-3.5">
-          <div className="text-[14px] font-semibold text-ink">
+          <div className="text-section font-semibold text-ink">
             {t("perm.matrixTitle")}
           </div>
-          <div className="mt-0.5 text-[12px] text-faint">
+          <div className="mt-0.5 text-dense text-faint">
             {t("perm.matrixNote")}
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[12.5px]">
+          <table className="w-full border-collapse text-body">
             <thead>
               <tr className="border-b border-line">
                 <th className="py-2 pr-3 text-left font-semibold text-muted">
@@ -126,7 +126,7 @@ export function PermissionsView() {
                   >
                     {t(`role.${r}`)}
                     {r === myRole ? (
-                      <span className="ml-1 text-[10px] font-bold uppercase tracking-wide text-[#3f8f5e]">
+                      <span className="ml-1 text-counter font-bold uppercase tracking-wide text-accent">
                         {t("perm.you")}
                       </span>
                     ) : null}
@@ -141,7 +141,7 @@ export function PermissionsView() {
                 <tr
                   key={cap.key}
                   data-cap={cap.key}
-                  className="border-b border-[#f1f4f8]"
+                  className="border-b border-rule"
                 >
                   <td className="py-2.5 pr-3 text-ink">{t(cap.key)}</td>
                   {ROLES.map((r) => {
@@ -153,7 +153,7 @@ export function PermissionsView() {
                         data-allowed={allowed}
                         className={cn(
                           "px-2 py-2.5 text-center",
-                          r === myRole && "bg-[#f4faf6]",
+                          r === myRole && "bg-accent-wash",
                         )}
                       >
                         {/* Named, because a tick with no accessible name is
@@ -165,7 +165,7 @@ export function PermissionsView() {
                             strokeWidth={2.5}
                             role="img"
                             aria-label={t("perm.allowed")}
-                            className="mx-auto text-[#3f8f5e]"
+                            className="mx-auto text-accent"
                           />
                         ) : (
                           <Minus
@@ -173,7 +173,7 @@ export function PermissionsView() {
                             strokeWidth={2}
                             role="img"
                             aria-label={t("perm.denied")}
-                            className="mx-auto text-[#cbd5e1]"
+                            className="mx-auto text-dim"
                           />
                         )}
                       </td>
@@ -185,16 +185,16 @@ export function PermissionsView() {
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-[11.5px] text-faint">{t("perm.userScopeNote")}</p>
+        <p className="mt-3 text-caption text-faint">{t("perm.userScopeNote")}</p>
       </Card>
 
       {/* Row-level ticket visibility */}
       <Card className="p-5">
         <div className="mb-3.5">
-          <div className="text-[14px] font-semibold text-ink">
+          <div className="text-section font-semibold text-ink">
             {t("perm.scopeTitle")}
           </div>
-          <div className="mt-0.5 text-[12px] text-faint">
+          <div className="mt-0.5 text-dense text-faint">
             {t("perm.scopeNote")}
           </div>
         </div>
@@ -205,14 +205,14 @@ export function PermissionsView() {
               className={cn(
                 "flex items-center gap-3 rounded-lg border px-3.5 py-2.5",
                 s.role === myRole
-                  ? "border-[#b4dcc3] bg-[#f4faf6]"
+                  ? "border-accent-line bg-accent-wash"
                   : "border-line bg-white",
               )}
             >
-              <span className="w-24 flex-none text-[12.5px] font-semibold text-ink">
+              <span className="w-24 flex-none text-body font-semibold text-ink">
                 {t(`role.${s.role}`)}
               </span>
-              <span className="text-[12.5px] text-muted">{t(s.key)}</span>
+              <span className="text-body text-muted">{t(s.key)}</span>
             </li>
           ))}
         </ul>
@@ -220,7 +220,7 @@ export function PermissionsView() {
             the same clause is what the history, the dashboard and the reports
             count through. Worth saying, since a reader looking at an empty
             dashboard otherwise has no way to tell scoping from no data. */}
-        <p className="mt-3 text-[11.5px] leading-relaxed text-faint">
+        <p className="mt-3 text-caption leading-relaxed text-faint">
           {t("perm.scopeReach")}
         </p>
       </Card>

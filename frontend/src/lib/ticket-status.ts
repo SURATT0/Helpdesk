@@ -1,3 +1,5 @@
+import { BADGE, type BadgePair } from "./badge-pairs";
+
 /**
  * Everything true about ticket status, in one file — the client's half of
  * `backend/src/shared/ticket-status.ts`.
@@ -117,13 +119,13 @@ export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
  */
 export const STATUS_META: Record<
   DisplayStatus | TicketStatusRecord,
-  { label: string; fg: string; bg: string }
+  { label: string } & BadgePair
 > = {
-  new: { label: "New", fg: "#1d4ed8", bg: "#dbeafe" },
-  in_progress: { label: "In Progress", fg: "#b45309", bg: "#fef3c7" },
-  pending: { label: "Pending", fg: "#6d28d9", bg: "#ede9fe" },
-  closed: { label: "Closed", fg: "#475569", bg: "#f1f5f9" },
+  new: { label: "New", ...BADGE.blue },
+  in_progress: { label: "In Progress", ...BADGE.amber },
+  pending: { label: "Pending", ...BADGE.violet },
+  closed: { label: "Closed", ...BADGE.slate },
   // Historical only — reachable from a timeline row, never from a ticket.
-  open: { label: "Open", fg: "#0369a1", bg: "#e0f2fe" },
-  resolved: { label: "Resolved", fg: "#15803d", bg: "#dcfce7" },
+  open: { label: "Open", ...BADGE.sky },
+  resolved: { label: "Resolved", ...BADGE.green },
 };

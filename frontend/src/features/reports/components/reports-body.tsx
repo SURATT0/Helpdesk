@@ -138,11 +138,11 @@ export function ReportsBody() {
             key={k.label}
             className="rounded-lg border border-line bg-panel px-[18px] py-4"
           >
-            <div className="text-[12.5px] font-medium text-muted">{k.label}</div>
-            <div className="mt-1.5 text-[26px] font-bold leading-none text-ink">
+            <div className="text-body font-medium text-muted">{k.label}</div>
+            <div className="mt-1.5 text-figure font-bold leading-none text-ink">
               {k.value}
             </div>
-            <div className="mt-2 text-[11.5px] text-faint">{k.sub}</div>
+            <div className="mt-2 text-caption text-faint">{k.sub}</div>
           </div>
         ))}
       </div>
@@ -151,12 +151,12 @@ export function ReportsBody() {
       <Card className="px-5 py-[18px]">
         <div className="flex items-baseline justify-between">
           <div>
-            <div className="text-[13.5px] font-semibold text-ink">
+            <div className="text-lead font-semibold text-ink">
               {t("report.trend.title")}
             </div>
-            <div className="text-[11.5px] text-faint">{t("report.trend.sub")}</div>
+            <div className="text-caption text-faint">{t("report.trend.sub")}</div>
           </div>
-          <span className="rounded-full bg-[#efe0cd] px-2.5 py-1 font-mono text-[11px] font-semibold text-brand-hover">
+          <span className="rounded-full bg-[#efe0cd] px-2.5 py-1 font-mono text-meta font-semibold text-brand-hover">
             {t("report.trend.peak", { n: chart.peak })}
           </span>
         </div>
@@ -166,7 +166,7 @@ export function ReportsBody() {
             now, so this reads as "no closures" instead of leaning on the old
             scale floor of 1. */}
         {totalJudged === 0 && chart.peak === 0 && data.kpis.handledCount === 0 ? (
-          <div className="py-10 text-center text-[12.5px] text-faint">
+          <div className="py-10 text-center text-body text-faint">
             {t("report.empty")}
           </div>
         ) : (
@@ -214,7 +214,7 @@ export function ReportsBody() {
                 />
               ))}
             </svg>
-            <div className="flex justify-between px-1 pt-1 font-mono text-[10.5px] font-medium text-faint">
+            <div className="flex justify-between px-1 pt-1 font-mono text-eyebrow font-medium text-faint">
               {labels.map((w, i) => (
                 <span key={i}>{w}</span>
               ))}
@@ -227,17 +227,17 @@ export function ReportsBody() {
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         {/* Outside the scroller: the section's own title should not slide away
             when the columns are scrolled. */}
-        <div className="border-b border-[#eef1f5] px-5 py-3.5">
-          <div className="text-[13.5px] font-semibold text-ink">
+        <div className="border-b border-hairline px-5 py-3.5">
+          <div className="text-lead font-semibold text-ink">
             {t("report.byPriority.title")}
           </div>
-          <div className="text-[11.5px] text-faint">
+          <div className="text-caption text-faint">
             {t("report.byPriority.sub")}
           </div>
         </div>
         <TableScroll minWidth={ROW_MIN_WIDTH}>
         <div
-          className={`grid ${ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
+          className={`grid ${ROW} border-b border-hairline bg-wash px-5 py-2.5 text-caption font-semibold text-faint`}
         >
           <span>{t("report.col.priority")}</span>
           <span>{t("report.col.compliance")}</span>
@@ -249,9 +249,9 @@ export function ReportsBody() {
           return (
             <div
               key={r.priority}
-              className={`grid ${ROW} items-center border-b border-[#f1f4f8] px-5 py-2.5 text-[12.5px]`}
+              className={`grid ${ROW} items-center border-b border-rule px-5 py-2.5 text-body`}
             >
-              <span className="flex items-center gap-1.5 text-[#475569]">
+              <span className="flex items-center gap-1.5 text-subtle">
                 <span
                   className="h-2 w-2 rounded-full"
                   style={{ background: color }}
@@ -259,20 +259,20 @@ export function ReportsBody() {
                 {t(`priority.${r.priority}`)}
               </span>
               <span className="flex items-center gap-2.5">
-                <span className="h-[7px] flex-1 overflow-hidden rounded-[4px] bg-[#f1f5f9]">
+                <span className="h-[7px] flex-1 overflow-hidden rounded-[4px] bg-fill">
                   <span
                     className="block h-full rounded-[4px]"
                     style={{ width: `${r.compliancePct}%`, background: color }}
                   />
                 </span>
-                <span className="w-11 font-mono text-[12px] font-semibold text-ink">
+                <span className="w-11 font-mono text-dense font-semibold text-ink">
                   {r.compliancePct.toFixed(1)}%
                 </span>
               </span>
-              <span className="font-mono text-[12px] font-medium text-[#475569]">
+              <span className="font-mono text-dense font-medium text-subtle">
                 {r.met}
               </span>
-              <span className="font-mono text-[12px] font-medium text-[#dc2626]">
+              <span className="font-mono text-dense font-medium text-danger">
                 {r.breached}
               </span>
             </div>
@@ -280,16 +280,16 @@ export function ReportsBody() {
         })}
         {/* totals */}
         <div
-          className={`grid ${ROW} items-center bg-[#fafbfc] px-5 py-2.5 text-[12.5px] font-semibold`}
+          className={`grid ${ROW} items-center bg-wash px-5 py-2.5 text-body font-semibold`}
         >
           <span className="text-ink">{t("report.total")}</span>
-          <span className="font-mono text-[12px] text-ink">
+          <span className="font-mono text-dense text-ink">
             {totalJudged > 0
               ? `${((totalMet / totalJudged) * 100).toFixed(1)}%`
               : "—"}
           </span>
-          <span className="font-mono text-[12px] text-[#475569]">{totalMet}</span>
-          <span className="font-mono text-[12px] text-[#dc2626]">
+          <span className="font-mono text-dense text-subtle">{totalMet}</span>
+          <span className="font-mono text-dense text-danger">
             {totalBreached}
           </span>
         </div>
@@ -301,25 +301,25 @@ export function ReportsBody() {
           never learned the section existed. The agent table below says "not
           enough data yet" in the same situation; these two now behave alike. */}
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="border-b border-[#eef1f5] px-5 py-3.5">
-          <div className="text-[13.5px] font-semibold text-ink">
+        <div className="border-b border-hairline px-5 py-3.5">
+          <div className="text-lead font-semibold text-ink">
             {t("report.byCategory.title")}
           </div>
-          <div className="text-[11.5px] text-faint">
+          <div className="text-caption text-faint">
             {t("report.byCategory.sub")}
           </div>
         </div>
         {data.byCategory.length === 0 ? (
           // No columns to hold apart, so no scroller — same reasoning as the
           // agent table's empty state.
-          <div className="px-5 py-6 text-center text-[12.5px] text-faint">
+          <div className="px-5 py-6 text-center text-body text-faint">
             {t("report.sectionEmpty")}
           </div>
         ) : (
           <>
           <TableScroll minWidth={ROW_MIN_WIDTH}>
           <div
-            className={`grid ${ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
+            className={`grid ${ROW} border-b border-hairline bg-wash px-5 py-2.5 text-caption font-semibold text-faint`}
           >
             <span>{t("report.col.category")}</span>
             <span>{t("report.col.compliance")}</span>
@@ -330,26 +330,26 @@ export function ReportsBody() {
             <div
               key={r.category}
               className={cn(
-                `grid ${ROW} items-center px-5 py-2.5 text-[12.5px]`,
-                i < data.byCategory.length - 1 && "border-b border-[#f1f4f8]",
+                `grid ${ROW} items-center px-5 py-2.5 text-body`,
+                i < data.byCategory.length - 1 && "border-b border-rule",
               )}
             >
-              <span className="truncate text-[#475569]">{r.category}</span>
+              <span className="truncate text-subtle">{r.category}</span>
               <span className="flex items-center gap-2.5">
-                <span className="h-[7px] flex-1 overflow-hidden rounded-[4px] bg-[#f1f5f9]">
+                <span className="h-[7px] flex-1 overflow-hidden rounded-[4px] bg-fill">
                   <span
                     className="block h-full rounded-[4px]"
                     style={{ width: `${r.compliancePct}%`, background: "#3f8f5e" }}
                   />
                 </span>
-                <span className="w-11 font-mono text-[12px] font-semibold text-ink">
+                <span className="w-11 font-mono text-dense font-semibold text-ink">
                   {r.compliancePct.toFixed(1)}%
                 </span>
               </span>
-              <span className="font-mono text-[12px] font-medium text-[#475569]">
+              <span className="font-mono text-dense font-medium text-subtle">
                 {r.judged}
               </span>
-              <span className="font-mono text-[12px] font-medium text-[#dc2626]">
+              <span className="font-mono text-dense font-medium text-danger">
                 {r.breached}
               </span>
             </div>
@@ -361,24 +361,24 @@ export function ReportsBody() {
 
       {/* Throughput by agent */}
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="border-b border-[#eef1f5] px-5 py-3.5">
-          <div className="text-[13.5px] font-semibold text-ink">
+        <div className="border-b border-hairline px-5 py-3.5">
+          <div className="text-lead font-semibold text-ink">
             {t("report.byAgent.title")}
           </div>
-          <div className="text-[11.5px] text-faint">
+          <div className="text-caption text-faint">
             {t("report.byAgent.sub")}
           </div>
         </div>
         {data.byAgent.length === 0 ? (
           // No columns to hold apart, so no scroller — a centred sentence
           // inside a width floor would be pushed off to the left.
-          <div className="px-5 py-6 text-center text-[12.5px] text-faint">
+          <div className="px-5 py-6 text-center text-body text-faint">
             {t("report.sectionEmpty")}
           </div>
         ) : (
           <TableScroll minWidth={AGENT_ROW_MIN_WIDTH}>
             <div
-              className={`grid ${AGENT_ROW} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[11.5px] font-semibold text-faint`}
+              className={`grid ${AGENT_ROW} border-b border-hairline bg-wash px-5 py-2.5 text-caption font-semibold text-faint`}
             >
               <span>{t("report.col.agent")}</span>
               <span>{t("report.col.resolved")}</span>
@@ -388,8 +388,8 @@ export function ReportsBody() {
               <div
                 key={r.agent}
                 className={cn(
-                  `grid ${AGENT_ROW} items-center px-5 py-2.5 text-[12.5px]`,
-                  i < data.byAgent.length - 1 && "border-b border-[#f1f4f8]",
+                  `grid ${AGENT_ROW} items-center px-5 py-2.5 text-body`,
+                  i < data.byAgent.length - 1 && "border-b border-rule",
                 )}
               >
                 <span className="flex items-center gap-2 truncate text-ink">
@@ -400,10 +400,10 @@ export function ReportsBody() {
                   />
                   {r.agent}
                 </span>
-                <span className="font-mono text-[12px] font-medium text-[#475569]">
+                <span className="font-mono text-dense font-medium text-subtle">
                   {r.handled}
                 </span>
-                <span className="font-mono text-[12px] font-medium text-[#475569]">
+                <span className="font-mono text-dense font-medium text-subtle">
                   {hours(r.avgHandlingHours)}
                 </span>
               </div>

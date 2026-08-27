@@ -17,14 +17,14 @@ export function HistoryPanel({ ticketId }: { ticketId: number }) {
   const { data: entries = [], isLoading } = useTicketHistory(ticketId);
 
   if (isLoading) {
-    return <div className="text-[11.5px] text-faint">{t("common.loading")}</div>;
+    return <div className="text-caption text-faint">{t("common.loading")}</div>;
   }
   if (entries.length === 0) {
-    return <div className="text-[11.5px] text-faint">{t("history.empty")}</div>;
+    return <div className="text-caption text-faint">{t("history.empty")}</div>;
   }
 
   return (
-    <div className="flex flex-col text-[11.5px] text-muted">
+    <div className="flex flex-col text-caption text-muted">
       {entries.map((h, i) => {
         const meta = STATUS_META[h.toStatus];
         const label =
@@ -42,7 +42,7 @@ export function HistoryPanel({ ticketId }: { ticketId: number }) {
               {!last ? <span className="w-[1.5px] flex-1 bg-line" /> : null}
             </div>
             <div className={last ? "" : "pb-3"}>
-              <strong className="text-[#334155]">{label}</strong> ·{" "}
+              <strong className="text-strong">{label}</strong> ·{" "}
               {h.actor ?? t("history.system")} · {fmt(h.createdAt, lang)}
             </div>
           </div>

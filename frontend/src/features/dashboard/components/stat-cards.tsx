@@ -55,10 +55,10 @@ export function StatCards() {
           key={c.label}
           className="rounded-lg border border-line bg-panel px-[18px] py-4"
         >
-          <div className="text-[12.5px] font-medium text-muted">{c.label}</div>
-          <div className="mt-1.5 text-[26px] font-bold text-ink">{c.value}</div>
+          <div className="text-body font-medium text-muted">{c.label}</div>
+          <div className="mt-1.5 text-figure font-bold text-ink">{c.value}</div>
           {c.sub ? (
-            <div className="mt-0.5 text-[11.5px] text-faint">{c.sub}</div>
+            <div className="mt-0.5 text-caption text-faint">{c.sub}</div>
           ) : null}
         </div>
       ))}
@@ -70,14 +70,14 @@ export function StatCards() {
           style={{ background: "linear-gradient(135deg,#fff7ed 0%,#fff 55%)" }}
         />
         <div className="relative">
-          <div className="text-[12.5px] font-medium text-[#9a5b13]">
+          <div className="text-body font-medium text-[#9a5b13]">
             {t("dashboard.stat.slaRisk")}
           </div>
           <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-[26px] font-bold text-[#b45309]">
+            <span className="text-figure font-bold text-warn">
               {s.slaAtRisk}
             </span>
-            <span className="text-[12px] font-semibold text-[#b45309]">
+            <span className="text-dense font-semibold text-warn">
               {t("dashboard.stat.breach1h", { n: s.slaBreachUnder1h })}
             </span>
           </div>

@@ -9,7 +9,7 @@ const LABELS: Record<Lang, string> = { en: "EN", th: "ไทย" };
 export function LanguageToggle() {
   const { lang, setLang } = useI18n();
   return (
-    <div className="inline-flex overflow-hidden rounded-md border border-line text-[12px] font-semibold">
+    <div className="inline-flex overflow-hidden rounded-md border border-line text-dense font-semibold">
       {(["en", "th"] as const).map((l) => (
         <button
           key={l}

@@ -18,14 +18,14 @@ export function ReportActions() {
 
   return (
     <>
-      <span className="inline-flex items-center rounded-md border border-line bg-white px-3 py-[7px] text-[12.5px] text-[#475569]">
+      <span className="inline-flex items-center rounded-md border border-line bg-white px-3 py-[7px] text-body text-subtle">
         {t("report.range")}
       </span>
       <button
         type="button"
         onClick={exportCsv}
         disabled={!data}
-        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-[7px] text-[12.5px] font-semibold text-[#475569] hover:bg-app disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-[7px] text-body font-semibold text-subtle hover:bg-app disabled:opacity-50"
       >
         <Download size={13} strokeWidth={2} />
         {t("report.export")}

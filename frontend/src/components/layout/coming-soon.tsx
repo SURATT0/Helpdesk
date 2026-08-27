@@ -10,10 +10,10 @@ export function ComingSoon({ titleKey }: { titleKey: string }) {
       <Topbar titleKey={titleKey} showSearch={false} />
       <main className="grid flex-1 place-items-center p-6">
         <div className="text-center">
-          <div className="text-[15px] font-semibold text-ink">
+          <div className="text-wordmark font-semibold text-ink">
             {t(titleKey)}
           </div>
-          <div className="mt-1 text-[13px] text-faint">{t("comingSoon.body")}</div>
+          <div className="mt-1 text-control text-faint">{t("comingSoon.body")}</div>
         </div>
       </main>
     </>

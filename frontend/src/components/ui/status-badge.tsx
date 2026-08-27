@@ -25,7 +25,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold",
+        "inline-flex items-center rounded-full px-2.5 py-[3px] text-caption font-semibold",
         className,
       )}
       style={{ color: meta.fg, background: meta.bg }}
@@ -40,17 +40,31 @@ export function PriorityIndicator({
   priority,
   caret,
   className,
+  tone = "subtle",
 }: {
   priority: Priority;
   caret?: boolean;
   className?: string;
+  /**
+   * The label's colour, as a prop rather than something a caller overrides
+   * through `className`.
+   *
+   * `cn` joins class names, it does not merge them — so a caller passing
+   * `text-ink` alongside this component's own colour left the winner to be
+   * decided by the order Tailwind happens to emit the two rules in. That is
+   * invisible until it flips: naming the colours as tokens reordered them and
+   * silently repainted the properties rail's Priority value. One colour class
+   * is emitted now, and the caller says which.
+   */
+  tone?: "subtle" | "ink";
 }) {
   const { t } = useI18n();
   const meta = PRIORITY_META[priority];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-[12.5px] text-[#475569]",
+        "inline-flex items-center gap-1.5 text-body",
+        tone === "ink" ? "text-ink" : "text-subtle",
         className,
       )}
     >

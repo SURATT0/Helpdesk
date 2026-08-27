@@ -56,16 +56,16 @@ export function RejectClosureDialog({
       panelClassName="max-w-[460px]"
     >
       <div className="rounded-xl border border-line bg-panel p-5 shadow-modal">
-        <div className="text-[14.5px] font-semibold text-ink">
+        <div className="text-dialog font-semibold text-ink">
           {t("closure.rejectTitle")}
         </div>
-        <p className="mt-1 text-[12.5px] text-[#475569]">
+        <p className="mt-1 text-body text-subtle">
           {t("closure.rejectBody")}
         </p>
 
         <label
           htmlFor="reject-reason"
-          className="mt-3 block text-[12px] font-semibold text-muted"
+          className="mt-3 block text-dense font-semibold text-muted"
         >
           {t("closure.rejectReason")}
         </label>
@@ -80,7 +80,7 @@ export function RejectClosureDialog({
         />
 
         {error ? (
-          <div className="mt-3 text-[12.5px] font-medium text-[#dc2626]">
+          <div className="mt-3 text-body font-medium text-danger">
             {error}
           </div>
         ) : null}

@@ -28,10 +28,10 @@ function CategoryChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-3 py-1.5 text-[12.5px]",
+        "rounded-full border px-3 py-1.5 text-body",
         active
-          ? "border-[#b4dcc3] bg-[#e4f2ea] font-semibold text-brand-hover"
-          : "border-line text-muted hover:border-[#94a3b8]",
+          ? "border-accent-line bg-accent-soft font-semibold text-brand-hover"
+          : "border-line text-muted hover:border-faint",
       )}
     >
       {label}
@@ -109,23 +109,23 @@ export function KbBrowser() {
               className="group flex flex-col gap-2 rounded-lg border border-line bg-panel p-4 transition-colors hover:border-brand"
             >
               <div className="flex items-center gap-2">
-                <span className="rounded-[4px] bg-[#e4f2ea] px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-brand-hover">
+                <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 font-mono text-eyebrow font-semibold text-brand-hover">
                   {a.id}
                 </span>
-                <span className="rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-medium text-[#475569]">
+                <span className="rounded-full bg-fill px-2 py-0.5 text-meta font-medium text-subtle">
                   {a.category}
                 </span>
                 {a.status === "draft" ? <DraftBadge /> : null}
-                <span className="ml-auto flex items-center gap-1 text-[11px] text-faint">
+                <span className="ml-auto flex items-center gap-1 text-meta text-faint">
                   <Clock size={11} strokeWidth={2} />
                   {t("kb.readMin", { n: a.readMin })}
                 </span>
               </div>
-              <div className="text-[14px] font-semibold text-ink group-hover:text-brand-hover">
+              <div className="text-section font-semibold text-ink group-hover:text-brand-hover">
                 {a.title}
               </div>
-              <p className="line-clamp-2 text-[12.5px] text-muted">{a.excerpt}</p>
-              <span className="mt-auto inline-flex items-center gap-1 text-[12px] font-medium text-brand-hover">
+              <p className="line-clamp-2 text-body text-muted">{a.excerpt}</p>
+              <span className="mt-auto inline-flex items-center gap-1 text-dense font-medium text-brand-hover">
                 {t("kb.read")}
                 <ChevronRight size={13} strokeWidth={2} />
               </span>

@@ -54,7 +54,7 @@ export function SlaStateLabel({ state }: { state: SlaState }) {
   const { t } = useI18n();
   const Icon = LOOK[state].icon;
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink">
+    <span className="inline-flex items-center gap-1.5 text-body text-ink">
       <span className={cn("inline-flex", TEXT_TONE[state])}>
         <Icon size={12} strokeWidth={2.5} />
       </span>
@@ -96,7 +96,7 @@ export function SlaBadge({
       role="img"
       aria-label={spoken}
       className={cn(
-        "inline-flex w-fit items-center gap-1 whitespace-nowrap text-[11.5px]",
+        "inline-flex w-fit items-center gap-1 whitespace-nowrap text-caption",
         look.className,
         className,
       )}

@@ -175,12 +175,12 @@ export function CreateTicketModal({
       panelClassName="max-w-[712px]"
     >
       <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
-        <div className="flex items-center justify-between border-b border-[#eef1f5] px-6 py-[18px]">
+        <div className="flex items-center justify-between border-b border-hairline px-6 py-[18px]">
           <div>
-            <div id="create-ticket-title" className="text-[16px] font-bold text-ink">
+            <div id="create-ticket-title" className="text-field font-bold text-ink">
               {t("create.title")}
             </div>
-            <div className="mt-0.5 text-[12px] text-faint">
+            <div className="mt-0.5 text-dense text-faint">
               {t("create.subtitle")}
             </div>
           </div>
@@ -200,7 +200,7 @@ export function CreateTicketModal({
         <div className="flex flex-col gap-4 px-6 py-[22px]">
           <div>
             <Label htmlFor="ticket-subject">
-              {t("create.subject")} <span className="text-[#dc2626]">*</span>
+              {t("create.subject")} <span className="text-danger">*</span>
             </Label>
             <Input
               id="ticket-subject"
@@ -214,23 +214,23 @@ export function CreateTicketModal({
 
           {/* KB deflection — live suggestions from the subject */}
           {suggestions.length > 0 ? (
-            <div className="rounded-[9px] border border-[#b4dcc3] bg-[#e4f2ea] px-3.5 py-3">
-              <div className="mb-2 text-[11px] font-bold tracking-[0.06em] text-brand-hover">
+            <div className="rounded-[9px] border border-accent-line bg-accent-soft px-3.5 py-3">
+              <div className="mb-2 text-meta font-bold tracking-[0.06em] text-brand-hover">
                 {t("create.suggested")}
               </div>
-              <div className="flex flex-col gap-1.5 text-[12.5px]">
+              <div className="flex flex-col gap-1.5 text-body">
                 {suggestions.map((a) => (
                   <Link
                     key={a.id}
                     href={`/kb/${a.id}`}
                     target="_blank"
-                    className="flex items-center gap-2 rounded-sm px-1 py-0.5 hover:bg-[#d3ecdd]"
+                    className="flex items-center gap-2 rounded-sm px-1 py-0.5 hover:bg-accent-edge"
                   >
-                    <span className="rounded-[4px] bg-[#d3ecdd] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-brand-hover">
+                    <span className="rounded-[4px] bg-accent-edge px-1.5 py-0.5 font-mono text-counter font-semibold text-brand-hover">
                       {a.id}
                     </span>
                     <span className="font-medium text-[#2f6b46]">{a.title}</span>
-                    <span className="ml-auto whitespace-nowrap text-[11px] text-faint">
+                    <span className="ml-auto whitespace-nowrap text-meta text-faint">
                       {t("kb.readMin", { n: a.readMin })}
                     </span>
                   </Link>
@@ -244,14 +244,14 @@ export function CreateTicketModal({
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <div>
               <Label htmlFor="ticket-category">
-                {t("create.category")} <span className="text-[#dc2626]">*</span>
+                {t("create.category")} <span className="text-danger">*</span>
               </Label>
               <select
                 id="ticket-category"
                 value={categoryId ?? ""}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
                 className={cn(
-                  "w-full rounded-md border border-[#e2e8f0] bg-white px-3.5 py-2.5 text-ink",
+                  "w-full rounded-md border border-edge bg-white px-3.5 py-2.5 text-ink",
                   "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
                   FIELD_TEXT_13,
                 )}
@@ -268,7 +268,7 @@ export function CreateTicketModal({
               <div
                 role="group"
                 aria-labelledby="ticket-priority-label"
-                className="flex overflow-hidden rounded-md border border-[#e2e8f0] text-center text-[12.5px] font-medium"
+                className="flex overflow-hidden rounded-md border border-edge text-center text-body font-medium"
               >
                 {PRIORITIES.map((p, i) => (
                   <button
@@ -278,9 +278,9 @@ export function CreateTicketModal({
                     onClick={() => setPriority(p)}
                     className={cn(
                       "flex-1 py-2.5",
-                      i > 0 && "border-l border-[#e2e8f0]",
+                      i > 0 && "border-l border-edge",
                       priority === p
-                        ? "bg-[#e4f2ea] font-semibold text-brand-hover"
+                        ? "bg-accent-soft font-semibold text-brand-hover"
                         : "text-muted",
                     )}
                   >
@@ -293,7 +293,7 @@ export function CreateTicketModal({
 
           <div>
             <Label htmlFor="ticket-description">
-              {t("create.description")} <span className="text-[#dc2626]">*</span>
+              {t("create.description")} <span className="text-danger">*</span>
             </Label>
             <Textarea
               id="ticket-description"
@@ -325,10 +325,10 @@ export function CreateTicketModal({
                 addFiles(e.dataTransfer.files);
               }}
               className={cn(
-                "flex cursor-pointer flex-wrap items-center justify-center gap-1.5 rounded-[9px] border-[1.5px] border-dashed px-4 py-[18px] text-[12.5px] transition-colors",
+                "flex cursor-pointer flex-wrap items-center justify-center gap-1.5 rounded-[9px] border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
                 dragging
-                  ? "border-brand bg-[#e4f2ea] text-brand-hover"
-                  : "border-[#cbd5e1] bg-[#fafbfc] text-muted",
+                  ? "border-brand bg-accent-soft text-brand-hover"
+                  : "border-dim bg-wash text-muted",
               )}
             >
               <Upload size={16} strokeWidth={2} />
@@ -355,24 +355,24 @@ export function CreateTicketModal({
                 {files.map((f, i) => (
                   <div
                     key={`${f.name}-${i}`}
-                    className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2 text-[12px]"
+                    className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2 text-dense"
                   >
                     <FileText
                       size={14}
                       strokeWidth={2}
                       className="flex-none text-muted"
                     />
-                    <span className="min-w-0 flex-1 truncate font-medium text-[#334155]">
+                    <span className="min-w-0 flex-1 truncate font-medium text-strong">
                       {f.name}
                     </span>
-                    <span className="flex-none text-[11px] text-faint">
+                    <span className="flex-none text-meta text-faint">
                       {formatSize(f.size)}
                     </span>
                     <button
                       type="button"
                       onClick={() => removeFile(i)}
                       aria-label={t("create.remove", { name: f.name })}
-                      className="flex-none text-faint hover:text-[#dc2626]"
+                      className="flex-none text-faint hover:text-danger"
                     >
                       <X size={13} />
                     </button>
@@ -383,7 +383,7 @@ export function CreateTicketModal({
           </div>
 
           {createTicket.isError ? (
-            <div className="rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-[12.5px] font-medium text-[#b91c1c]">
+            <div className="rounded-md border border-danger-edge bg-danger-bg px-3 py-2 text-body font-medium text-danger-ink">
               {createTicket.error instanceof ApiError
                 ? createTicket.error.message
                 : t("create.createError")}
@@ -391,13 +391,13 @@ export function CreateTicketModal({
           ) : null}
 
           {attachError ? (
-            <div className="rounded-md border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-[12.5px] font-medium text-[#c2410c]">
+            <div className="rounded-md border border-[#fed7aa] bg-warn-wash px-3 py-2 text-body font-medium text-warn-ink">
               {attachError} — {t("create.attachErrorNote")}
             </div>
           ) : null}
         </div>
 
-        <div className="flex justify-end gap-2.5 border-t border-[#eef1f5] bg-[#fafbfc] px-6 py-4">
+        <div className="flex justify-end gap-2.5 border-t border-hairline bg-wash px-6 py-4">
           <Button variant="secondary" onClick={requestClose} disabled={busy}>
             {t("common.cancel")}
           </Button>

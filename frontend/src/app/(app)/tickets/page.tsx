@@ -37,13 +37,13 @@ export default function TicketsPage() {
               <button
                 type="button"
                 onClick={() => setImportOpen(true)}
-                className="flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-[7px] text-[12.5px] font-medium text-[#475569] hover:bg-app"
+                className="flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-[7px] text-body font-medium text-subtle hover:bg-app"
               >
                 <Upload size={14} strokeWidth={2} />
                 {t("import.button")}
               </button>
             ) : null}
-            <div className="flex overflow-hidden rounded-md border border-line text-[12.5px] font-medium">
+            <div className="flex overflow-hidden rounded-md border border-line text-body font-medium">
               {(["list", "board"] as const).map((v, i) => (
                 <button
                   key={v}
@@ -53,7 +53,7 @@ export default function TicketsPage() {
                     "px-3 py-[7px]",
                     i > 0 && "border-l border-line",
                     view === v
-                      ? "bg-[#f1f5f9] font-semibold text-ink"
+                      ? "bg-fill font-semibold text-ink"
                       : "text-muted hover:bg-app",
                   )}
                 >

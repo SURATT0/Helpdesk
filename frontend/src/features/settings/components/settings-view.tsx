@@ -30,9 +30,9 @@ function Section({
   return (
     <Card className="p-5">
       <div className="mb-3.5">
-        <div className="text-[14px] font-semibold text-ink">{title}</div>
+        <div className="text-section font-semibold text-ink">{title}</div>
         {note ? (
-          <div className="mt-0.5 text-[12px] text-faint">{note}</div>
+          <div className="mt-0.5 text-dense text-faint">{note}</div>
         ) : null}
       </div>
       {children}
@@ -79,8 +79,8 @@ export function SettingsView() {
       <Section title={t("settings.account")} note={t("settings.accountNote")}>
         <div className="mb-4 flex items-center gap-3">
           <Avatar name={user.name} size={44} />
-          <div className="flex items-center gap-2 text-[12.5px]">
-            <span className="rounded-full bg-[#e4f2ea] px-2.5 py-0.5 font-semibold text-brand-hover">
+          <div className="flex items-center gap-2 text-body">
+            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-semibold text-brand-hover">
               {t(`role.${user.role}`)}
             </span>
           </div>
@@ -118,12 +118,12 @@ export function SettingsView() {
             {save.isPending ? t("settings.saving") : t("settings.save")}
           </Button>
           {saved && !dirty ? (
-            <span className="text-[12.5px] font-medium text-[#15803d]">
+            <span className="text-body font-medium text-success">
               {t("settings.saved")}
             </span>
           ) : null}
           {save.isError ? (
-            <span className="text-[12.5px] font-medium text-[#dc2626]">
+            <span className="text-body font-medium text-danger">
               {save.error instanceof ApiError
                 ? save.error.message
                 : t("settings.saveError")}
@@ -138,7 +138,7 @@ export function SettingsView() {
         title={t("settings.availability")}
         note={t("settings.availabilityNote")}
       >
-        <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-control">
           <input
             type="checkbox"
             checked={user.availableForAssignment}
@@ -153,12 +153,12 @@ export function SettingsView() {
           </span>
         </label>
         {!user.availableForAssignment ? (
-          <p className="mt-2 text-[12.5px] text-status-pending-fg">
+          <p className="mt-2 text-body text-status-pending-fg">
             {t("settings.awayHint")}
           </p>
         ) : null}
         {availability.isError ? (
-          <p className="mt-2 text-[12.5px] font-medium text-[#dc2626]">
+          <p className="mt-2 text-body font-medium text-danger">
             {availability.error instanceof ApiError
               ? availability.error.message
               : t("settings.saveError")}
@@ -169,7 +169,7 @@ export function SettingsView() {
       {/* Preferences */}
       <Section title={t("settings.preferences")}>
         <Label>{t("settings.language")}</Label>
-        <div className="mt-1 inline-flex overflow-hidden rounded-md border border-line text-[13px] font-medium">
+        <div className="mt-1 inline-flex overflow-hidden rounded-md border border-line text-control font-medium">
           {LANGS.map((l, i) => (
             <button
               key={l.value}
@@ -179,7 +179,7 @@ export function SettingsView() {
                 "px-4 py-2",
                 i > 0 && "border-l border-line",
                 lang === l.value
-                  ? "bg-[#e4f2ea] font-semibold text-brand-hover"
+                  ? "bg-accent-soft font-semibold text-brand-hover"
                   : "text-muted hover:bg-app",
               )}
             >
@@ -197,7 +197,7 @@ export function SettingsView() {
         <button
           type="button"
           onClick={signOut}
-          className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-semibold text-[#dc2626] hover:bg-[#fef2f2]"
+          className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3.5 py-2 text-control font-semibold text-danger hover:bg-danger-bg"
         >
           <LogOut size={14} strokeWidth={2} />
           {t("settings.signOut")}

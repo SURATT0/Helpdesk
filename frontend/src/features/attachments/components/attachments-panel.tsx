@@ -50,7 +50,7 @@ function DeleteButton({
           onClick={onConfirm}
           disabled={busy}
           aria-label={t("att.confirmDelete", { name })}
-          className="text-[#dc2626] hover:text-[#b91c1c] disabled:opacity-50"
+          className="text-danger hover:text-danger-ink disabled:opacity-50"
         >
           {busy ? (
             <Loader2 size={13} className="animate-spin" />
@@ -76,7 +76,7 @@ function DeleteButton({
       onClick={() => setConfirming(true)}
       title={t("att.delete")}
       aria-label={t("att.deleteFile", { name })}
-      className="flex-none text-faint hover:text-[#dc2626]"
+      className="flex-none text-faint hover:text-danger"
     >
       <Trash2 size={13} strokeWidth={2} />
     </button>
@@ -139,14 +139,14 @@ function ImageThumb({
     url && onOpen({ id: file.id, filename: file.filename, url });
 
   return (
-    <div className="flex items-center gap-2.5 rounded-md border border-line px-2.5 py-2 text-[12px] hover:bg-app">
+    <div className="flex items-center gap-2.5 rounded-md border border-line px-2.5 py-2 text-dense hover:bg-app">
       {/* Small thumbnail: an at-a-glance indicator that an image is attached */}
       <button
         type="button"
         onClick={open}
         disabled={!url}
         aria-label={t("att.previewFile", { name: file.filename })}
-        className="flex-none overflow-hidden rounded border border-line bg-[#f1f5f9]"
+        className="flex-none overflow-hidden rounded border border-line bg-fill"
         style={{ width: 40, height: 40 }}
       >
         {url ? (
@@ -168,10 +168,10 @@ function ImageThumb({
       </button>
 
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-[#334155]">
+        <div className="truncate font-medium text-strong">
           {file.filename}
         </div>
-        <div className="text-[11px] text-faint">
+        <div className="text-meta text-faint">
           {formatSize(file.sizeBytes)}
         </div>
       </div>
@@ -181,7 +181,7 @@ function ImageThumb({
         type="button"
         onClick={open}
         disabled={!url}
-        className="flex-none inline-flex items-center gap-1 text-[12px] font-semibold text-brand hover:text-brand-hover hover:underline disabled:opacity-50"
+        className="flex-none inline-flex items-center gap-1 text-dense font-semibold text-brand hover:text-brand-hover hover:underline disabled:opacity-50"
       >
         <Eye size={13} strokeWidth={2} />
         {t("att.preview")}
@@ -222,17 +222,17 @@ function FileRow({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2 text-[12px] hover:bg-app">
+    <div className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2 text-dense hover:bg-app">
       <FileText size={14} strokeWidth={2} className="flex-none text-muted" />
       <button
         type="button"
         onClick={onView}
         title={t("att.view")}
-        className="min-w-0 flex-1 truncate text-left font-medium text-[#334155] hover:text-brand-hover"
+        className="min-w-0 flex-1 truncate text-left font-medium text-strong hover:text-brand-hover"
       >
         {file.filename}
       </button>
-      <span className="flex-none text-[11px] text-faint">
+      <span className="flex-none text-meta text-faint">
         {formatSize(file.sizeBytes)}
       </span>
       <button
@@ -289,13 +289,13 @@ function Lightbox({
       {/* Centered modal card */}
       <div className="flex max-h-[88dvh] max-w-[880px] flex-col overflow-hidden rounded-xl bg-panel shadow-modal">
         <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
+          <span className="min-w-0 flex-1 truncate text-control font-semibold text-ink">
             {opened.filename}
           </span>
           <button
             type="button"
             onClick={() => downloadAttachment(opened.id, opened.filename)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-muted hover:bg-app"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-dense font-medium text-muted hover:bg-app"
           >
             <Download size={13} strokeWidth={2} />
             {t("att.download")}
@@ -309,7 +309,7 @@ function Lightbox({
             <X size={16} strokeWidth={2} />
           </button>
         </div>
-        <div className="grid place-items-center overflow-auto bg-[#0f172a] p-4">
+        <div className="grid place-items-center overflow-auto bg-ink p-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={opened.url}
@@ -380,13 +380,13 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
   return (
     <div className="flex flex-col gap-1.5">
       {isLoading ? (
-        <div className="text-[11.5px] text-faint">{t("common.loading")}</div>
+        <div className="text-caption text-faint">{t("common.loading")}</div>
       ) : isError ? (
-        <div className="text-[11.5px] font-medium text-[#dc2626]">
+        <div className="text-caption font-medium text-danger">
           {t("att.loadError")}
         </div>
       ) : files.length === 0 ? (
-        <div className="text-[11.5px] text-faint">{t("att.empty")}</div>
+        <div className="text-caption text-faint">{t("att.empty")}</div>
       ) : (
         files.map((f) =>
           isImage(f.contentType) ? (
@@ -412,7 +412,7 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
       )}
 
       {actionError ? (
-        <span className="text-[11px] font-medium text-[#dc2626]">
+        <span className="text-meta font-medium text-danger">
           {actionError}
         </span>
       ) : null}
@@ -421,7 +421,7 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={upload.isPending}
-        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#cbd5e1] px-3 py-2 text-[12px] font-medium text-muted hover:bg-app disabled:opacity-50"
+        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-dim px-3 py-2 text-dense font-medium text-muted hover:bg-app disabled:opacity-50"
       >
         {upload.isPending ? (
           <Loader2 size={13} className="animate-spin" />
@@ -433,7 +433,7 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
       <input ref={inputRef} type="file" className="hidden" onChange={onPick} />
 
       {upload.isError ? (
-        <span className="text-[11px] font-medium text-[#dc2626]">
+        <span className="text-meta font-medium text-danger">
           {t("att.uploadError")}
         </span>
       ) : null}

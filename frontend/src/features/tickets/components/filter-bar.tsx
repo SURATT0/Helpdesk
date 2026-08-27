@@ -44,16 +44,16 @@ function FacetDropdown<T extends string | number>({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12.5px]",
+          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-body",
           active
-            ? "border-[#b4dcc3] bg-[#e4f2ea] font-semibold text-brand-hover"
-            : "border-dashed border-[#cbd5e1] font-medium text-muted hover:border-[#94a3b8]",
+            ? "border-accent-line bg-accent-soft font-semibold text-brand-hover"
+            : "border-dashed border-dim font-medium text-muted hover:border-faint",
         )}
       >
         {active ? null : <span className="leading-none">＋</span>}
         {label}
         {active ? (
-          <span className="rounded-full bg-[#d3ecdd] px-1.5 text-[11px] font-semibold">
+          <span className="rounded-full bg-accent-edge px-1.5 text-meta font-semibold">
             {count}
           </span>
         ) : null}
@@ -88,7 +88,7 @@ function FacetDropdown<T extends string | number>({
             className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-lg border border-line bg-white p-2 shadow-modal lg:absolute lg:inset-x-auto lg:bottom-auto lg:left-0 lg:top-full lg:z-20 lg:mt-1 lg:max-h-none lg:min-w-[190px] lg:rounded-md lg:p-0 lg:py-1 lg:shadow-modal"
           >
             <div className="mb-1 flex items-center justify-between px-1 lg:hidden">
-              <span className="text-[13px] font-semibold text-ink">{label}</span>
+              <span className="text-control font-semibold text-ink">{label}</span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -114,7 +114,7 @@ function FacetDropdown<T extends string | number>({
                       "grid h-3.5 w-3.5 flex-none place-items-center rounded-[4px] border",
                       checked
                         ? "border-brand bg-brand text-white"
-                        : "border-[#cbd5e1]",
+                        : "border-dim",
                     )}
                   >
                     {checked ? <Check size={11} strokeWidth={3.5} /> : null}
@@ -215,7 +215,7 @@ export function FilterBar() {
           onToggle={toggleAssignee}
           renderOption={(a) =>
             a === "none" ? (
-              <span className="text-[12.5px] font-medium text-muted">
+              <span className="text-body font-medium text-muted">
                 {t("filter.unassigned")}
               </span>
             ) : (
@@ -225,7 +225,7 @@ export function FilterBar() {
                   tone={toneForName(nameById.get(a) ?? "?")}
                   size={20}
                 />
-                <span className="truncate text-[12.5px] text-ink">
+                <span className="truncate text-body text-ink">
                   {nameById.get(a)}
                   {user?.id === a ? (
                     <span className="text-faint"> · {t("filter.you")}</span>
@@ -241,7 +241,7 @@ export function FilterBar() {
         <button
           type="button"
           onClick={clearFilters}
-          className="inline-flex items-center gap-1 text-[12.5px] font-medium text-muted hover:text-ink"
+          className="inline-flex items-center gap-1 text-body font-medium text-muted hover:text-ink"
         >
           <X size={13} strokeWidth={2} />
           {t("filter.clear")}

@@ -12,7 +12,7 @@ import { useI18n } from "@/features/i18n/context";
 export function DraftBadge() {
   const { t } = useI18n();
   return (
-    <span className="rounded-full bg-[#fef3c7] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]">
+    <span className="rounded-full bg-warn-bg px-2 py-0.5 text-meta font-semibold text-warn">
       {t("kb.draft")}
     </span>
   );

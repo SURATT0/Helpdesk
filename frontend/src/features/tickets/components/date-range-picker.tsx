@@ -80,7 +80,7 @@ function Calendar({
         >
           <ChevronLeft size={15} />
         </button>
-        <span className="text-[12.5px] font-semibold text-ink">{monthLabel}</span>
+        <span className="text-body font-semibold text-ink">{monthLabel}</span>
         <button
           type="button"
           onClick={() => onMonthChange(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
@@ -91,7 +91,7 @@ function Calendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 text-center text-[10.5px] font-semibold text-faint">
+      <div className="grid grid-cols-7 text-center text-eyebrow font-semibold text-faint">
         {weekdayInitials(lang).map((w, i) => (
           <span key={i} className="py-1">
             {w}
@@ -117,7 +117,7 @@ function Calendar({
               aria-label={dayLabel.format(day)}
               aria-pressed={isStart || isEnd || within}
               className={cn(
-                "h-8 text-[12px] tabular-nums",
+                "h-8 text-dense tabular-nums",
                 outside ? "text-faint" : "text-ink",
                 within && "bg-accent-soft",
                 (isStart || isEnd || pending) &&
@@ -209,7 +209,7 @@ export function DateRangePicker({
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium",
+            "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-body font-medium",
             value
               ? "border-brand bg-accent-soft text-brand-hover"
               : "border-line bg-panel text-muted hover:bg-app",
@@ -234,7 +234,7 @@ export function DateRangePicker({
               className="fixed inset-x-0 bottom-0 z-40 rounded-t-lg border border-line bg-panel p-3 shadow-modal sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-1 sm:w-auto sm:rounded-lg sm:shadow-card"
             >
               <div className="mb-2 flex items-center justify-between sm:hidden">
-                <span className="text-[13px] font-semibold text-ink">
+                <span className="text-control font-semibold text-ink">
                   {t("range.title")}
                 </span>
                 <button
@@ -259,7 +259,7 @@ export function DateRangePicker({
                       aria-pressed={activePreset === preset}
                       onClick={() => choosePreset(preset)}
                       className={cn(
-                        "rounded-md px-2.5 py-1.5 text-left text-[12.5px]",
+                        "rounded-md px-2.5 py-1.5 text-left text-body",
                         activePreset === preset
                           ? "bg-accent-soft font-semibold text-brand-hover"
                           : "text-ink hover:bg-app",
@@ -279,7 +279,7 @@ export function DateRangePicker({
                       setOpen(false);
                     }}
                     className={cn(
-                      "rounded-md px-2.5 py-1.5 text-left text-[12.5px]",
+                      "rounded-md px-2.5 py-1.5 text-left text-body",
                       value == null
                         ? "bg-accent-soft font-semibold text-brand-hover"
                         : "text-ink hover:bg-app",
@@ -295,7 +295,7 @@ export function DateRangePicker({
                       mode switch to somewhere already on screen. */}
                   <div
                     className={cn(
-                      "mb-1 text-[11px] font-semibold tracking-[0.02em]",
+                      "mb-1 text-meta font-semibold tracking-[0.02em]",
                       value != null && activePreset === null
                         ? "text-brand-hover"
                         : "text-faint",
@@ -311,7 +311,7 @@ export function DateRangePicker({
                     onPick={pickDay}
                     lang={lang}
                   />
-                  <p className="mt-1 text-center text-[11px] text-faint">
+                  <p className="mt-1 text-center text-meta text-faint">
                     {pendingStart
                       ? t("range.pickEnd")
                       : t("range.pickStart")}
