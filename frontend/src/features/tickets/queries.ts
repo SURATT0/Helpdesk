@@ -11,6 +11,7 @@ import { useAuth } from "@/features/auth/context";
 import { runStream } from "@/lib/sse";
 import type { Comment } from "./schemas";
 import {
+  confirmClosure,
   createComment,
   createTicket,
   deleteTicket,
@@ -22,6 +23,7 @@ import {
   fetchTicketHistory,
   fetchTickets,
   importTickets,
+  rejectClosure,
   reassignTickets,
   sendReply,
   streamComments,
@@ -132,6 +134,34 @@ export function useTicketHistory(id: number) {
     queryKey: ticketKeys.history(id),
     queryFn: () => fetchTicketHistory(id),
     enabled: Number.isFinite(id),
+  });
+}
+
+/**
+ * The requester answering a closure. Both invalidate every ticket query for the
+ * same reason a status change does: the row moves between the list, the counts
+ * and the closed log at once.
+ */
+export function useConfirmClosure() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => confirmClosure(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ticketKeys.all }),
+  });
+}
+
+export function useRejectClosure() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; reason?: string }) =>
+      rejectClosure(vars.id, vars.reason),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ticketKeys.all });
+      // A rejection with a reason posts a comment, and the thread is a different
+      // query — without this the requester does not see their own sentence until
+      // something else refreshes it.
+      qc.invalidateQueries({ queryKey: commentKeys.list(vars.id) });
+    },
   });
 }
 

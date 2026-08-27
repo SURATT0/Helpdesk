@@ -15,6 +15,7 @@ import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
+import { RejectClosureDialog } from "./reject-closure-dialog";
 import { SlaBadge } from "./sla-badge";
 import { useAssessSla } from "../use-sla";
 import { toneForName } from "../data";
@@ -27,6 +28,8 @@ import {
   useDeleteTicket,
   useRemoveFailedComment,
   useTicket,
+  useConfirmClosure,
+  useRejectClosure,
   useUpdateTicketStatus,
 } from "../queries";
 
@@ -232,6 +235,12 @@ export function TicketDetailView({ id }: { id: number }) {
   const { user } = useAuth();
   const { t, lang } = useI18n();
   const statusMutation = useUpdateTicketStatus();
+  const confirmClosure = useConfirmClosure();
+  const rejectClosure = useRejectClosure();
+  // One flag for both, so neither button can be pressed while the other is
+  // mid-flight — they move the same ticket in opposite directions.
+  const closureBusy = confirmClosure.isPending || rejectClosure.isPending;
+  const [rejecting, setRejecting] = React.useState(false);
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
@@ -348,6 +357,17 @@ export function TicketDetailView({ id }: { id: number }) {
   // "Done, over to the requester" — the move that finishes the desk's part.
   const canResolve =
     canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("pending");
+  /**
+   * The requester's half: this ticket is mine, and it is waiting on me.
+   *
+   * Keyed on being the requester of this row rather than on a role, exactly as
+   * the API is — an admin who raised their own ticket answers it the same way
+   * anyone else does, and an admin who did not raise it uses the status menu.
+   */
+  const awaitingMyConfirmation =
+    user != null &&
+    ticket.requesterId === user.id &&
+    ticket.status === "pending";
   // Deleting a ticket is the escape hatch for a row that should never have
   // existed, so it sits at the top tier — closing is the normal end of the line.
   const canDelete = user?.role === "super_admin";
@@ -420,7 +440,7 @@ export function TicketDetailView({ id }: { id: number }) {
             </Link>
             <span>›</span>
             <span className="font-mono font-medium">#{ticket.id}</span>
-            {canResolve || canDelete ? (
+            {canResolve || canDelete || awaitingMyConfirmation ? (
               // wrap + shrink-0 on the buttons: the confirm state adds a label and
               // a second button to this strip, which must not widen the header
               // past the viewport.
@@ -439,6 +459,26 @@ export function TicketDetailView({ id }: { id: number }) {
                       : t("detail.markResolved")}
                   </button>
                 ) : null}
+                {awaitingMyConfirmation ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => confirmClosure.mutate(ticket.id)}
+                      disabled={closureBusy}
+                      className="rounded-md border border-[#b4dcc3] bg-[#e4f2ea] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#d7ebe0] disabled:opacity-50"
+                    >
+                      {closureBusy ? t("detail.saving") : t("closure.confirm")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRejecting(true)}
+                      disabled={closureBusy}
+                      className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+                    >
+                      {t("closure.reject")}
+                    </button>
+                  </>
+                ) : null}
                 {canDelete ? <DeleteTicketButton id={ticket.id} /> : null}
               </span>
             ) : null}
@@ -447,7 +487,7 @@ export function TicketDetailView({ id }: { id: number }) {
             {ticket.subject}
           </h1>
           <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
-            <StatusBadge status={ticket.status} />
+            <StatusBadge status={ticket.displayStatus} />
             <span className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-[3px]">
               <PriorityIndicator priority={ticket.priority} />
             </span>
@@ -560,6 +600,14 @@ export function TicketDetailView({ id }: { id: number }) {
                 {t("chat.jumpNew", { count: String(unread) })}
               </button>
             </div>
+          ) : null}
+
+          {rejecting ? (
+            <RejectClosureDialog
+              ticketId={ticket.id}
+              onClose={() => setRejecting(false)}
+              onRejected={() => setRejecting(false)}
+            />
           ) : null}
 
           <Composer
