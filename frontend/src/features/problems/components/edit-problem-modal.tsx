@@ -79,10 +79,10 @@ export function EditProblemModal({
       <div className="flex max-h-[85dvh] flex-col overflow-y-auto rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[14.5px] font-semibold text-ink">
+            <div className="text-dialog font-semibold text-ink">
               {t("problem.editTitle")}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-[#475569]">
+            <div className="mt-0.5 text-body text-subtle">
               {t("problem.editNote", { n: problem.ticketCount })}
             </div>
           </div>
@@ -91,7 +91,7 @@ export function EditProblemModal({
             onClick={onClose}
             aria-label={t("problem.close")}
             className={cn(
-              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-subtle hover:bg-app",
               TOUCH_TARGET,
             )}
           >
@@ -101,7 +101,7 @@ export function EditProblemModal({
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-faint" htmlFor="ep-title">
+            <label className="text-dense font-medium text-faint" htmlFor="ep-title">
               {t("problem.titleLabel")}
             </label>
             <input
@@ -117,7 +117,7 @@ export function EditProblemModal({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-faint" htmlFor="ep-status">
+            <label className="text-dense font-medium text-faint" htmlFor="ep-status">
               {t("problem.statusLabel")}
             </label>
             <select
@@ -139,7 +139,7 @@ export function EditProblemModal({
 
           <div className="flex flex-col gap-1.5">
             <label
-              className="text-[12px] font-medium text-faint"
+              className="text-dense font-medium text-faint"
               htmlFor="ep-workaround"
             >
               {t("problem.workaroundLabel")}
@@ -156,7 +156,7 @@ export function EditProblemModal({
                 FIELD_TEXT_13,
               )}
             />
-            <span className="text-[11.5px] text-faint">
+            <span className="text-caption text-faint">
               {t("problem.workaroundHelp")}
             </span>
           </div>
@@ -164,18 +164,18 @@ export function EditProblemModal({
           {/* Sits with the workaround, not the root cause: both answer "how do
               I get this user working now", which is what a known error is for. */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-medium text-faint">
+            <span className="text-dense font-medium text-faint">
               {t("problem.kbLabel")}
             </span>
             <KbArticlePicker value={kbArticleId} onChange={setKbArticleId} />
-            <span className="text-[11.5px] text-faint">
+            <span className="text-caption text-faint">
               {t("problem.kbHelp")}
             </span>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label
-              className="text-[12px] font-medium text-faint"
+              className="text-dense font-medium text-faint"
               htmlFor="ep-rootcause"
             >
               {t("problem.rootCauseLabel")}
@@ -196,14 +196,14 @@ export function EditProblemModal({
         </div>
 
         {needsWorkaround ? (
-          <div className="mt-3 flex items-start gap-1.5 rounded-md border border-[#fde68a] bg-[#fffbeb] p-2.5 text-[12px] font-medium text-[#b45309]">
+          <div className="mt-3 flex items-start gap-1.5 rounded-md border border-warn-edge bg-warn-tint p-2.5 text-dense font-medium text-warn">
             <AlertTriangle size={13} className="mt-px flex-none" />
             <span>{t("problem.knownErrorNeedsWorkaround")}</span>
           </div>
         ) : null}
 
         {error ? (
-          <div className="mt-2.5 text-[12.5px] font-medium text-[#dc2626]">
+          <div className="mt-2.5 text-body font-medium text-danger">
             {error}
           </div>
         ) : null}

@@ -21,8 +21,8 @@ function Section({
   first?: boolean;
 }) {
   return (
-    <div className={first ? "" : "border-t border-[#eef1f5] pt-4"}>
-      <div className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-faint">
+    <div className={first ? "" : "border-t border-hairline pt-4"}>
+      <div className="mb-2.5 text-eyebrow font-semibold uppercase tracking-[0.08em] text-faint">
         {title}
       </div>
       {children}
@@ -46,14 +46,17 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
   return (
     <aside className="flex flex-col gap-[18px] bg-panel p-5">
       <Section title={t("rail.properties")} first>
-        <div className="flex flex-col gap-2.5 text-[12.5px]">
+        <div className="flex flex-col gap-2.5 text-body">
           <Row label={t("col.status")}>
             <StatusMenu ticket={ticket} />
           </Row>
           <Row label={t("col.priority")}>
+            {/* `ink`, matching the Status, Category and Requester values beside
+                it — a property's value reads darker than its label. */}
             <PriorityIndicator
               priority={ticket.priority}
-              className="font-medium text-ink"
+              tone="ink"
+              className="font-medium"
             />
           </Row>
           <Row label={t("col.assignee")}>
@@ -72,8 +75,8 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
       </Section>
 
       <Section title="SLA">
-        <div className="flex items-center justify-between rounded-[9px] border border-line bg-[#fafbfc] px-3.5 py-3">
-          <span className="text-[12px] font-semibold text-muted">
+        <div className="flex items-center justify-between rounded-[9px] border border-line bg-wash px-3.5 py-3">
+          <span className="text-dense font-semibold text-muted">
             {t("rail.resolutionDue")}
           </span>
           <SlaBadge sla={assess(ticket)} />

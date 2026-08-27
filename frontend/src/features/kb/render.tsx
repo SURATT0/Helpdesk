@@ -13,7 +13,7 @@ export function KbBody({ body }: { body: string }) {
     blocks.push(
       <ul
         key={key++}
-        className="list-disc space-y-1 pl-5 text-[13.5px] leading-relaxed text-[#334155]"
+        className="list-disc space-y-1 pl-5 text-lead leading-relaxed text-strong"
       >
         {items.map((b, i) => (
           <li key={i}>{b}</li>
@@ -31,7 +31,7 @@ export function KbBody({ body }: { body: string }) {
     if (line.startsWith("## ")) {
       flushBullets();
       blocks.push(
-        <h3 key={key++} className="text-[14px] font-semibold text-ink">
+        <h3 key={key++} className="text-section font-semibold text-ink">
           {line.slice(3)}
         </h3>,
       );
@@ -45,7 +45,7 @@ export function KbBody({ body }: { body: string }) {
     blocks.push(
       <p
         key={key++}
-        className="text-[13.5px] leading-relaxed text-[#334155]"
+        className="text-lead leading-relaxed text-strong"
       >
         {line}
       </p>,

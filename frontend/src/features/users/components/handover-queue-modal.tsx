@@ -73,10 +73,10 @@ export function HandoverQueueModal({
       <div className="rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[14.5px] font-semibold text-ink">
+            <div className="text-dialog font-semibold text-ink">
               {t("handover.title")}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-[#475569]">
+            <div className="mt-0.5 text-body text-subtle">
               {t("handover.note")}
             </div>
           </div>
@@ -85,7 +85,7 @@ export function HandoverQueueModal({
             onClick={onClose}
             aria-label={t("handover.close")}
             className={cn(
-              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-subtle hover:bg-app",
               TOUCH_TARGET,
             )}
           >
@@ -95,18 +95,18 @@ export function HandoverQueueModal({
 
         {result ? (
           <div className="mt-4">
-            <div className="rounded-lg border border-line bg-[#fafbfc] p-3 text-[13px]">
+            <div className="rounded-lg border border-line bg-wash p-3 text-control">
               <div className="font-semibold text-ink">
                 {t("handover.movedCount", { n: moved })}
               </div>
               {result.remaining > 0 ? (
                 // Not a silent truncation: the queue was bigger than one call.
-                <div className="mt-1.5 flex items-start gap-1.5 text-[12px] font-medium text-[#b45309]">
+                <div className="mt-1.5 flex items-start gap-1.5 text-dense font-medium text-warn">
                   <AlertTriangle size={13} className="mt-px flex-none" />
                   <span>{t("handover.remaining", { n: result.remaining })}</span>
                 </div>
               ) : null}
-              <div className="mt-1.5 text-[11.5px] text-faint">
+              <div className="mt-1.5 text-caption text-faint">
                 {t("handover.statusNote", {
                   statuses: result.statuses.join(", "),
                 })}
@@ -118,13 +118,13 @@ export function HandoverQueueModal({
           </div>
         ) : (
           <>
-            <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-line bg-[#fafbfc] p-3">
+            <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-line bg-wash p-3">
               <Avatar name={from.name} tone={toneForName(from.name)} size={28} />
               <div className="min-w-0 leading-tight">
-                <div className="truncate text-[13px] font-semibold text-ink">
+                <div className="truncate text-control font-semibold text-ink">
                   {from.name}
                 </div>
-                <div className="truncate text-[11.5px] text-faint">
+                <div className="truncate text-caption text-faint">
                   {from.email}
                 </div>
               </div>
@@ -158,7 +158,7 @@ export function HandoverQueueModal({
             </div>
 
             {error ? (
-              <div className="mt-2.5 text-[12.5px] font-medium text-[#dc2626]">
+              <div className="mt-2.5 text-body font-medium text-danger">
                 {error}
               </div>
             ) : null}

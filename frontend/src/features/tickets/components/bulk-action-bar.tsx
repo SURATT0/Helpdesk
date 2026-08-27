@@ -32,7 +32,7 @@ function Menu({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-sm border border-[#334155] px-2.5 py-1.5 hover:bg-[#1e293b] disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-sm border border-strong px-2.5 py-1.5 hover:bg-[#1e293b] disabled:opacity-50"
       >
         {label}
         <ChevronDown size={12} strokeWidth={2} />
@@ -60,7 +60,7 @@ function MenuItem({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] hover:bg-app"
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body hover:bg-app"
     >
       {children}
     </button>
@@ -103,7 +103,7 @@ export function BulkActionBar({
   }
 
   return (
-    <div className="flex items-center gap-3.5 bg-ink px-4 py-2.5 text-[12.5px] text-[#e2e8f0]">
+    <div className="flex items-center gap-3.5 bg-ink px-4 py-2.5 text-body text-edge">
       <span className="font-semibold">
         {t("bulk.selected", { n: selectedIds.length })}
       </span>

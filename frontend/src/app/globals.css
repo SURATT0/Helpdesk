@@ -2,10 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Read from the token config rather than restated here — these three were the
+   same hex written twice, so a theme change had to be made in two files. */
 :root {
-  --app-bg: #f6efe1;
-  --ink: #0f172a;
-  --line: #e6e8ee;
+  --app-bg: theme(colors.app);
+  --ink: theme(colors.ink);
+  --line: theme(colors.line);
 }
 
 * {
@@ -17,7 +19,7 @@
    ring (Input/Textarea/select) set focus:outline-none, which keeps their ring
    and suppresses this one — no double outline. */
 :focus-visible {
-  outline: 2px solid #3f8f5e;
+  outline: 2px solid theme(colors.accent.DEFAULT);
   outline-offset: 2px;
   border-radius: 5px;
 }
@@ -39,14 +41,14 @@ body {
 /* thin, unobtrusive scrollbars to match the polished shell */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: theme(colors.dim) transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: theme(colors.dim);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;

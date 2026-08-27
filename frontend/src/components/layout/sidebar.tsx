@@ -107,10 +107,10 @@ export function Sidebar() {
               href={href}
               onClick={() => setOpen(false)}
               className={cn(
-                "flex items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-[13px] font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-control font-medium transition-colors",
                 active
-                  ? "bg-[#e4f2ea] font-semibold text-brand-hover"
-                  : "text-[#475569] hover:bg-app",
+                  ? "bg-accent-soft font-semibold text-brand-hover"
+                  : "text-subtle hover:bg-app",
               )}
             >
               <Icon size={15} strokeWidth={2} />
@@ -120,13 +120,13 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto flex items-center gap-2.5 rounded-[9px] border border-line bg-[#fafbfc] p-2.5">
+      <div className="mt-auto flex items-center gap-2.5 rounded-[9px] border border-line bg-wash p-2.5">
         <Avatar name={user?.name ?? "…"} size={30} />
         <div className="min-w-0 leading-tight">
-          <div className="truncate text-[12.5px] font-semibold text-ink">
+          <div className="truncate text-body font-semibold text-ink">
             {user?.name ?? "…"}
           </div>
-          <div className="truncate text-[11px] text-faint">
+          <div className="truncate text-meta text-faint">
             {user ? t(`role.${user.role}`) : ""}
           </div>
         </div>
@@ -136,7 +136,7 @@ export function Sidebar() {
           aria-label={t("sidebar.signOut")}
           title={t("sidebar.signOut")}
           className={cn(
-            "ml-auto grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+            "ml-auto grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-subtle hover:bg-app",
             TOUCH_TARGET,
           )}
         >

@@ -27,10 +27,10 @@ export function Logo({
         </svg>
       </div>
       {showWordmark ? (
-        <span className="text-[15px] font-bold tracking-[-0.01em] text-ink">
+        <span className="text-wordmark font-bold tracking-[-0.01em] text-ink">
           Deskly
           {ops ? (
-            <span className="ml-1.5 align-[2px] rounded bg-brand/15 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-brand">
+            <span className="ml-1.5 align-[2px] rounded bg-brand/15 px-1.5 py-0.5 font-mono text-micro font-semibold text-brand">
               OPS
             </span>
           ) : null}

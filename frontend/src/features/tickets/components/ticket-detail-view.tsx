@@ -85,9 +85,9 @@ function MessageBubble({
   // Chat-style bubbles: agent on the right (green accent), requester on the
   // left (white); internal notes keep their amber regardless of side.
   const bubble = internal
-    ? "border-[#fde68a] bg-[#fffbeb]"
+    ? "border-warn-edge bg-warn-tint"
     : fromAgent
-      ? "border-[#b4dcc3] bg-[#e4f2ea]"
+      ? "border-accent-line bg-accent-soft"
       : "border-line bg-white";
   return (
     <div
@@ -115,14 +115,14 @@ function MessageBubble({
               fromAgent && "flex-row-reverse",
             )}
           >
-            <span className="text-[13px] font-semibold text-ink">{author}</span>
+            <span className="text-control font-semibold text-ink">{author}</span>
             {internal ? (
-              <span className="rounded-[9px] bg-[#fef3c7] px-2 py-0.5 text-[10.5px] font-bold tracking-[0.06em] text-[#b45309]">
+              <span className="rounded-[9px] bg-warn-bg px-2 py-0.5 text-eyebrow font-bold tracking-[0.06em] text-warn">
                 {t("detail.internalNote")}
               </span>
             ) : null}
             <span
-              className={`text-[11.5px] ${internal ? "text-[#b8834a]" : "text-faint"}`}
+              className={`text-caption ${internal ? "text-[#b8834a]" : "text-faint"}`}
             >
               {internal ? time : `${role} · ${time}`}
             </span>
@@ -130,11 +130,11 @@ function MessageBubble({
         )}
         {children}
         {status === "sending" ? (
-          <div className="mt-1 text-right text-[11px] text-faint">
+          <div className="mt-1 text-right text-meta text-faint">
             {t("chat.sending")}
           </div>
         ) : status === "failed" ? (
-          <div className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-[#dc2626]">
+          <div className="mt-1 flex items-center justify-end gap-1.5 text-meta text-danger">
             <span>{t("chat.failed")}</span>
             <button
               type="button"
@@ -147,8 +147,8 @@ function MessageBubble({
         ) : receipt ? (
           <div
             className={cn(
-              "mt-1 text-right text-[11px]",
-              receipt === "read" ? "text-[#3f8f5e]" : "text-faint",
+              "mt-1 text-right text-meta",
+              receipt === "read" ? "text-accent" : "text-faint",
             )}
           >
             {receipt === "read" ? `✓✓ ${t("chat.read")}` : `✓ ${t("chat.sent")}`}
@@ -179,7 +179,7 @@ function DeleteTicketButton({ id }: { id: number }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[#b91c1c] hover:border-[#f0c4c4] hover:bg-[#fef2f2]"
+        className="flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-body font-semibold text-danger-ink hover:border-[#f0c4c4] hover:bg-danger-bg"
       >
         <Trash2 size={13} strokeWidth={2} />
         {t("detail.delete")}
@@ -189,12 +189,12 @@ function DeleteTicketButton({ id }: { id: number }) {
 
   return (
     <span className="flex flex-none items-center gap-2">
-      <span className="text-[12px] text-muted">{t("detail.deleteConfirm")}</span>
+      <span className="text-dense text-muted">{t("detail.deleteConfirm")}</span>
       <button
         type="button"
         onClick={() => mutation.mutate(id)}
         disabled={mutation.isPending}
-        className="flex-none rounded-md bg-[#b91c1c] px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-[#991b1b] disabled:opacity-50"
+        className="flex-none rounded-md bg-danger-ink px-3 py-1.5 text-body font-semibold text-white hover:bg-[#991b1b] disabled:opacity-50"
       >
         {mutation.isPending ? t("detail.deleting") : t("detail.deleteYes")}
       </button>
@@ -202,12 +202,12 @@ function DeleteTicketButton({ id }: { id: number }) {
         type="button"
         onClick={() => setConfirming(false)}
         disabled={mutation.isPending}
-        className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted hover:bg-app disabled:opacity-50"
+        className="rounded-md border border-line bg-white px-3 py-1.5 text-body font-semibold text-muted hover:bg-app disabled:opacity-50"
       >
         {t("common.cancel")}
       </button>
       {mutation.isError ? (
-        <span className="text-[12px] text-[#dc2626]">
+        <span className="text-dense text-danger">
           {t("detail.deleteError")}
         </span>
       ) : null}
@@ -435,7 +435,7 @@ export function TicketDetailView({ id }: { id: number }) {
           column, which squeezed the title and the badge row into 1fr while the
           rail stood empty beside them. */}
       <header className="flex-none border-b border-line bg-panel px-5 py-4 sm:px-7">
-        <div className="mb-2 flex items-center gap-2 text-[12px] text-faint">
+        <div className="mb-2 flex items-center gap-2 text-dense text-faint">
           <Link href="/tickets" className="hover:text-muted">
             {t("detail.tickets")}
           </Link>
@@ -453,7 +453,7 @@ export function TicketDetailView({ id }: { id: number }) {
                     statusMutation.mutate({ id: ticket.id, status: "pending" })
                   }
                   disabled={statusMutation.isPending}
-                  className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
+                  className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-body font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
                 >
                   {statusMutation.isPending
                     ? t("detail.saving")
@@ -466,7 +466,7 @@ export function TicketDetailView({ id }: { id: number }) {
                     type="button"
                     onClick={() => confirmClosure.mutate(ticket.id)}
                     disabled={closureBusy}
-                    className="rounded-md border border-[#b4dcc3] bg-[#e4f2ea] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#d7ebe0] disabled:opacity-50"
+                    className="rounded-md border border-accent-line bg-accent-soft px-3 py-1.5 text-body font-semibold text-brand-hover hover:bg-[#d7ebe0] disabled:opacity-50"
                   >
                     {closureBusy ? t("detail.saving") : t("closure.confirm")}
                   </button>
@@ -474,7 +474,7 @@ export function TicketDetailView({ id }: { id: number }) {
                     type="button"
                     onClick={() => setRejecting(true)}
                     disabled={closureBusy}
-                    className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+                    className="rounded-md border border-line bg-white px-3 py-1.5 text-body font-semibold text-muted hover:text-ink disabled:opacity-50"
                   >
                     {t("closure.reject")}
                   </button>
@@ -489,14 +489,14 @@ export function TicketDetailView({ id }: { id: number }) {
             200-character subject — the longest the API accepts, and it may have
             no spaces in it — from widening the document instead of wrapping. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="min-w-0 break-words text-[19px] font-bold tracking-[-0.01em] text-ink">
+          <h1 className="min-w-0 break-words text-subject font-bold tracking-[-0.01em] text-ink">
             {ticket.subject}
           </h1>
           <StatusBadge status={ticket.displayStatus} />
           <span className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-[3px]">
             <PriorityIndicator priority={ticket.priority} />
           </span>
-          <span className="text-[12.5px] text-muted">
+          <span className="text-body text-muted">
             {ticket.category} · {t("detail.opened")}{" "}
             {formatOpened(ticket.createdAt, lang)} {t("detail.by")}{" "}
             <strong className="text-ink">{ticket.requester}</strong>
@@ -504,7 +504,7 @@ export function TicketDetailView({ id }: { id: number }) {
           {/* The badge names its own state; "SLA" is what says which clock
               that state belongs to, which the header has no other label for. */}
           <span className="ml-auto inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5">
-            <span className="text-[11.5px] font-semibold text-muted">SLA</span>
+            <span className="text-caption font-semibold text-muted">SLA</span>
             <SlaBadge sla={assess(ticket)} />
           </span>
         </div>
@@ -553,8 +553,8 @@ export function TicketDetailView({ id }: { id: number }) {
                   >
                     <p
                       className={cn(
-                        "whitespace-pre-wrap text-[13.5px] leading-relaxed",
-                        m.internal ? "text-[#57430f]" : "text-[#334155]",
+                        "whitespace-pre-wrap text-lead leading-relaxed",
+                        m.internal ? "text-[#57430f]" : "text-strong",
                       )}
                     >
                       {m.body}
@@ -565,11 +565,11 @@ export function TicketDetailView({ id }: { id: number }) {
                   return (
                     <React.Fragment key={`unread-${m.key}`}>
                       <div className="my-3 flex items-center gap-2" role="separator">
-                        <span className="h-px flex-1 bg-[#fecaca]" />
-                        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#dc2626]">
+                        <span className="h-px flex-1 bg-danger-edge" />
+                        <span className="text-meta font-bold uppercase tracking-[0.06em] text-danger">
                           {t("chat.unreadDivider")}
                         </span>
-                        <span className="h-px flex-1 bg-[#fecaca]" />
+                        <span className="h-px flex-1 bg-danger-edge" />
                       </div>
                       {bubble}
                     </React.Fragment>
@@ -585,7 +585,7 @@ export function TicketDetailView({ id }: { id: number }) {
 
             {typingNames.length > 0 ? (
               <div
-                className="flex items-center gap-2 px-1 text-[12.5px] text-muted"
+                className="flex items-center gap-2 px-1 text-body text-muted"
                 aria-live="polite"
               >
                 <TypingDots />
@@ -602,7 +602,7 @@ export function TicketDetailView({ id }: { id: number }) {
                 <button
                   type="button"
                   onClick={jumpToLatest}
-                  className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_2px_12px_rgba(15,23,42,.18)] hover:bg-brand-hover"
+                  className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-dense font-semibold text-white shadow-[0_2px_12px_rgba(15,23,42,.18)] hover:bg-brand-hover"
                 >
                   <ArrowDown size={13} strokeWidth={2.5} />
                   {t("chat.jumpNew", { count: String(unread) })}

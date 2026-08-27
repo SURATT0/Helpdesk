@@ -193,7 +193,7 @@ export function Composer({
 
   return (
     <div className="mt-auto overflow-hidden rounded-lg border border-line bg-white">
-      <div className="flex border-b border-[#eef1f5] text-[12.5px] font-semibold">
+      <div className="flex border-b border-hairline text-body font-semibold">
         {noteOnly ? null : (
           <button
             onClick={() => switchTab("chat")}
@@ -228,7 +228,7 @@ export function Composer({
             className={cn(
               "px-4 py-2.5",
               isNote
-                ? "border-b-2 border-[#b45309] text-[#a16207]"
+                ? "border-b-2 border-warn text-[#a16207]"
                 : "text-[#a16207]/70",
             )}
           >
@@ -238,7 +238,7 @@ export function Composer({
         {/* Says why the other two tabs are missing, so their absence reads as a
             rule about this ticket rather than something failing to load. */}
         {noteOnly ? (
-          <span className="ml-auto self-center truncate px-4 text-[11.5px] font-normal text-faint">
+          <span className="ml-auto self-center truncate px-4 text-caption font-normal text-faint">
             {t("composer.internalOnly")}
           </span>
         ) : null}
@@ -246,7 +246,7 @@ export function Composer({
 
       {/* Email header fields — reply tab only */}
       {isReply ? (
-        <div className="flex flex-col divide-y divide-[#f1f5f9] border-b border-[#eef1f5] text-[12.5px]">
+        <div className="flex flex-col divide-y divide-fill border-b border-hairline text-body">
           <div className="flex items-center gap-2 px-4 py-2">
             <span className="w-12 flex-none font-medium text-faint">
               {t("composer.from")}
@@ -292,7 +292,7 @@ export function Composer({
         className={cn(
           "w-full resize-none px-4 py-3 text-ink placeholder:text-faint focus:outline-none",
           FIELD_TEXT,
-          isNote && "bg-[#fffbeb]",
+          isNote && "bg-warn-tint",
         )}
       />
 
@@ -301,7 +301,7 @@ export function Composer({
           {files.map((f, i) => (
             <span
               key={`${f.name}-${i}`}
-              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-[#fafbfc] px-2 py-1 text-[11.5px] text-[#334155]"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-wash px-2 py-1 text-caption text-strong"
             >
               <Paperclip size={11} strokeWidth={2} className="text-faint" />
               <span className="max-w-[160px] truncate">{f.name}</span>
@@ -310,7 +310,7 @@ export function Composer({
                 type="button"
                 onClick={() => removeFile(i)}
                 aria-label={t("composer.removeFile", { name: f.name })}
-                className="text-faint hover:text-[#dc2626]"
+                className="text-faint hover:text-danger"
               >
                 <X size={12} />
               </button>
@@ -319,11 +319,11 @@ export function Composer({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2.5 border-t border-[#eef1f5] bg-[#fafbfc] px-3 py-2.5">
+      <div className="flex items-center gap-2.5 border-t border-hairline bg-wash px-3 py-2.5">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-sm border border-line bg-white px-2.5 py-1.5 text-[12px] text-muted hover:bg-app"
+          className="inline-flex items-center gap-1.5 rounded-sm border border-line bg-white px-2.5 py-1.5 text-dense text-muted hover:bg-app"
         >
           <Paperclip size={13} strokeWidth={2} />
           {t("composer.attach")}
@@ -341,11 +341,11 @@ export function Composer({
         />
 
         {error ? (
-          <span className="text-[11.5px] font-medium text-[#dc2626]">
+          <span className="text-caption font-medium text-danger">
             {error}
           </span>
         ) : sentInfo ? (
-          <span className="text-[11.5px] font-medium text-[#15803d]">
+          <span className="text-caption font-medium text-success">
             {sentInfo}
           </span>
         ) : null}
@@ -355,9 +355,9 @@ export function Composer({
             onClick={submit}
             disabled={busy || !canSend}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3.5 py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50",
+              "inline-flex items-center gap-1.5 rounded-md px-3.5 py-[7px] text-body font-semibold text-white disabled:opacity-50",
               isNote
-                ? "bg-[#b45309] hover:bg-[#92400e]"
+                ? "bg-warn hover:bg-[#92400e]"
                 : "bg-brand hover:bg-brand-hover",
             )}
           >

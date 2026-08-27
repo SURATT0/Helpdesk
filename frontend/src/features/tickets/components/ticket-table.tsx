@@ -45,7 +45,7 @@ function Checkbox({ checked }: { checked: boolean }) {
     <span
       className={cn(
         "relative inline-block h-3.5 w-3.5 rounded-[4px]",
-        checked ? "bg-brand" : "border-[1.5px] border-[#cbd5e1]",
+        checked ? "bg-brand" : "border-[1.5px] border-dim",
       )}
     >
       {checked ? (
@@ -133,7 +133,7 @@ function SortHeader({
           // Revealed on hover where there is a cursor, always visible where
           // there is not: on a touch screen the hover state never arrives, so
           // the only hint that these headers sort anything was invisible.
-          className="text-[#cbd5e1] opacity-0 transition-opacity group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+          className="text-dim opacity-0 transition-opacity group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
         />
       )}
     </button>
@@ -222,7 +222,7 @@ export function TicketTable() {
       {/* header */}
       <div
         className={cn(
-          "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
+          "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-[0.02em] text-faint",
           COLS,
         )}
       >
@@ -321,14 +321,14 @@ export function TicketTable() {
             className={cn(
               // Every row carries the 3px edge, transparent unless the clock is
               // against it, so nothing shifts sideways as a ticket changes state.
-              "grid cursor-pointer items-center border-l-[3px] px-4 py-3 text-[13px]",
+              "grid cursor-pointer items-center border-l-[3px] px-4 py-3 text-control",
               COLS,
               // One colour class, never two: `cn` is a plain join with no
               // tailwind-merge behind it, so a transparent default left in place
               // would race the real colour on stylesheet order and usually win.
               STRIPE[sla.state] ?? "border-l-transparent",
-              i < rows.length - 1 && "border-b border-b-[#f1f4f8]",
-              isSel ? "bg-[#eff7f2]" : "hover:bg-[#fafbfc]",
+              i < rows.length - 1 && "border-b border-b-rule",
+              isSel ? "bg-accent-tint" : "hover:bg-wash",
             )}
           >
             <button
@@ -345,7 +345,7 @@ export function TicketTable() {
             >
               <Checkbox checked={isSel} />
             </button>
-            <span className="font-mono text-[12px] font-medium text-muted">
+            <span className="font-mono text-dense font-medium text-muted">
               #{t.id}
             </span>
             <span className="flex items-center gap-2 truncate pr-3 font-medium text-ink">
@@ -353,7 +353,7 @@ export function TicketTable() {
               {t.attachments > 0 ? (
                 <span className="flex flex-none items-center gap-1 text-faint">
                   <Paperclip size={12} strokeWidth={2} />
-                  <span className="text-[11px]">{t.attachments}</span>
+                  <span className="text-meta">{t.attachments}</span>
                 </span>
               ) : null}
             </span>
@@ -364,7 +364,7 @@ export function TicketTable() {
               <SlaBadge sla={sla} />
             </span>
             <PriorityIndicator priority={t.priority} />
-            <span className="flex items-center gap-2 text-[12.5px] text-[#475569]">
+            <span className="flex items-center gap-2 text-body text-subtle">
               {t.assignee ? (
                 <>
                   <Avatar
@@ -378,7 +378,7 @@ export function TicketTable() {
                 <span className="italic text-faint">{unassignedLabel}</span>
               )}
             </span>
-            <span className="text-[12.5px] text-[#475569]">{t.category}</span>
+            <span className="text-body text-subtle">{t.category}</span>
           </div>
         );
       })}

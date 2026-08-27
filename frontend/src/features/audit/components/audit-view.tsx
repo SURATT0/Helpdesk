@@ -9,6 +9,7 @@ import { TableScroll } from "@/components/ui/table-scroll";
 import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { BADGE, type BadgePair } from "@/lib/badge-pairs";
 import { cn } from "@/lib/utils";
 import { useAuditActions, useAuditLog } from "../queries";
 import type { AuditEntry } from "../schemas";
@@ -18,16 +19,17 @@ const PAGE_SIZE = 50;
 const COLS = "grid-cols-[150px_1.1fr_170px_90px_1fr]";
 
 /** Colour the action family so a long trail is scannable at a glance. */
-const FAMILY_STYLE: Record<string, { fg: string; bg: string }> = {
-  ticket: { fg: "#0369a1", bg: "#e0f2fe" },
-  comment: { fg: "#15803d", bg: "#dcfce7" },
-  user: { fg: "#6d28d9", bg: "#ede9fe" },
-  project: { fg: "#b45309", bg: "#fef3c7" },
-  problem: { fg: "#be123c", bg: "#ffe4e6" },
-  asset: { fg: "#0f766e", bg: "#ccfbf1" },
-  attachment: { fg: "#475569", bg: "#f1f5f9" },
+const FAMILY_STYLE: Record<string, BadgePair> = {
+  ticket: BADGE.sky,
+  comment: BADGE.green,
+  user: BADGE.violet,
+  project: BADGE.amber,
+  problem: BADGE.rose,
+  asset: BADGE.teal,
+  attachment: BADGE.slate,
 };
-const DEFAULT_STYLE = { fg: "#475569", bg: "#f1f5f9" };
+/** An action family this build has no colour for — never a blank cell. */
+const DEFAULT_STYLE = BADGE.slate;
 
 const familyOf = (action: string) => action.split(".")[0] ?? action;
 
@@ -49,13 +51,13 @@ function MetaCell({ meta }: { meta: unknown }) {
     return <span className="text-faint">—</span>;
   }
   if (typeof meta !== "object") {
-    return <span className="truncate text-[12px]">{String(meta)}</span>;
+    return <span className="truncate text-dense">{String(meta)}</span>;
   }
   const pairs = Object.entries(meta as Record<string, unknown>);
   return (
     <span className="flex flex-wrap gap-x-2 gap-y-0.5">
       {pairs.map(([k, v]) => (
-        <span key={k} className="text-[11.5px] text-[#475569]">
+        <span key={k} className="text-caption text-subtle">
           <span className="text-faint">{k}:</span>{" "}
           <span className="font-medium">
             {v == null
@@ -76,18 +78,18 @@ function Row({ entry, last }: { entry: AuditEntry; last: boolean }) {
   return (
     <div
       className={cn(
-        "grid items-center px-4 py-2.5 text-[13px]",
+        "grid items-center px-4 py-2.5 text-control",
         COLS,
-        !last && "border-b border-[#f1f4f8]",
+        !last && "border-b border-rule",
       )}
     >
-      <span className="text-[12px] text-faint">
+      <span className="text-dense text-faint">
         {formatWhen(entry.createdAt, lang)}
       </span>
 
       <span className="min-w-0">
         <span
-          className="inline-flex max-w-full items-center truncate rounded-full px-2 py-[3px] font-mono text-[11px] font-semibold"
+          className="inline-flex max-w-full items-center truncate rounded-full px-2 py-[3px] font-mono text-meta font-semibold"
           style={{ color: style.fg, background: style.bg }}
         >
           {entry.action}
@@ -102,19 +104,19 @@ function Row({ entry, last }: { entry: AuditEntry; last: boolean }) {
               tone={toneForName(entry.actor.name)}
               size={22}
             />
-            <span className="truncate text-[12.5px] font-medium text-ink">
+            <span className="truncate text-body font-medium text-ink">
               {entry.actor.name}
             </span>
           </span>
         ) : (
           // No session behind the write — e.g. a requester created from email.
-          <span className="text-[12px] italic text-faint">
+          <span className="text-dense italic text-faint">
             {t("audit.system")}
           </span>
         )}
       </span>
 
-      <span className="text-[12px] text-[#475569]">
+      <span className="text-dense text-subtle">
         {entry.entity}
         {entry.entityId != null ? (
           <span className="text-faint"> #{entry.entityId}</span>
@@ -148,10 +150,10 @@ export function AuditView() {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-line bg-panel p-10 text-center">
         <ShieldAlert size={22} className="text-faint" />
-        <div className="text-[13.5px] font-semibold text-ink">
+        <div className="text-lead font-semibold text-ink">
           {t("audit.forbidden")}
         </div>
-        <div className="max-w-[46ch] text-[12.5px] text-[#475569]">
+        <div className="max-w-[46ch] text-body text-subtle">
           {t("audit.forbiddenNote")}
         </div>
       </div>
@@ -167,13 +169,13 @@ export function AuditView() {
 
   return (
     <>
-      <p className="mb-4 flex max-w-[78ch] items-start gap-2 text-[12.5px] leading-relaxed text-[#475569]">
+      <p className="mb-4 flex max-w-[78ch] items-start gap-2 text-body leading-relaxed text-subtle">
         <Info size={14} className="mt-[2px] flex-none text-faint" />
         {t("audit.explainer")}
       </p>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="text-[12px] font-medium text-faint" htmlFor="audit-action">
+        <label className="text-dense font-medium text-faint" htmlFor="audit-action">
           {t("audit.filterAction")}
         </label>
         <select
@@ -202,7 +204,7 @@ export function AuditView() {
               setAction("");
               setOffset(0);
             }}
-            className="rounded-md border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#475569] hover:bg-app"
+            className="rounded-md border border-line bg-white px-2.5 py-1.5 text-dense font-semibold text-subtle hover:bg-app"
           >
             {t("filter.clear")}
           </button>
@@ -213,7 +215,7 @@ export function AuditView() {
         <TableScroll minWidth={980}>
             <div
               className={cn(
-                "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
+                "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-[0.02em] text-faint",
                 COLS,
               )}
             >
@@ -242,14 +244,14 @@ export function AuditView() {
       </div>
 
       {total > 0 ? (
-        <div className="mt-3 flex items-center justify-between text-[12.5px] text-[#475569]">
+        <div className="mt-3 flex items-center justify-between text-body text-subtle">
           <span>{t("audit.range", { from, to, total })}</span>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
               disabled={offset === 0}
-              className="flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-semibold text-[#475569] hover:bg-app disabled:opacity-40"
+              className="flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-semibold text-subtle hover:bg-app disabled:opacity-40"
             >
               <ChevronLeft size={13} />
               {t("audit.prev")}
@@ -258,7 +260,7 @@ export function AuditView() {
               type="button"
               onClick={() => setOffset((o) => o + PAGE_SIZE)}
               disabled={to >= total}
-              className="flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-semibold text-[#475569] hover:bg-app disabled:opacity-40"
+              className="flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-semibold text-subtle hover:bg-app disabled:opacity-40"
             >
               {t("audit.next")}
               <ChevronRight size={13} />

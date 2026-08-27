@@ -41,13 +41,13 @@ export function TicketBoard() {
         const meta = STATUS_META[status];
         return (
           <div key={status} className="flex w-[264px] flex-none flex-col">
-            <div className="mb-2.5 flex items-center gap-2 px-1 text-[12.5px] font-semibold text-ink">
+            <div className="mb-2.5 flex items-center gap-2 px-1 text-body font-semibold text-ink">
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ background: meta.fg }}
               />
               {t(`status.${status}`)}
-              <span className="ml-auto rounded-full bg-[#f1f5f9] px-2 py-px font-mono text-[11px] font-semibold text-[#475569]">
+              <span className="ml-auto rounded-full bg-fill px-2 py-px font-mono text-meta font-semibold text-subtle">
                 {col.length}
               </span>
             </div>
@@ -58,15 +58,15 @@ export function TicketBoard() {
                   key={x.id}
                   type="button"
                   onClick={() => router.push(`/tickets/${x.id}`)}
-                  className="rounded-lg border border-line bg-panel p-3 text-left transition-colors hover:border-[#cbd5e1] hover:bg-[#fafbfc]"
+                  className="rounded-lg border border-line bg-panel p-3 text-left transition-colors hover:border-dim hover:bg-wash"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] font-medium text-muted">
+                    <span className="font-mono text-meta font-medium text-muted">
                       #{x.id}
                     </span>
                     <SlaBadge sla={assess(x)} />
                   </div>
-                  <div className="mt-1 line-clamp-2 text-[13px] font-medium text-ink">
+                  <div className="mt-1 line-clamp-2 text-control font-medium text-ink">
                     {x.subject}
                   </div>
                   <div className="mt-2.5 flex items-center justify-between">
@@ -82,7 +82,7 @@ export function TicketBoard() {
                 </button>
               ))}
               {col.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-faint">
+                <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-caption text-faint">
                   —
                 </div>
               ) : null}

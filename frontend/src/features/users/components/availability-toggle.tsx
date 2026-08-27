@@ -32,7 +32,7 @@ export function AvailabilityToggle({
     return (
       <span
         className={cn(
-          "inline-flex items-center rounded-full px-2 py-[2px] text-[11.5px] font-semibold",
+          "inline-flex items-center rounded-full px-2 py-[2px] text-caption font-semibold",
           available
             ? "bg-status-resolved-bg text-status-resolved-fg"
             : "bg-status-pending-bg text-status-pending-fg",
@@ -46,7 +46,7 @@ export function AvailabilityToggle({
   return (
     <label
       className={cn(
-        "inline-flex cursor-pointer items-center gap-1.5 text-[12px]",
+        "inline-flex cursor-pointer items-center gap-1.5 text-dense",
         pending && "cursor-wait opacity-60",
       )}
     >
@@ -61,7 +61,7 @@ export function AvailabilityToggle({
       <span
         className={cn(
           "font-medium",
-          available ? "text-[#475569]" : "text-status-pending-fg",
+          available ? "text-subtle" : "text-status-pending-fg",
         )}
       >
         {label}

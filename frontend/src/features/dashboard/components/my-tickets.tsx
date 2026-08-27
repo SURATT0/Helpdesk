@@ -40,21 +40,21 @@ export function MyTickets() {
 
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-panel">
-      <div className="flex items-center justify-between border-b border-[#eef1f5] px-5 py-3.5">
-        <div className="text-[13.5px] font-semibold text-ink">
+      <div className="flex items-center justify-between border-b border-hairline px-5 py-3.5">
+        <div className="text-lead font-semibold text-ink">
           {t("myTickets.title")}{" "}
           <span className="font-medium text-faint">
             · {t("myTickets.shown", { n: mine.length })}
           </span>
         </div>
-        <Link href="/tickets" className="text-[12.5px] font-semibold text-brand">
+        <Link href="/tickets" className="text-body font-semibold text-brand">
           {t("myTickets.viewAll")}
         </Link>
       </div>
 
       <TableScroll minWidth={MIN_WIDTH}>
         <div
-          className={`grid ${COLS} border-b border-[#eef1f5] bg-[#fafbfc] px-5 py-2.5 text-[12px] font-medium text-faint`}
+          className={`grid ${COLS} border-b border-hairline bg-wash px-5 py-2.5 text-dense font-medium text-faint`}
         >
           <span>{t("col.id")}</span>
           <span>{t("col.subject")}</span>
@@ -74,11 +74,11 @@ export function MyTickets() {
           <Link
             key={t.id}
             href={`/tickets/${t.id}`}
-            className={`grid ${COLS} items-center px-5 py-3 text-[13px] hover:bg-[#eff7f2] ${
-              i < mine.length - 1 ? "border-b border-[#f1f4f8]" : ""
+            className={`grid ${COLS} items-center px-5 py-3 text-control hover:bg-accent-tint ${
+              i < mine.length - 1 ? "border-b border-rule" : ""
             }`}
           >
-            <span className="font-mono text-[12px] font-medium text-muted">
+            <span className="font-mono text-dense font-medium text-muted">
               #{t.id}
             </span>
             <span className="truncate pr-3 font-medium text-ink">
@@ -88,7 +88,7 @@ export function MyTickets() {
               <StatusBadge status={t.displayStatus} />
             </span>
             <PriorityIndicator priority={t.priority} />
-            <span className="text-[12.5px] text-[#475569]">{t.requester}</span>
+            <span className="text-body text-subtle">{t.requester}</span>
             <SlaBadge sla={assess(t)} />
           </Link>
         ))}

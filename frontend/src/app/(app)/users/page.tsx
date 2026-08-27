@@ -16,13 +16,14 @@ import { HandoverQueueModal } from "@/features/users/components/handover-queue-m
 import { ProjectSelect } from "@/features/users/components/project-select";
 import { useI18n } from "@/features/i18n/context";
 import type { User, UserRole } from "@/features/users/schemas";
+import { BADGE, type BadgePair } from "@/lib/badge-pairs";
 import { cn } from "@/lib/utils";
 
 // Descending privilege, so the badge colours read as a ladder at a glance.
-const ROLE_STYLE: Record<UserRole, { fg: string; bg: string }> = {
-  super_admin: { fg: "#6d28d9", bg: "#ede9fe" },
-  admin: { fg: "#15803d", bg: "#dcfce7" },
-  user: { fg: "#475569", bg: "#f1f5f9" },
+const ROLE_STYLE: Record<UserRole, BadgePair> = {
+  super_admin: BADGE.violet,
+  admin: BADGE.green,
+  user: BADGE.slate,
 };
 
 const COLS =
@@ -68,7 +69,7 @@ export default function UsersPage() {
     <>
       <Topbar titleKey="nav.users" showSearch={false} />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <p className="mb-4 flex max-w-[70ch] items-start gap-2 text-[12.5px] leading-relaxed text-[#475569]">
+        <p className="mb-4 flex max-w-[70ch] items-start gap-2 text-body leading-relaxed text-subtle">
           <Info size={14} className="mt-[2px] flex-none text-faint" />
           {t("users.explainer")}
         </p>
@@ -80,7 +81,7 @@ export default function UsersPage() {
         {update.isError ? (
           <div
             role="alert"
-            className="mb-4 flex max-w-[70ch] items-start gap-2 rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2.5 text-[12.5px] font-medium text-[#b91c1c]"
+            className="mb-4 flex max-w-[70ch] items-start gap-2 rounded-md border border-danger-edge bg-danger-bg px-3 py-2.5 text-body font-medium text-danger-ink"
           >
             <Info size={14} className="mt-[2px] flex-none" />
             {update.error instanceof Error
@@ -93,7 +94,7 @@ export default function UsersPage() {
           <TableScroll minWidth={MIN_WIDTH}>
           <div
             className={cn(
-              "grid items-center border-b border-[#eef1f5] bg-[#fafbfc] px-4 py-2.5 text-[11.5px] font-semibold tracking-[0.02em] text-faint",
+              "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-[0.02em] text-faint",
               COLS,
             )}
           >
@@ -122,27 +123,27 @@ export default function UsersPage() {
               <div
                 key={u.id}
                 className={cn(
-                  "grid items-center px-4 py-3 text-[13px]",
+                  "grid items-center px-4 py-3 text-control",
                   COLS,
-                  i < users.length - 1 && "border-b border-[#f1f4f8]",
+                  i < users.length - 1 && "border-b border-rule",
                 )}
               >
                 <span className="flex items-center gap-2 font-medium text-ink">
                   <Avatar name={u.name} tone={toneForName(u.name)} size={24} />
                   <span className="truncate">{u.name}</span>
                 </span>
-                <span className="truncate text-[12.5px] text-[#475569]">
+                <span className="truncate text-body text-subtle">
                   {u.email}
                 </span>
                 <span>
                   <span
-                    className="inline-flex items-center rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold"
+                    className="inline-flex items-center rounded-full px-2.5 py-[3px] text-caption font-semibold"
                     style={{ color: role.fg, background: role.bg }}
                   >
                     {t(`role.${u.role}`)}
                   </span>
                 </span>
-                <span className="truncate text-[12.5px] text-[#475569]">
+                <span className="truncate text-body text-subtle">
                   {u.team?.name ?? "—"}
                 </span>
 
@@ -158,7 +159,7 @@ export default function UsersPage() {
                       }
                     />
                   ) : (
-                    <span className="truncate text-[12.5px] text-[#475569]">
+                    <span className="truncate text-body text-subtle">
                       {u.project?.name ?? "—"}
                     </span>
                   )}
@@ -194,7 +195,7 @@ export default function UsersPage() {
                   />
                 </span>
 
-                <span className="text-[12.5px] text-faint">
+                <span className="text-body text-faint">
                   {formatDate(u.createdAt, lang)}
                 </span>
 
@@ -204,13 +205,13 @@ export default function UsersPage() {
                     <button
                       type="button"
                       onClick={() => setHandoverFor(u)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2 py-1 text-[11.5px] font-semibold text-[#475569] hover:bg-app"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2 py-1 text-caption font-semibold text-subtle hover:bg-app"
                     >
                       <UsersIcon size={12} strokeWidth={2} />
                       {t("users.handover")}
                     </button>
                   ) : (
-                    <span className="text-[12.5px] text-faint">—</span>
+                    <span className="text-body text-faint">—</span>
                   )}
                 </span>
               </div>

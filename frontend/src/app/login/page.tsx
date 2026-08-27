@@ -85,10 +85,10 @@ export default function LoginPage() {
 
         <div className="rounded-[14px] border border-line bg-panel p-8 shadow-card">
           <div className="mb-6">
-            <h1 className="text-[22px] font-bold tracking-[-0.01em] text-ink">
+            <h1 className="text-hero font-bold tracking-[-0.01em] text-ink">
               {t("login.welcome")}
             </h1>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
+            <p className="mt-1.5 text-lead leading-relaxed text-muted">
               {t("login.useCorporate")}
             </p>
           </div>
@@ -97,7 +97,7 @@ export default function LoginPage() {
             {error ? (
               <div
                 role="alert"
-                className="rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2.5 text-[12.5px] font-medium text-[#b91c1c]"
+                className="rounded-md border border-danger-edge bg-danger-bg px-3 py-2.5 text-body font-medium text-danger-ink"
               >
                 {error}
               </div>
@@ -130,13 +130,13 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowForgot((v) => !v)}
                   aria-expanded={showForgot}
-                  className="mb-1.5 text-[12px] font-medium text-brand hover:text-brand-hover hover:underline"
+                  className="mb-1.5 text-dense font-medium text-brand hover:text-brand-hover hover:underline"
                 >
                   {t("login.forgot")}
                 </button>
               </div>
               {showForgot ? (
-                <div className="mb-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-[12px] leading-relaxed text-[#166534]">
+                <div className="mb-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-dense leading-relaxed text-[#166534]">
                   {t("login.forgotHint")}
                 </div>
               ) : null}
@@ -176,7 +176,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-1 rounded-md bg-brand py-2.5 text-center text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+              className="mt-1 rounded-md bg-brand py-2.5 text-center text-lead font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
             >
               {submitting ? t("login.submitting") : t("login.signIn")}
             </button>
@@ -185,14 +185,14 @@ export default function LoginPage() {
               type="button"
               onClick={demoLogin}
               disabled={submitting}
-              className="rounded-md border border-line bg-white py-2.5 text-center text-[13px] font-medium text-muted transition-colors hover:border-brand/40 hover:text-ink disabled:opacity-60"
+              className="rounded-md border border-line bg-white py-2.5 text-center text-control font-medium text-muted transition-colors hover:border-brand/40 hover:text-ink disabled:opacity-60"
             >
               {t("login.demoLogin")}
             </button>
           </form>
         </div>
 
-        <div className="mt-5 text-center text-[11.5px] leading-relaxed text-faint">
+        <div className="mt-5 text-center text-caption leading-relaxed text-faint">
           {t("login.demo", { pw: DEMO.password })}
         </div>
       </div>

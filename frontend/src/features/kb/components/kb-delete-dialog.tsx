@@ -50,24 +50,24 @@ export function KbDeleteDialog({
         <div className="flex items-start gap-2.5">
           <AlertTriangle
             size={16}
-            className="mt-px flex-none text-[#b45309]"
+            className="mt-px flex-none text-warn"
             aria-hidden
           />
           <div>
-            <div className="text-[14.5px] font-semibold text-ink">
+            <div className="text-dialog font-semibold text-ink">
               {t("kb.deleteTitle")}
             </div>
-            <p className="mt-1 text-[12.5px] text-[#475569]">
+            <p className="mt-1 text-body text-subtle">
               {t("kb.deleteBody", { id, title })}
             </p>
-            <p className="mt-2 text-[12.5px] text-faint">
+            <p className="mt-2 text-body text-faint">
               {t("kb.deleteLinks")}
             </p>
           </div>
         </div>
 
         {error ? (
-          <div className="mt-3 text-[12.5px] font-medium text-[#dc2626]">
+          <div className="mt-3 text-body font-medium text-danger">
             {error}
           </div>
         ) : null}

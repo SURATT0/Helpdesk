@@ -284,15 +284,15 @@ export function ImportTicketsModal({
       panelClassName="max-w-[920px]"
     >
       <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
-        <div className="flex items-center justify-between border-b border-[#eef1f5] px-6 py-[18px]">
+        <div className="flex items-center justify-between border-b border-hairline px-6 py-[18px]">
           <div>
             <div
               id="import-tickets-title"
-              className="text-[16px] font-bold text-ink"
+              className="text-field font-bold text-ink"
             >
               {t("import.title")}
             </div>
-            <div className="mt-0.5 text-[12px] text-faint">
+            <div className="mt-0.5 text-dense text-faint">
               {t("import.subtitle")}
             </div>
           </div>
@@ -330,10 +330,10 @@ export function ImportTicketsModal({
                 loadFile(e.dataTransfer.files?.[0]);
               }}
               className={cn(
-                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[9px] border-[1.5px] border-dashed px-4 py-10 text-center text-[13px] transition-colors",
+                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[9px] border-[1.5px] border-dashed px-4 py-10 text-center text-control transition-colors",
                 dragging
-                  ? "border-brand bg-[#e4f2ea] text-brand-hover"
-                  : "border-[#cbd5e1] bg-[#fafbfc] text-muted",
+                  ? "border-brand bg-accent-soft text-brand-hover"
+                  : "border-dim bg-wash text-muted",
               )}
             >
               <Upload size={22} strokeWidth={2} />
@@ -343,7 +343,7 @@ export function ImportTicketsModal({
                   {t("import.browse")}
                 </span>
               </div>
-              <div className="text-[11.5px] text-faint">
+              <div className="text-caption text-faint">
                 {t("import.formatHint")}
               </div>
             </div>
@@ -359,7 +359,7 @@ export function ImportTicketsModal({
             />
 
             {fileError ? (
-              <div className="rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-[12.5px] font-medium text-[#b91c1c]">
+              <div className="rounded-md border border-danger-edge bg-danger-bg px-3 py-2 text-body font-medium text-danger-ink">
                 {fileError}
               </div>
             ) : null}
@@ -383,7 +383,7 @@ export function ImportTicketsModal({
                 a.click();
                 URL.revokeObjectURL(url);
               }}
-              className="self-start text-[12.5px] font-medium text-brand hover:underline"
+              className="self-start text-body font-medium text-brand hover:underline"
             >
               {t("import.template")}
             </button>
@@ -395,12 +395,12 @@ export function ImportTicketsModal({
           <>
             <div className="px-6 pt-4">
               {banner ? (
-                <div className="mb-3 rounded-md border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-[12.5px] font-medium text-[#c2410c]">
+                <div className="mb-3 rounded-md border border-[#fed7aa] bg-warn-wash px-3 py-2 text-body font-medium text-warn-ink">
                   {banner}
                 </div>
               ) : null}
               {importTickets.isError ? (
-                <div className="mb-3 rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-[12.5px] font-medium text-[#b91c1c]">
+                <div className="mb-3 rounded-md border border-danger-edge bg-danger-bg px-3 py-2 text-body font-medium text-danger-ink">
                   {importTickets.error instanceof ApiError
                     ? importTickets.error.message
                     : t("create.createError")}
@@ -408,9 +408,9 @@ export function ImportTicketsModal({
               ) : null}
             </div>
             <div className="max-h-[52vh] overflow-auto px-6">
-              <table className="w-full border-collapse text-[12.5px]">
+              <table className="w-full border-collapse text-body">
                 <thead className="sticky top-0 bg-white">
-                  <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-faint">
+                  <tr className="text-left text-meta font-semibold uppercase tracking-[0.04em] text-faint">
                     <th className="w-8 pb-2" />
                     {FIELDS.map((f) => (
                       <th key={f} className="pb-2 pr-2">
@@ -427,11 +427,11 @@ export function ImportTicketsModal({
                       <tr
                         key={idx}
                         className={cn(
-                          "border-t border-[#eef1f5] align-top",
-                          errored && "bg-[#fef2f2]/40",
+                          "border-t border-hairline align-top",
+                          errored && "bg-danger-bg/40",
                         )}
                       >
-                        <td className="py-1.5 pr-2 font-mono text-[11px] text-faint">
+                        <td className="py-1.5 pr-2 font-mono text-meta text-faint">
                           {idx + 1}
                         </td>
                         {FIELDS.map((f) => {
@@ -484,7 +484,7 @@ export function ImportTicketsModal({
                                 />
                               )}
                               {err ? (
-                                <div className="mt-0.5 text-[10.5px] font-medium text-[#dc2626]">
+                                <div className="mt-0.5 text-eyebrow font-medium text-danger">
                                   {err}
                                 </div>
                               ) : null}
@@ -496,7 +496,7 @@ export function ImportTicketsModal({
                             type="button"
                             onClick={() => removeRow(idx)}
                             aria-label={t("import.removeRow")}
-                            className="text-faint hover:text-[#dc2626]"
+                            className="text-faint hover:text-danger"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -514,7 +514,7 @@ export function ImportTicketsModal({
                     return reason ? (
                       <div
                         key={i}
-                        className="text-[11px] text-[#b91c1c]"
+                        className="text-meta text-danger-ink"
                       >
                         <span className="font-mono">#{i + 1}</span> {reason}
                       </div>
@@ -524,11 +524,11 @@ export function ImportTicketsModal({
               ) : null}
             </div>
 
-            <div className="flex items-center justify-between gap-2.5 border-t border-[#eef1f5] bg-[#fafbfc] px-6 py-4">
+            <div className="flex items-center justify-between gap-2.5 border-t border-hairline bg-wash px-6 py-4">
               <div
                 className={cn(
-                  "text-[12.5px] font-medium",
-                  invalidCount > 0 ? "text-[#c2410c]" : "text-[#15803d]",
+                  "text-body font-medium",
+                  invalidCount > 0 ? "text-warn-ink" : "text-success",
                 )}
               >
                 {invalidCount > 0
@@ -560,13 +560,13 @@ export function ImportTicketsModal({
         {/* ---- Done step ---- */}
         {step === "done" ? (
           <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-[#dcfce7] text-[#15803d]">
+            <div className="grid h-14 w-14 place-items-center rounded-full bg-success-bg text-success">
               <CheckCircle2 size={30} />
             </div>
-            <div className="text-[17px] font-bold text-ink">
+            <div className="text-page font-bold text-ink">
               {t("import.resultTitle")}
             </div>
-            <div className="text-[13px] text-muted">
+            <div className="text-control text-muted">
               {t("import.created", { n: createdTotal })}
             </div>
             <Button
@@ -591,6 +591,6 @@ function cellClass(hasError: boolean): string {
     // Kept in step with the other fields even though this grid is a desk-only
     // surface: a field that zooms is worse than one whose text crowds its cell.
     FIELD_TEXT_12,
-    hasError ? "border-[#fca5a5]" : "border-[#e2e8f0] focus:border-brand",
+    hasError ? "border-[#fca5a5]" : "border-edge focus:border-brand",
   );
 }

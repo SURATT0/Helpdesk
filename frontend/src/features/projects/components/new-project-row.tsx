@@ -39,7 +39,7 @@ export function NewProjectRow() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-brand-hover"
+        className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-body font-semibold text-white hover:bg-brand-hover"
       >
         <Plus size={14} strokeWidth={2.5} />
         {t("projects.new")}
@@ -58,7 +58,7 @@ export function NewProjectRow() {
         // Fluid on a phone — a fixed 224px field plus the two buttons beside it
         // overflowed the row.
         className={cn(
-          "w-full min-w-0 rounded-md border border-[#e2e8f0] bg-white px-2.5 py-1.5 text-ink sm:w-56",
+          "w-full min-w-0 rounded-md border border-edge bg-white px-2.5 py-1.5 text-ink sm:w-56",
           "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
           FIELD_TEXT_12,
         )}
@@ -66,7 +66,7 @@ export function NewProjectRow() {
       <button
         type="submit"
         disabled={!name.trim() || create.isPending}
-        className="rounded-md bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md bg-brand px-3 py-1.5 text-body font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {create.isPending ? t("projects.saving") : t("projects.create")}
       </button>
@@ -79,7 +79,7 @@ export function NewProjectRow() {
         }}
         aria-label={t("common.cancel")}
         className={cn(
-          "grid h-7 w-7 place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+          "grid h-7 w-7 place-items-center rounded-md border border-line text-subtle hover:bg-app",
           TOUCH_TARGET,
         )}
       >
@@ -88,7 +88,7 @@ export function NewProjectRow() {
       {create.isError ? (
         // Most likely cause is the per-customer unique name, so say so rather
         // than surfacing a raw 4xx.
-        <span className="text-[12px] text-[#dc2626]">
+        <span className="text-dense text-danger">
           {t("projects.createError")}
         </span>
       ) : null}

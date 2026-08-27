@@ -20,7 +20,7 @@ export function TicketListFooter() {
   const isFiltered = activeCount > 0 || query.trim().length > 0;
 
   return (
-    <div className="px-4 pb-4 text-[12.5px] text-muted sm:px-6 sm:pb-6">
+    <div className="px-4 pb-4 text-body text-muted sm:px-6 sm:pb-6">
       {all.length > 0
         ? t(isFiltered ? "filter.showingFiltered" : "filter.showing", {
             shown: filtered,

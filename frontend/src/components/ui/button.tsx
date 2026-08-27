@@ -9,17 +9,17 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary: "bg-brand text-white hover:bg-brand-hover",
-  secondary: "bg-white text-[#475569] border border-line hover:bg-app",
-  outline: "border border-line text-[#475569] bg-white hover:bg-app",
-  ghost: "text-[#475569] hover:bg-app",
+  secondary: "bg-white text-subtle border border-line hover:bg-app",
+  outline: "border border-line text-subtle bg-white hover:bg-app",
+  ghost: "text-subtle hover:bg-app",
   // For the button that confirms something irreversible, and nothing else — a
   // red button on a step you can walk back teaches people to ignore red ones.
-  danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
+  danger: "bg-danger text-white hover:bg-danger-ink",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "text-[12.5px] px-3 py-1.5",
-  md: "text-[13px] px-3.5 py-2",
+  sm: "text-body px-3 py-1.5",
+  md: "text-control px-3.5 py-2",
 };
 
 export interface ButtonProps

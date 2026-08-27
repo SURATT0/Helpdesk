@@ -15,14 +15,14 @@ type RowResult = { created: number; failed: number } | { error: string };
 function StatusBadge({ source }: { source: SourceInfo }) {
   const { t } = useI18n();
   const [label, classes] = !source.implemented
-    ? [t("integrations.comingSoon"), "bg-[#f1f5f9] text-[#475569]"]
+    ? [t("integrations.comingSoon"), "bg-fill text-subtle"]
     : source.configured
-      ? [t("integrations.connected"), "bg-[#dcfce7] text-[#15803d]"]
-      : [t("integrations.notConfigured"), "bg-[#fef3c7] text-[#b45309]"];
+      ? [t("integrations.connected"), "bg-success-bg text-success"]
+      : [t("integrations.notConfigured"), "bg-warn-bg text-warn"];
   return (
     <span
       className={cn(
-        "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+        "rounded-full px-2.5 py-0.5 text-meta font-semibold",
         classes,
       )}
     >
@@ -69,25 +69,25 @@ export function IntegrationsPanel() {
       <div className="mb-3.5 flex items-center gap-2">
         <Plug size={16} className="text-brand" />
         <div>
-          <div className="text-[14px] font-semibold text-ink">
+          <div className="text-section font-semibold text-ink">
             {t("integrations.title")}
           </div>
-          <div className="mt-0.5 text-[12px] text-faint">
+          <div className="mt-0.5 text-dense text-faint">
             {t("integrations.note")}
           </div>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="text-[12.5px] text-faint">{t("common.loading")}</div>
+        <div className="text-body text-faint">{t("common.loading")}</div>
       ) : isError ? (
-        <div className="text-[12.5px] text-[#dc2626]">
+        <div className="text-body text-danger">
           {t("integrations.loadError")}
         </div>
       ) : sources.length === 0 ? (
-        <div className="text-[12.5px] text-faint">{t("integrations.empty")}</div>
+        <div className="text-body text-faint">{t("integrations.empty")}</div>
       ) : (
-        <div className="flex flex-col divide-y divide-[#eef1f5]">
+        <div className="flex flex-col divide-y divide-hairline">
           {sources.map((s) => {
             const canSync = s.implemented && s.configured;
             const busy = activeId === s.id;
@@ -99,16 +99,16 @@ export function IntegrationsPanel() {
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13.5px] font-semibold text-ink">
+                    <span className="text-lead font-semibold text-ink">
                       {s.label}
                     </span>
                     <StatusBadge source={s} />
                   </div>
-                  <div className="mt-0.5 text-[12px] text-muted">
+                  <div className="mt-0.5 text-dense text-muted">
                     {s.description}
                   </div>
                   {!s.implemented ? (
-                    <div className="mt-0.5 text-[11.5px] text-faint">
+                    <div className="mt-0.5 text-caption text-faint">
                       {s.configured
                         ? t("integrations.credsDetected")
                         : t("integrations.configureHint")}
@@ -117,12 +117,12 @@ export function IntegrationsPanel() {
                   {result ? (
                     <div
                       className={cn(
-                        "mt-1 text-[11.5px] font-medium",
+                        "mt-1 text-caption font-medium",
                         "error" in result
-                          ? "text-[#dc2626]"
+                          ? "text-danger"
                           : result.failed > 0
-                            ? "text-[#c2410c]"
-                            : "text-[#15803d]",
+                            ? "text-warn-ink"
+                            : "text-success",
                       )}
                     >
                       {"error" in result
@@ -162,20 +162,20 @@ export function IntegrationsPanel() {
 
       {/* Inbound email (webhook) — a push surface, not a sync source */}
       {email ? (
-        <div className="mt-4 border-t border-[#eef1f5] pt-4">
+        <div className="mt-4 border-t border-hairline pt-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <Mail size={15} className="text-brand" />
-                <span className="text-[13.5px] font-semibold text-ink">
+                <span className="text-lead font-semibold text-ink">
                   {t("integrations.email.title")}
                 </span>
                 <span
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                    "rounded-full px-2.5 py-0.5 text-meta font-semibold",
                     email.webhookEnabled
-                      ? "bg-[#dcfce7] text-[#15803d]"
-                      : "bg-[#f1f5f9] text-[#475569]",
+                      ? "bg-success-bg text-success"
+                      : "bg-fill text-subtle",
                   )}
                 >
                   {email.webhookEnabled
@@ -183,17 +183,17 @@ export function IntegrationsPanel() {
                     : t("integrations.email.disabled")}
                 </span>
               </div>
-              <div className="mt-0.5 text-[12px] text-muted">
+              <div className="mt-0.5 text-dense text-muted">
                 {t("integrations.email.note")}
               </div>
               <div className="mt-1.5 flex items-center gap-2">
-                <span className="text-[11px] font-medium text-faint">POST</span>
-                <code className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[11.5px] text-ink">
+                <span className="text-meta font-medium text-faint">POST</span>
+                <code className="rounded bg-fill px-1.5 py-0.5 font-mono text-caption text-ink">
                   {email.endpoint}
                 </code>
               </div>
               {!email.webhookEnabled ? (
-                <div className="mt-1 text-[11.5px] text-faint">
+                <div className="mt-1 text-caption text-faint">
                   {t("integrations.email.enableHint")}
                 </div>
               ) : null}

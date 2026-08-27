@@ -72,10 +72,10 @@ export function LinkProblemModal({
       <div className="flex max-h-[80dvh] flex-col rounded-xl border border-line bg-panel p-5 shadow-modal">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[14.5px] font-semibold text-ink">
+            <div className="text-dialog font-semibold text-ink">
               {t("problem.linkTitle")}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-[#475569]">
+            <div className="mt-0.5 text-body text-subtle">
               {t("problem.linkNote")}
             </div>
           </div>
@@ -84,7 +84,7 @@ export function LinkProblemModal({
             onClick={onClose}
             aria-label={t("problem.close")}
             className={cn(
-              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-[#475569] hover:bg-app",
+              "grid h-7 w-7 flex-none place-items-center rounded-md border border-line text-subtle hover:bg-app",
               TOUCH_TARGET,
             )}
           >
@@ -93,7 +93,7 @@ export function LinkProblemModal({
         </div>
 
         <div
-          className="mb-3 flex gap-1 rounded-lg border border-line bg-[#fafbfc] p-1"
+          className="mb-3 flex gap-1 rounded-lg border border-line bg-wash p-1"
           role="tablist"
         >
           {(["link", "convert"] as const).map((m) => (
@@ -105,8 +105,8 @@ export function LinkProblemModal({
               onClick={() => setMode(m)}
               className={
                 mode === m
-                  ? "flex-1 rounded-md bg-white px-3 py-1.5 text-[12.5px] font-semibold text-ink shadow-sm"
-                  : "flex-1 rounded-md px-3 py-1.5 text-[12.5px] font-medium text-muted hover:text-ink"
+                  ? "flex-1 rounded-md bg-white px-3 py-1.5 text-body font-semibold text-ink shadow-sm"
+                  : "flex-1 rounded-md px-3 py-1.5 text-body font-medium text-muted hover:text-ink"
               }
             >
               {m === "link" ? t("problem.tabLink") : t("problem.tabConvert")}
@@ -131,12 +131,12 @@ export function LinkProblemModal({
 
             <div className="min-h-[120px] flex-1 overflow-y-auto rounded-lg border border-line">
               {isLoading ? (
-                <div className="flex items-center justify-center gap-2 p-6 text-[12.5px] text-faint">
+                <div className="flex items-center justify-center gap-2 p-6 text-body text-faint">
                   <Loader2 size={14} className="animate-spin" />
                   {t("common.loading")}
                 </div>
               ) : problems.length === 0 ? (
-                <div className="p-6 text-center text-[12.5px] text-faint">
+                <div className="p-6 text-center text-body text-faint">
                   {t("problem.noneFound")}
                 </div>
               ) : (
@@ -149,19 +149,19 @@ export function LinkProblemModal({
                     className={
                       "flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-app disabled:opacity-50" +
                       (i < problems.length - 1
-                        ? " border-b border-[#f1f4f8]"
+                        ? " border-b border-rule"
                         : "")
                     }
                   >
                     <Link2 size={13} className="mt-1 flex-none text-faint" />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[13px] font-semibold text-ink">
+                        <span className="truncate text-control font-semibold text-ink">
                           {p.title}
                         </span>
                         <ProblemStatusBadge status={p.status} />
                       </span>
-                      <span className="mt-0.5 block text-[11.5px] text-faint">
+                      <span className="mt-0.5 block text-caption text-faint">
                         {t("problem.linkedCount", { n: p.ticketCount })}
                         {p.workaround
                           ? ` · ${t("problem.hasWorkaround")}`
@@ -175,7 +175,7 @@ export function LinkProblemModal({
           </>
         ) : (
           <div className="flex flex-col gap-2.5">
-            <label className="text-[12px] font-medium text-faint" htmlFor="p-title">
+            <label className="text-dense font-medium text-faint" htmlFor="p-title">
               {t("problem.titleLabel")}
             </label>
             <input
@@ -188,7 +188,7 @@ export function LinkProblemModal({
                 FIELD_TEXT_13,
               )}
             />
-            <label className="text-[12px] font-medium text-faint" htmlFor="p-desc">
+            <label className="text-dense font-medium text-faint" htmlFor="p-desc">
               {t("problem.descLabel")}
             </label>
             <textarea
@@ -207,7 +207,7 @@ export function LinkProblemModal({
         )}
 
         {error ? (
-          <div className="mt-2.5 text-[12.5px] font-medium text-[#dc2626]">
+          <div className="mt-2.5 text-body font-medium text-danger">
             {error}
           </div>
         ) : null}

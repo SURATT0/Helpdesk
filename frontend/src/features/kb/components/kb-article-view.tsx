@@ -43,7 +43,7 @@ export function KbArticleView({ id }: { id: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/kb"
-          className="inline-flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink"
+          className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink"
         >
           <ArrowLeft size={14} strokeWidth={2} />
           {t("kb.back")}
@@ -67,23 +67,23 @@ export function KbArticleView({ id }: { id: string }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-[4px] bg-[#e4f2ea] px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-brand-hover">
+        <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 font-mono text-eyebrow font-semibold text-brand-hover">
           {a.id}
         </span>
-        <span className="rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-medium text-[#475569]">
+        <span className="rounded-full bg-fill px-2 py-0.5 text-meta font-medium text-subtle">
           {a.category}
         </span>
         {a.status === "draft" ? <DraftBadge /> : null}
-        <span className="ml-auto flex items-center gap-1 text-[11px] text-faint">
+        <span className="ml-auto flex items-center gap-1 text-meta text-faint">
           <Clock size={11} strokeWidth={2} />
           {t("kb.readMin", { n: a.readMin })}
         </span>
       </div>
 
-      <h1 className="text-[22px] font-bold tracking-[-0.01em] text-ink">
+      <h1 className="text-hero font-bold tracking-[-0.01em] text-ink">
         {a.title}
       </h1>
-      <div className="text-[11.5px] text-faint">
+      <div className="text-caption text-faint">
         {t("kb.updated")} {formatUpdated(a.updatedAt, lang)}
         {/* Attribution only where there is someone to attribute it to: the
             seeded library predates authors and shows the date alone. */}

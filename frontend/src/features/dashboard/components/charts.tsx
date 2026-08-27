@@ -12,7 +12,7 @@ export function StatusBarChart() {
 
   return (
     <Card className="px-5 py-[18px]">
-      <div className="mb-4 text-[13.5px] font-semibold text-ink">
+      <div className="mb-4 text-lead font-semibold text-ink">
         {t("charts.byStatus")}
       </div>
 
@@ -32,7 +32,7 @@ export function StatusBarChart() {
                   key={b.status}
                   className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
                 >
-                  <span className="font-mono text-[11.5px] font-semibold text-[#475569]">
+                  <span className="font-mono text-caption font-semibold text-subtle">
                     {b.count}
                   </span>
                   <div
@@ -42,7 +42,7 @@ export function StatusBarChart() {
                       background: meta.color,
                     }}
                   />
-                  <span className="text-[11.5px] text-muted">
+                  <span className="text-caption text-muted">
                     {t(`status.${b.status}`)}
                   </span>
                 </div>
@@ -61,7 +61,7 @@ export function PriorityDonut() {
 
   return (
     <Card className="px-5 py-[18px]">
-      <div className="mb-4 text-[13.5px] font-semibold text-ink">
+      <div className="mb-4 text-lead font-semibold text-ink">
         {t("charts.byPriority")}
       </div>
 
@@ -85,16 +85,16 @@ export function PriorityDonut() {
           >
             <div className="absolute inset-4 grid place-items-center rounded-full bg-white">
               <div className="text-center">
-                <div className="text-[22px] font-bold text-ink">
+                <div className="text-hero font-bold text-ink">
                   {data.openByPriority.reduce((s, p) => s + p.count, 0)}
                 </div>
-                <div className="text-[10.5px] text-faint">
+                <div className="text-eyebrow text-faint">
                   {t("charts.open")}
                 </div>
               </div>
             </div>
           </div>
-          <div className="flex flex-col gap-2.5 text-[12.5px] text-[#475569]">
+          <div className="flex flex-col gap-2.5 text-body text-subtle">
             {data.openByPriority.map((p) => (
               <div key={p.priority} className="flex items-center gap-2">
                 <span
@@ -102,7 +102,7 @@ export function PriorityDonut() {
                   style={{ background: PRIORITY_CHART[p.priority].color }}
                 />
                 {t(`priority.${p.priority}`)}
-                <span className="ml-auto pl-[18px] font-mono text-[12px] font-semibold text-ink">
+                <span className="ml-auto pl-[18px] font-mono text-dense font-semibold text-ink">
                   {p.count}
                 </span>
               </div>

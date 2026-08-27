@@ -57,14 +57,14 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
 
   if (!ticket.problem) {
     if (!canWrite) {
-      return <span className="text-[12.5px] text-faint">{t("problem.none")}</span>;
+      return <span className="text-body text-faint">{t("problem.none")}</span>;
     }
     return (
       <>
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[#cbd5e1] px-2.5 py-1.5 text-[12px] font-semibold text-muted hover:border-[#94a3b8] hover:text-ink"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-dim px-2.5 py-1.5 text-dense font-semibold text-muted hover:border-faint hover:text-ink"
         >
           <Link2 size={12} strokeWidth={2} />
           {t("problem.linkAction")}
@@ -81,27 +81,27 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
   }
 
   return (
-    <div className="rounded-[9px] border border-line bg-[#fafbfc] p-3">
+    <div className="rounded-[9px] border border-line bg-wash p-3">
       <div className="flex flex-wrap items-start gap-2">
-        <span className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug text-ink">
+        <span className="min-w-0 flex-1 text-body font-semibold leading-snug text-ink">
           {ticket.problem.title}
         </span>
         <ProblemStatusBadge status={ticket.problem.status as ProblemStatus} />
       </div>
 
       {full ? (
-        <div className="mt-1.5 text-[11.5px] text-faint">
+        <div className="mt-1.5 text-caption text-faint">
           {t("problem.linkedCount", { n: full.ticketCount })}
         </div>
       ) : null}
 
       {full?.workaround ? (
         // The reason a known error is worth linking: the fix is already known.
-        <div className="mt-2 rounded-md border border-[#fde68a] bg-[#fffbeb] p-2">
-          <div className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#b45309]">
+        <div className="mt-2 rounded-md border border-warn-edge bg-warn-tint p-2">
+          <div className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-warn">
             {t("problem.workaround")}
           </div>
-          <div className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-[#78350f]">
+          <div className="mt-1 whitespace-pre-wrap text-dense leading-relaxed text-[#78350f]">
             {full.workaround}
           </div>
         </div>
@@ -112,7 +112,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
       {full?.kbArticle ? (
         <Link
           href={`/kb/${encodeURIComponent(full.kbArticle.id)}`}
-          className="mt-2 flex items-center gap-1.5 rounded-md border border-line bg-white px-2 py-1.5 text-[11.5px] font-semibold text-brand-hover hover:bg-app"
+          className="mt-2 flex items-center gap-1.5 rounded-md border border-line bg-white px-2 py-1.5 text-caption font-semibold text-brand-hover hover:bg-app"
         >
           <BookOpen size={12} strokeWidth={2} className="flex-none" />
           <span className="min-w-0 flex-1 truncate">{full.kbArticle.title}</span>
@@ -121,7 +121,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
       ) : full?.kbArticleId ? (
         // An id that no longer resolves — say so rather than dropping it, so
         // whoever curates the KB can see the reference went stale.
-        <div className="mt-2 flex items-start gap-1.5 text-[11.5px] text-[#b45309]">
+        <div className="mt-2 flex items-start gap-1.5 text-caption text-warn">
           <BookOpen size={12} className="mt-px flex-none" />
           <span>{t("problem.kbMissing", { id: full.kbArticleId })}</span>
         </div>
@@ -129,17 +129,17 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
 
       {full?.rootCause ? (
         <div className="mt-2">
-          <div className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+          <div className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-faint">
             {t("problem.rootCause")}
           </div>
-          <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-[#475569]">
+          <div className="mt-0.5 whitespace-pre-wrap text-dense leading-relaxed text-subtle">
             {full.rootCause}
           </div>
         </div>
       ) : null}
 
       {error ? (
-        <div className="mt-2 text-[11.5px] font-medium text-[#dc2626]">
+        <div className="mt-2 text-caption font-medium text-danger">
           {error}
         </div>
       ) : null}
@@ -152,7 +152,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
             type="button"
             onClick={() => setEditing(true)}
             disabled={full == null}
-            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-caption font-semibold text-muted hover:text-ink disabled:opacity-50"
           >
             <Pencil size={12} strokeWidth={2} />
             {full?.workaround ? t("problem.edit") : t("problem.addWorkaround")}
@@ -161,7 +161,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
             type="button"
             onClick={doUnlink}
             disabled={unlink.isPending}
-            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-caption font-semibold text-muted hover:text-ink disabled:opacity-50"
           >
             {unlink.isPending ? (
               <Loader2 size={12} className="animate-spin" />

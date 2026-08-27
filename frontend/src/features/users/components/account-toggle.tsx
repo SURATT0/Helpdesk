@@ -42,9 +42,9 @@ export function AccountToggle({
     return (
       <span
         className={cn(
-          "inline-flex items-center rounded-full px-2 py-[2px] text-[11.5px] font-semibold",
+          "inline-flex items-center rounded-full px-2 py-[2px] text-caption font-semibold",
           active
-            ? "text-[#475569]"
+            ? "text-subtle"
             : "bg-sla-risk-bg text-sla-breach-fg",
         )}
       >
@@ -56,7 +56,7 @@ export function AccountToggle({
   return (
     <label
       className={cn(
-        "inline-flex cursor-pointer items-center gap-1.5 text-[12px]",
+        "inline-flex cursor-pointer items-center gap-1.5 text-dense",
         pending && "cursor-wait opacity-60",
       )}
     >
@@ -71,7 +71,7 @@ export function AccountToggle({
       <span
         className={cn(
           "font-medium",
-          active ? "text-[#475569]" : "font-semibold text-sla-breach-fg",
+          active ? "text-subtle" : "font-semibold text-sla-breach-fg",
         )}
       >
         {label}

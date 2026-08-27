@@ -83,7 +83,7 @@ export function SlaSummary() {
             aria-pressed={active}
             onClick={() => setSlaOnly(tile.state)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold",
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body font-semibold",
               active ? tile.activeClassName : tile.className,
             )}
           >
