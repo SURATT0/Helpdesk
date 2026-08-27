@@ -42,6 +42,12 @@ export const ticketSchema = z.object({
   requester: z.string(),
   requesterEmail: z.string(),
   /**
+   * Who raised it, by id. What the closure buttons are keyed on — "is this mine"
+   * is an identity question, and identity questions are answered on the id, not
+   * on a display name or an email string.
+   */
+  requesterId: z.number(),
+  /**
    * The requester's role. Read for one decision — `isInternalThread`, which
    * decides whether the thread has an external side to chat with and mail at all
    * — and deliberately not for permissions: what the VIEWER may do comes from

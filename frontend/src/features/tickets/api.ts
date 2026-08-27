@@ -123,6 +123,29 @@ export async function updateTicketStatus(
   return ticketEnvelopeSchema.parse(body).data;
 }
 
+/**
+ * The requester's half of closing a ticket: agree that it is fixed, or send it
+ * back. Separate endpoints from the desk's status write, because the right to
+ * use them comes from being the person the ticket is about — see the routes.
+ */
+export async function confirmClosure(id: number): Promise<Ticket> {
+  const body = await apiRequest(`/tickets/${id}/closure/confirm`, {
+    method: "POST",
+  });
+  return ticketEnvelopeSchema.parse(body).data;
+}
+
+export async function rejectClosure(
+  id: number,
+  reason?: string,
+): Promise<Ticket> {
+  const body = await apiRequest(`/tickets/${id}/closure/reject`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+  return ticketEnvelopeSchema.parse(body).data;
+}
+
 export async function updateTicketAssignee(
   id: number,
   assigneeId: number | null,

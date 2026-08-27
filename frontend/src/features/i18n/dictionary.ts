@@ -295,6 +295,19 @@ const en: Dict = {
 
   "detail.tickets": "Tickets",
   "detail.markResolved": "Done — ask requester",
+  // The requester's half of closing a ticket. Their words, not the desk's:
+  // "confirm the fix" rather than "close the ticket", because closing is what
+  // happens, not what they are being asked.
+  "closure.confirm": "Yes, it is fixed",
+  "closure.reject": "Not fixed yet",
+  "closure.rejectTitle": "Send it back to the team?",
+  "closure.rejectBody":
+    "The ticket goes back to whoever was working on it. Anything you write here is posted on the ticket, so they can read it.",
+  "closure.rejectReason": "What is still wrong? (optional)",
+  "closure.rejectPlaceholder": "It still happens when…",
+  "closure.rejectConfirm": "Send it back",
+  "closure.rejectError": "Couldn’t send it back",
+  "closure.cancel": "Cancel",
   "detail.saving": "Saving…",
   // Deleting a ticket is super-admin only. Closing is the normal end of the line,
   // so the wording says what this is for rather than just "Are you sure?".
@@ -925,6 +938,17 @@ const th: Dict = {
 
   "detail.tickets": "Ticket",
   "detail.markResolved": "เสร็จแล้ว — ส่งให้ผู้แจ้งยืนยัน",
+  // ฝั่งผู้แจ้ง — ใช้คำของผู้แจ้ง ไม่ใช่ของทีมงาน
+  "closure.confirm": "ใช่ แก้ได้แล้ว",
+  "closure.reject": "ยังไม่หาย",
+  "closure.rejectTitle": "ส่งกลับให้ทีมงานไหม?",
+  "closure.rejectBody":
+    "Ticket จะกลับไปหาคนที่ดูแลอยู่เดิม ข้อความที่พิมพ์ตรงนี้จะขึ้นในเธรดให้เขาอ่านด้วย",
+  "closure.rejectReason": "ยังติดอะไรอยู่? (ไม่บังคับ)",
+  "closure.rejectPlaceholder": "ยังเป็นตอนที่…",
+  "closure.rejectConfirm": "ส่งกลับ",
+  "closure.rejectError": "ส่งกลับไม่สำเร็จ",
+  "closure.cancel": "ยกเลิก",
   "detail.saving": "กำลังบันทึก…",
   "detail.delete": "ลบ ticket",
   "detail.deleteConfirm": "ลบ ticket นี้? จะหายจากทุกรายการและทุกรายงาน",
