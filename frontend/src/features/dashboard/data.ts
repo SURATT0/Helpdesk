@@ -1,15 +1,13 @@
-import type { Priority, TicketStatus } from "@/lib/domain";
+import type { DisplayStatus, Priority } from "@/lib/domain";
 
 /** Bar colours for the "Tickets by status" chart (presentational). */
 export const STATUS_CHART: Record<
-  TicketStatus,
+  DisplayStatus,
   { label: string; color: string }
 > = {
   new: { label: "New", color: "#3b82f6" },
-  open: { label: "Open", color: "#0ea5e9" },
   in_progress: { label: "In Progress", color: "#f59e0b" },
   pending: { label: "Pending", color: "#8b5cf6" },
-  resolved: { label: "Resolved", color: "#22c55e" },
   closed: { label: "Closed", color: "#cbd5e1" },
 };
 

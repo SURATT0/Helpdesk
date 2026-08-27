@@ -1,9 +1,12 @@
 import { Prisma } from "@prisma/client";
 import {
   canTransition,
+  displayStatus,
+  type DisplayStatus,
   type Priority,
   type Role,
   type TicketStatus,
+  type TicketStatusRecord,
 } from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
 import {
@@ -23,6 +26,7 @@ import {
   type SlaState,
 } from "./sla";
 import {
+  displayStatusWhere,
   ticketScopeWhere,
   type AssignmentCandidate,
   type RequesterCandidate,
@@ -63,7 +67,15 @@ export type Ticket = {
   id: number;
   subject: string;
   description: string;
+  /** What is stored on the row. Writes name this; readers should not render it. */
   status: TicketStatus;
+  /**
+   * What a reader is shown — `status` with "In Progress" folded in, derived from
+   * the assignee (see `displayStatus`). Sent alongside rather than instead of
+   * `status`, because the client needs both: one to show, one to send back on a
+   * status change. Every badge, board column, chart and filter reads this.
+   */
+  displayStatus: DisplayStatus;
   priority: Priority;
   requester: string;
   requesterEmail: string;
@@ -110,7 +122,8 @@ export type Ticket = {
 };
 
 export type TicketFilter = {
-  status?: TicketStatus;
+  /** A DISPLAY status — what the reader picked in the filter bar, not a column value. */
+  status?: DisplayStatus;
   priority?: Priority;
   /** A user id, or `"none"` for the unassigned queue. Absent = no filter. */
   assigneeId?: number | "none";
@@ -118,8 +131,13 @@ export type TicketFilter = {
 
 export type HistoryEntry = {
   id: number;
-  fromStatus: TicketStatus | null;
-  toStatus: TicketStatus;
+  /**
+   * The words the row was written with, which may be pre-migration ones —
+   * ticket_status_history is append-only, so `open`/`in_progress`/`resolved`
+   * still appear on old rows. See TicketStatusRecord.
+   */
+  fromStatus: TicketStatusRecord | null;
+  toStatus: TicketStatusRecord;
   actor: string | null;
   createdAt: string;
 };
@@ -184,6 +202,7 @@ function toTicketDto(row: TicketRow): Ticket {
     subject: row.subject,
     description: row.description,
     status: row.status,
+    displayStatus: displayStatus(row),
     priority: row.priority,
     requester: row.requester.name,
     requesterEmail: row.requester.email,
@@ -237,8 +256,10 @@ export const ticketRepository = {
       where: {
         AND: [
           ticketScopeWhere(user),
+          // The status filter selects what the reader was SHOWN, so it goes
+          // through the same derivation the badge does — see displayStatusWhere.
+          filter.status ? displayStatusWhere(filter.status) : {},
           {
-            ...(filter.status ? { status: filter.status } : {}),
             ...(filter.priority ? { priority: filter.priority } : {}),
             // `"none"` is the unassigned queue; a number is one agent's load.
             ...(filter.assigneeId != null
@@ -413,10 +434,16 @@ export const ticketRepository = {
     }));
   },
 
-  /** Ids of tickets still in `resolved` whose resolution is older than the cutoff. */
-  async findStaleResolved(cutoff: Date): Promise<number[]> {
+  /**
+   * Ids of tickets finished before the cutoff and still waiting to be confirmed.
+   *
+   * `pending` is where the work ends and the wait for the requester starts, and
+   * `resolved_at` is stamped on the way in — so this is "done N hours ago,
+   * nobody has confirmed", which is exactly what the auto-close sweep wants.
+   */
+  async findStalePending(cutoff: Date): Promise<number[]> {
     const rows = await prisma.ticket.findMany({
-      where: { status: "resolved", resolvedAt: { lte: cutoff } },
+      where: { status: "pending", resolvedAt: { lte: cutoff } },
       select: { id: true },
     });
     return rows.map((r) => r.id);
@@ -789,7 +816,13 @@ export const ticketRepository = {
         where: { id, status: current.status },
         data: {
           status,
-          ...(status === "resolved" ? { resolvedAt: new Date() } : {}),
+          // Pending is where the work finished, so that is where the resolution
+          // clock stops. Only stamped on the first arrival: a ticket rejected
+          // back to `new` and finished again keeps the time it was first done,
+          // which is what the SLA target was set against.
+          ...(status === "pending" && current.resolvedAt == null
+            ? { resolvedAt: new Date() }
+            : {}),
           ...(status === "closed" ? { closedAt: new Date() } : {}),
         },
       });

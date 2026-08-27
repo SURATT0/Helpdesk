@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
-import { STATUS_META, type TicketStatus } from "@/lib/domain";
+import { DISPLAY_STATUSES, STATUS_META } from "@/lib/domain";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
 import { matchesFilters, useSearch } from "../search-context";
@@ -13,14 +13,7 @@ import { SlaBadge } from "./sla-badge";
 import { useAssessSla } from "../use-sla";
 import { useTickets } from "../queries";
 
-const COLUMNS: TicketStatus[] = [
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-  "resolved",
-  "closed",
-];
+const COLUMNS = DISPLAY_STATUSES;
 
 export function TicketBoard() {
   const router = useRouter();
@@ -44,7 +37,7 @@ export function TicketBoard() {
   return (
     <div className="flex gap-3 overflow-x-auto p-4 sm:p-6">
       {COLUMNS.map((status) => {
-        const col = tickets.filter((x) => x.status === status);
+        const col = tickets.filter((x) => x.displayStatus === status);
         const meta = STATUS_META[status];
         return (
           <div key={status} className="flex w-[264px] flex-none flex-col">

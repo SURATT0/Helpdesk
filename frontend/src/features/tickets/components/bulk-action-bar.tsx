@@ -11,10 +11,7 @@ import { useBulkTicketAction, type BulkAction } from "../queries";
 
 const STATUSES: TicketStatus[] = [
   "new",
-  "open",
-  "in_progress",
   "pending",
-  "resolved",
   "closed",
 ];
 const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];

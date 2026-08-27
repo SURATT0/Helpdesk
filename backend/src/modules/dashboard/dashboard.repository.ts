@@ -1,17 +1,17 @@
-import type { Priority, TicketStatus } from "../../shared/domain";
+import {
+  displayStatus,
+  DISPLAY_STATUSES,
+  type DisplayStatus,
+  type Priority,
+  type TicketStatus,
+} from "../../shared/domain";
 import type { AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { ticketScopeWhere } from "../tickets/ticket.scope";
 
-const ACTIVE: TicketStatus[] = ["new", "open", "in_progress", "pending"];
-const ALL_STATUS: TicketStatus[] = [
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-  "resolved",
-  "closed",
-];
+// Work still on the desk. One value now: New and In Progress are both `new`,
+// and `pending` is finished work waiting on the requester.
+const ACTIVE: TicketStatus[] = ["new"];
 const ALL_PRIORITY: Priority[] = ["critical", "high", "medium", "low"];
 const HOUR = 3_600_000;
 
@@ -25,7 +25,7 @@ export type DashboardSummary = {
     slaAtRisk: number;
     slaBreachUnder1h: number;
   };
-  byStatus: { status: TicketStatus; count: number }[];
+  byStatus: { status: DisplayStatus; count: number }[];
   openByPriority: { priority: Priority; count: number }[];
 };
 
@@ -39,8 +39,11 @@ export const dashboardRepository = {
     const [total, grouped, active, resolved, closedThisWeek] =
       await Promise.all([
         prisma.ticket.count({ where: scope }),
+        // Grouped by the two columns the DISPLAYED status is derived from, not by
+        // status alone: New and In Progress are the same stored value, so a
+        // group-by on status could never tell those two bars apart.
         prisma.ticket.groupBy({
-          by: ["status"],
+          by: ["status", "assigneeId"],
           where: scope,
           _count: { _all: true },
         }),
@@ -57,8 +60,12 @@ export const dashboardRepository = {
         }),
       ]);
 
-    const statusCount = new Map(grouped.map((g) => [g.status, g._count._all]));
-    const byStatus = ALL_STATUS.map((status) => ({
+    const statusCount = new Map<DisplayStatus, number>();
+    for (const g of grouped) {
+      const key = displayStatus(g);
+      statusCount.set(key, (statusCount.get(key) ?? 0) + g._count._all);
+    }
+    const byStatus = DISPLAY_STATUSES.map((status) => ({
       status,
       count: statusCount.get(status) ?? 0,
     }));

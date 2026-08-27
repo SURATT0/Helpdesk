@@ -1,6 +1,34 @@
 import { Prisma } from "@prisma/client";
 import { isPlatformWide, type AuthUser } from "../../shared/auth";
-import type { Role } from "../../shared/domain";
+import type { DisplayStatus, Role } from "../../shared/domain";
+
+/**
+ * One display status as a where-clause — the reverse of `displayStatus`.
+ *
+ * A filter has to select what the reader was shown, and "In Progress" is not a
+ * value in the column: it is `new` plus an assignee. Written here, next to the
+ * other clause builders, so the list, the board and the dashboard narrow the
+ * same way; asking the database for `status = 'in_progress'` would answer with
+ * the pre-migration rows only.
+ *
+ * Only the three stored values are matched — the column cannot hold the older
+ * words any more (see the three_state_ticket_status migration), and history rows
+ * that still do are read through `displayStatus`, never filtered on here.
+ */
+export function displayStatusWhere(
+  status: DisplayStatus,
+): Prisma.TicketWhereInput {
+  switch (status) {
+    case "closed":
+      return { status: "closed" };
+    case "pending":
+      return { status: "pending" };
+    case "in_progress":
+      return { status: "new", assigneeId: { not: null } };
+    case "new":
+      return { status: "new", assigneeId: null };
+  }
+}
 
 /**
  * Row-level ticket visibility as a Prisma where-clause — the single source of

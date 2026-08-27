@@ -1,7 +1,7 @@
 "use client";
 
 import { STATUS_META, PRIORITY_META } from "@/lib/domain";
-import type { TicketStatus, Priority } from "@/lib/domain";
+import type { DisplayStatus, Priority, TicketStatusRecord } from "@/lib/domain";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,11 @@ export function StatusBadge({
   caret,
   className,
 }: {
-  status: TicketStatus;
+  /**
+   * Any status word that can be shown: a DisplayStatus off a ticket row, or the
+   * older vocabulary a history row was written with.
+   */
+  status: DisplayStatus | TicketStatusRecord;
   caret?: boolean;
   className?: string;
 }) {

@@ -4,13 +4,70 @@
  * priority `low | medium | high | critical`.
  */
 
-export type TicketStatus =
-  | "new"
+/**
+ * What a ticket is stored as, mirroring the API's enum.
+ *
+ *   new      nobody has finished it — the queue, whether or not it is taken
+ *   pending  the work is done and it is waiting on the requester
+ *   closed   over
+ *
+ * The flow a person sees has four steps (New → In Progress → Pending → Closed);
+ * the column has three, because In Progress is `new` with an assignee. Anything
+ * that RENDERS a status wants DisplayStatus below, not this.
+ */
+export type TicketStatus = "new" | "pending" | "closed";
+
+/**
+ * The vocabulary a ticket's history can hold, which is wider than what can be
+ * stored today: `ticket_status_history` is append-only, so rows written before
+ * the three-value model still say `open`, `in_progress` and `resolved`.
+ */
+export type TicketStatusRecord =
+  | TicketStatus
   | "open"
   | "in_progress"
-  | "pending"
-  | "resolved"
-  | "closed";
+  | "resolved";
+
+/**
+ * What a reader is shown, which is not the same set as what is stored.
+ *
+ * Mirrors `DisplayStatus` in the API's shared/domain. "In Progress" is not a
+ * status a ticket is put into — it is the answer to "is anyone on this?", which
+ * the row already knows from its assignee. The server sends both values on every
+ * ticket: `status` to send back on a write, `displayStatus` to render.
+ */
+export type DisplayStatus = "new" | "in_progress" | "pending" | "closed";
+
+/** Display statuses in flow order — board columns and filter options read this. */
+export const DISPLAY_STATUSES: readonly DisplayStatus[] = [
+  "new",
+  "in_progress",
+  "pending",
+  "closed",
+];
+
+/**
+ * The client-side copy of the derivation, for the few places that hold a ticket
+ * shape the server did not build (an optimistic row mid-mutation). Prefer the
+ * `displayStatus` field the API sends; this exists so those places cannot invent
+ * a different rule.
+ */
+export function displayStatus(ticket: {
+  status: TicketStatusRecord;
+  assigneeId: number | null;
+}): DisplayStatus {
+  switch (ticket.status) {
+    case "closed":
+      return "closed";
+    case "pending":
+    case "resolved":
+      return "pending";
+    case "in_progress":
+      return "in_progress";
+    default:
+      return ticket.assigneeId != null ? "in_progress" : "new";
+  }
+}
 
 export type Priority = "low" | "medium" | "high" | "critical";
 
@@ -38,8 +95,14 @@ export function isInternalThread(requesterRole: Role): boolean {
   return requesterRole !== "user";
 }
 
+/**
+ * Label and colour per status word. Keyed by the union of what is DISPLAYED and
+ * what history can hold, because both go through the same badge: a board column
+ * says "In Progress" (derived) while a timeline row may still say "Resolved"
+ * (written before the column narrowed).
+ */
 export const STATUS_META: Record<
-  TicketStatus,
+  DisplayStatus | TicketStatusRecord,
   { label: string; fg: string; bg: string }
 > = {
   new: { label: "New", fg: "#1d4ed8", bg: "#dbeafe" },
@@ -75,14 +138,14 @@ export const TEXT_MAX = {
 } as const;
 
 /**
- * Allowed status transitions (whitelist). The service layer would return
+ * Allowed status transitions (whitelist). The service returns
  * 409 ILLEGAL_TRANSITION for anything not listed here.
+ *
+ * Taking a ticket is missing on purpose: assigning it is what turns New into In
+ * Progress, and both are the same stored `new`.
  */
 export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  new: ["open", "in_progress"],
-  open: ["in_progress", "pending", "resolved"],
-  in_progress: ["pending", "resolved"],
-  pending: ["in_progress", "resolved"],
-  resolved: ["open", "closed"],
-  closed: ["open"],
+  new: ["pending", "closed"],
+  pending: ["new", "closed"],
+  closed: ["new"],
 };

@@ -49,29 +49,57 @@ test("a real double-click sends only one create request", async ({ page }) => {
     }
   });
 
-  // Hold the create request open so the second click lands while the first is
-  // still in flight — otherwise the response returns first and there is no race.
-  await page.route("**/api/v1/tickets", async (route) => {
-    if (route.request().method() !== "POST") return route.fallback();
-    await new Promise((r) => setTimeout(r, 2_000));
-    await route.fallback();
+  /**
+   * Hold the create open until this test lets it go, so the second click is
+   * guaranteed to land while the first is still in flight.
+   *
+   * A timed hold (`sleep 2s`, then continue) does not guarantee that: under a
+   * parallel run the response could still beat the second click, and then the
+   * dialog was already gone and the click landed on nothing — which looks
+   * exactly like the guard working, because no second request was sent either.
+   */
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
   });
+  await page.route(
+    (url) => /\/api\/v1\/tickets(\?|$)/.test(url.href),
+    async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      await held;
+      await route.continue();
+    },
+  );
 
   await openCreateModal(page);
   await fillForm(page, `Double click probe ${Date.now()}`, "Clicked twice.");
 
-  // Real mouse clicks 60ms apart — a brisk human double-click. Driven through
-  // page.mouse rather than locator.click so the second click is still delivered
-  // to the (now disabled) button instead of waiting for it to become enabled.
-  const box = (await page
-    .getByRole("button", { name: "Create ticket" })
-    .boundingBox())!;
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.click(x, y);
+  // Two presses 60ms apart — a brisk human double-click. Both go through the
+  // locator, which re-finds the button at click time; the second is `force`d so
+  // it is delivered to the button while DISABLED instead of waiting for it to
+  // come back, which is the case under test.
+  //
+  // Not page.mouse coordinates: measuring the box before the first click and
+  // reusing the numbers is a trap. The dialog reflows (the KB deflection panel
+  // renders late), the stale point lands on the backdrop instead of the button,
+  // the backdrop CLOSES the dialog — and the test then reads as "the guard
+  // worked", because no second request was sent and no first one either.
+  // Matched on either label: the button renames itself to "Creating…" while the
+  // mutation is in flight, so a locator pinned to "Create ticket" stops matching
+  // the moment the first press lands — which reads as the dialog having vanished.
+  const submit = page.getByRole("button", { name: /Create ticket|Creating/ });
+  await submit.click();
+  // The press landed and the create is in flight: same button, new label, and
+  // disabled — which is the guard this test is about.
+  await expect(submit).toHaveText(/Creating/);
+  await expect(submit).toBeDisabled();
   await page.waitForTimeout(60);
-  await page.mouse.click(x, y);
+  await submit.click({ force: true });
 
+  // Only now may the server answer, so the count above is settled: whatever the
+  // second press did, it did while the first was unanswered.
+  expect(posts).toBe(1);
+  release();
   await expect(page).toHaveURL(/\/tickets\/\d+/, { timeout: 20_000 });
   expect(posts).toBe(1);
 });
@@ -179,30 +207,32 @@ test("a stale second screen is refused with the server's reason, not a silent no
     await expect(screenA).toHaveURL(/\/tickets\/\d+/, { timeout: 15_000 });
     const url = screenA.url();
 
-    // Both screens now agree the ticket is `open`.
-    await screenA.getByRole("button", { name: /New/i }).first().click();
-    await screenA.getByRole("button", { name: /^Open$/ }).click();
-    await expect(screenA.getByText("Open").first()).toBeVisible();
+    // The badge shows the DERIVED state, which is New or In Progress depending on
+    // whether routing put someone on the new ticket — either way it is unfinished,
+    // which is what both screens start out agreeing on.
+    const unfinished = /New|In Progress/;
+    await expect(screenA.getByText(unfinished).first()).toBeVisible();
 
     await login(screenB);
     await screenB.goto(url);
-    await expect(screenB.getByText("Open").first()).toBeVisible();
+    await expect(screenB.getByText(unfinished).first()).toBeVisible();
 
-    // Screen A finishes the ticket.
-    await screenA.getByRole("button", { name: /Open/i }).first().click();
-    await screenA.getByRole("button", { name: /^Resolved$/ }).click();
-    await expect(screenA.getByText("Resolved").first()).toBeVisible();
+    // Screen A closes it outright — the desk raised this one itself, so there is
+    // nobody to confirm and `new → closed` is a legal end.
+    await screenA.getByRole("button", { name: unfinished }).first().click();
+    await screenA.getByRole("button", { name: /^Closed$/ }).click();
+    await expect(screenA.getByText("Closed").first()).toBeVisible();
 
-    // Screen B still believes it is `open` and offers `pending`. The server must
-    // refuse it — resolved → pending is not in the whitelist — and screen B must
-    // SAY so rather than appear to have worked.
-    await screenB.getByRole("button", { name: /Open/i }).first().click();
+    // Screen B still believes it is unfinished and offers Pending. The server must
+    // refuse it — closed → pending is not in the whitelist, a closed ticket can
+    // only be reopened — and screen B must SAY so rather than appear to work.
+    await screenB.getByRole("button", { name: unfinished }).first().click();
     await screenB.getByRole("button", { name: /^Pending$/ }).click();
     // The exact sentence, so this cannot pass on some other error appearing:
     // the 409 has to name the transition the stale screen actually attempted.
     await expect(
       screenB
-        .getByText('Cannot move ticket from "resolved" to "pending"')
+        .getByText('Cannot move ticket from "closed" to "pending"')
         .first(),
     ).toBeVisible({ timeout: 10_000 });
   } finally {

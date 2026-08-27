@@ -68,14 +68,13 @@ type SortKey =
 
 type SortState = { key: SortKey; dir: "asc" | "desc" };
 
-// spec status order: new → open → in_progress → pending → resolved → closed
-const STATUS_ORDER: Record<Ticket["status"], number> = {
+// Flow order of what the column actually shows, so sorting agrees with the
+// badges: New → In Progress → Pending → Closed.
+const STATUS_ORDER: Record<Ticket["displayStatus"], number> = {
   new: 0,
-  open: 1,
-  in_progress: 2,
-  pending: 3,
-  resolved: 4,
-  closed: 5,
+  in_progress: 1,
+  pending: 2,
+  closed: 3,
 };
 
 // critical is most severe → lowest rank, so ascending puts Critical first
@@ -96,7 +95,8 @@ const COMPARATORS: Record<
 > = {
   id: (a, b) => a.id - b.id,
   subject: (a, b) => a.subject.localeCompare(b.subject),
-  status: (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status],
+  status: (a, b) =>
+    STATUS_ORDER[a.displayStatus] - STATUS_ORDER[b.displayStatus],
   priority: (a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority],
   assignee: (a, b) =>
     (a.assignee ?? "￿").localeCompare(b.assignee ?? "￿"),
@@ -363,7 +363,7 @@ export function TicketTable() {
               ) : null}
             </span>
             <span>
-              <StatusBadge status={t.status} />
+              <StatusBadge status={t.displayStatus} />
             </span>
             <span>
               <SlaBadge sla={sla} />

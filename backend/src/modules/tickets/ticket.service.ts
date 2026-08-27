@@ -339,7 +339,10 @@ export const ticketService = {
       throw IllegalTransition(ticket.status, next);
     }
     // Reopen is only allowed within 30 days of closing; beyond that, a new ticket.
-    if (ticket.status === "closed" && next === "open" && ticket.closedAt) {
+    // Reopening comes back as `new`, and the assignee is left alone: the person
+    // who closed it is the one who knows it, so it returns as their In Progress
+    // rather than into the unassigned queue.
+    if (ticket.status === "closed" && next === "new" && ticket.closedAt) {
       if (Date.now() - Date.parse(ticket.closedAt) > REOPEN_WINDOW_MS) {
         throw ReopenWindowExpired();
       }
@@ -455,20 +458,21 @@ export const ticketService = {
   },
 
   /**
-   * Auto-close tickets left in `resolved` for more than 72h (no confirmation /
-   * reopen). Runs as a system action (no actor) — reuses updateStatus so a
+   * Auto-close tickets left in `pending` for more than 72h — finished work the
+   * requester never came back to confirm, which is what pending now means.
+   * Runs as a system action (no actor) — reuses updateStatus so a
    * status-history row, audit entry, and notifications are written. Returns the
    * number of tickets actually closed. Invoked by the scheduler in server.ts.
    *
-   * A ticket the requester reopens between the scan and its write is skipped,
-   * not retried: `updateStatus` compare-and-swaps on `resolved`, so it raises a
+   * A ticket that moves between the scan and its write is skipped, not retried:
+   * `updateStatus` compare-and-swaps on `pending`, so it raises a
    * 409 rather than closing a ticket that is open again. That is the right
    * outcome for one ticket and must not abort the sweep for the rest, so each
    * write is isolated and the count reports what really closed.
    */
   async autoCloseStale(now: Date = new Date()): Promise<number> {
     const cutoff = new Date(now.getTime() - AUTO_CLOSE_MS);
-    const ids = await ticketRepository.findStaleResolved(cutoff);
+    const ids = await ticketRepository.findStalePending(cutoff);
     let closed = 0;
     for (const id of ids) {
       try {
@@ -479,7 +483,7 @@ export const ticketService = {
           (err.code === "CONCURRENT_STATUS_CHANGE" ||
             err.code === "ILLEGAL_TRANSITION")
         ) {
-          continue; // moved out of `resolved` under us — no longer ours to close
+          continue; // moved out of `pending` under us — no longer ours to close
         }
         throw err;
       }

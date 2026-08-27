@@ -9,21 +9,14 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
-import type { Priority, TicketStatus } from "@/lib/domain";
+import { DISPLAY_STATUSES, type Priority } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { toneForName } from "../data";
 import { useSearch, type AssigneeKey } from "../search-context";
 import type { SlaState } from "../sla";
 import { SlaStateLabel } from "./sla-badge";
 
-const STATUSES: TicketStatus[] = [
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-  "resolved",
-  "closed",
-];
+const STATUSES = DISPLAY_STATUSES;
 const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];
 
 // Worst first, same order the SLA column sorts in. `met` and `no_sla` are left

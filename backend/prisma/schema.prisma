@@ -15,7 +15,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// What a ticket can be stored as. Three values: the work is waiting (`new`),
+/// finished and waiting on the requester (`pending`), or over (`closed`).
+///
+/// "In Progress" is deliberately absent — it is `new` with an assignee, derived
+/// on read by `displayStatus`. Keeping it out of the column is what stops the
+/// two facts disagreeing: a status of its own could say nobody is on a ticket
+/// that has an assignee, or claim work on one that has none.
 enum TicketStatus {
+  new
+  pending
+  closed
+}
+
+/// The vocabulary `ticket_status_history` was written with, which is wider than
+/// what can be stored today: rows from before the three-value model name `open`,
+/// `in_progress` and `resolved`. That table is append-only and the SLA source of
+/// truth, so its words are left as they were rather than rewritten into
+/// something nobody chose — a `new → new` transition would be a lie about what
+/// happened. Readers map them with `displayStatus`.
+enum TicketStatusRecord {
   new
   open
   in_progress
@@ -310,8 +329,8 @@ model TicketStatusHistory {
   id          Int           @id @default(autoincrement())
   ticketId    Int           @map("ticket_id")
   ticket      Ticket        @relation(fields: [ticketId], references: [id])
-  fromStatus  TicketStatus? @map("from_status")
-  toStatus    TicketStatus  @map("to_status")
+  fromStatus  TicketStatusRecord? @map("from_status")
+  toStatus    TicketStatusRecord  @map("to_status")
   changedById Int?          @map("changed_by_id")
   changedBy   User?         @relation(fields: [changedById], references: [id])
   createdAt   DateTime      @default(now()) @map("created_at")

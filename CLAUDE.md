@@ -34,11 +34,31 @@ Per-directory conventions live in `frontend/CLAUDE.md` and `backend/CLAUDE.md`.
 
 These are load-bearing invariants — get them right in whatever layer you touch.
 
-- **Ticket status enum:** `new → open → in_progress → pending → resolved → closed`. Transitions are
-  guarded by a whitelist in the ticket service; an illegal jump returns **409 ILLEGAL_TRANSITION**.
-  `pending ⇄ in_progress`, `resolved → open` (requester rejects), `resolved → closed` (confirm or
-  72h auto-close), `closed → open` (reopen ≤ 30 days, else new ticket). Every transition appends a
-  `ticket_status_history` row (the SLA source of truth) and fires a notification.
+- **Ticket status: three stored values, four shown.** `tickets.status` holds **`new | pending |
+  closed`** only. **"In Progress" is a derived state, never a column value** — it is `new` with an
+  assignee, so the flow a person sees is `New → In Progress → Pending → Closed`. The derivation lives
+  in exactly one function per side, `displayStatus` in `shared/domain.ts` and `lib/domain.ts`; every
+  badge, board column, chart and filter goes through it, and its reverse (`displayStatusWhere` in
+  `ticket.scope.ts`) is how a filter for a shown value becomes a WHERE clause. Never re-derive it
+  inline, and never render `status` — the ticket DTO carries both `status` (to send back on a write)
+  and `displayStatus` (to show).
+  Transitions are guarded by a whitelist in the ticket service; an illegal jump returns **409
+  ILLEGAL_TRANSITION**. `new → pending` (work done, requester asked to confirm), `new → closed` (the
+  desk raised it and finished it), `pending → new` (requester rejects, or more work turns up),
+  `pending → closed` (confirmed, or the 72h auto-close), `closed → new` (reopen ≤ 30 days — the
+  assignee is KEPT, so it returns as In Progress; beyond 30 days, a new ticket). Taking a ticket is
+  not a transition: assignment is what makes it In Progress. Every transition appends a
+  `ticket_status_history` row and fires a notification.
+  **`pending` means finished work awaiting confirmation** (what `resolved` used to mean), so
+  `resolved_at` is stamped on the first arrival there and the SLA resolution clock stops —
+  `SLA_ACTIVE_STATUSES` is `["new"]` alone.
+  **History keeps the old vocabulary.** `ticket_status_history` is append-only and the SLA source of
+  truth, so rows written before this model still say `open`, `in_progress` and `resolved`; its columns
+  use the wider `TicketStatusRecord` enum and readers map them through `displayStatus`. Do not rewrite
+  those rows.
+- **Both report clocks start at the desk's first public reply** — not at a status change, which
+  stopped marking the pickup once In Progress became derived. First response = raise → that reply;
+  handling time = that reply → `closed`. An internal note is not a response.
 - **Priority enum:** `low | medium | high | critical`. `due_at` is computed from the SLA policy for
   the priority at creation time.
 - **Auto-assignment:** two mechanisms, composed. If the requester belongs to a project, the ticket is

@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { roleSchema } from "@/features/auth/schemas";
 
-export const ticketStatusSchema = z.enum([
+/** What a ticket may be stored as, and therefore what a write may send. */
+export const ticketStatusSchema = z.enum(["new", "pending", "closed"]);
+
+/**
+ * What a history row may say. Wider than the above: the table is append-only, so
+ * rows from before the three-value model still carry `open`, `in_progress` and
+ * `resolved`.
+ */
+export const ticketStatusRecordSchema = z.enum([
   "new",
   "open",
   "in_progress",
@@ -12,11 +20,24 @@ export const ticketStatusSchema = z.enum([
 
 export const prioritySchema = z.enum(["low", "medium", "high", "critical"]);
 
+/** What the reader sees. Four values — "In Progress" is derived server-side. */
+export const displayStatusSchema = z.enum([
+  "new",
+  "in_progress",
+  "pending",
+  "closed",
+]);
+
 export const ticketSchema = z.object({
   id: z.number(),
   subject: z.string(),
   description: z.string(),
   status: ticketStatusSchema,
+  /**
+   * The status to RENDER. Sent by the server alongside `status` so the two can
+   * never be derived differently on each side; see DisplayStatus in lib/domain.
+   */
+  displayStatus: displayStatusSchema,
   priority: prioritySchema,
   requester: z.string(),
   requesterEmail: z.string(),

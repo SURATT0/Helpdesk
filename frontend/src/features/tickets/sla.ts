@@ -115,7 +115,9 @@ export function judgeSla(
   const due = dueAt ? Date.parse(dueAt) : NaN;
   if (Number.isNaN(due)) return { state: "no_sla", minutesDelta: null };
 
-  if (status === "resolved" || status === "closed") {
+  // Finished: pending means the work is done and `resolved_at` is stamped, so
+  // there is a verdict rather than a countdown. Same rule as the API's deriveSla.
+  if (status === "pending" || status === "closed") {
     const done = resolvedAt ? Date.parse(resolvedAt) : NaN;
     // No recorded finish time leaves nothing to judge against; the backend calls
     // that "met" rather than inventing a breach, and so do we.

@@ -344,8 +344,9 @@ export function TicketDetailView({ id }: { id: number }) {
   }
 
   const canWrite = user ? WRITE_ROLES.includes(user.role) : false;
+  // "Done, over to the requester" — the move that finishes the desk's part.
   const canResolve =
-    canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("resolved");
+    canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("pending");
   // Deleting a ticket is the escape hatch for a row that should never have
   // existed, so it sits at the top tier — closing is the normal end of the line.
   const canDelete = user?.role === "super_admin";
@@ -427,7 +428,7 @@ export function TicketDetailView({ id }: { id: number }) {
                   <button
                     type="button"
                     onClick={() =>
-                      statusMutation.mutate({ id: ticket.id, status: "resolved" })
+                      statusMutation.mutate({ id: ticket.id, status: "pending" })
                     }
                     disabled={statusMutation.isPending}
                     className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
