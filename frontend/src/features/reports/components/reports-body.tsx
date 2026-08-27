@@ -259,9 +259,9 @@ export function ReportsBody() {
                 {t(`priority.${r.priority}`)}
               </span>
               <span className="flex items-center gap-2.5">
-                <span className="h-[7px] flex-1 overflow-hidden rounded-[4px] bg-fill">
+                <span className="h-[7px] flex-1 overflow-hidden rounded bg-fill">
                   <span
-                    className="block h-full rounded-[4px]"
+                    className="block h-full rounded"
                     style={{ width: `${r.compliancePct}%`, background: color }}
                   />
                 </span>
@@ -336,9 +336,9 @@ export function ReportsBody() {
             >
               <span className="truncate text-subtle">{r.category}</span>
               <span className="flex items-center gap-2.5">
-                <span className="h-[7px] flex-1 overflow-hidden rounded-[4px] bg-fill">
+                <span className="h-[7px] flex-1 overflow-hidden rounded bg-fill">
                   <span
-                    className="block h-full rounded-[4px]"
+                    className="block h-full rounded"
                     style={{ width: `${r.compliancePct}%`, background: "#3f8f5e" }}
                   />
                 </span>

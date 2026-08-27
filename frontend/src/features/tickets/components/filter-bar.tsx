@@ -111,7 +111,7 @@ function FacetDropdown<T extends string | number>({
                 >
                   <span
                     className={cn(
-                      "grid h-3.5 w-3.5 flex-none place-items-center rounded-[4px] border",
+                      "grid h-3.5 w-3.5 flex-none place-items-center rounded border",
                       checked
                         ? "border-brand bg-brand text-white"
                         : "border-dim",

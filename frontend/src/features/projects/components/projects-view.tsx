@@ -127,7 +127,7 @@ export function ProjectsView() {
           <TableScroll minWidth={760}>
               <div
                 className={cn(
-                  "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-[0.02em] text-faint",
+                  "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-columns text-faint",
                   COLS,
                 )}
               >

@@ -22,7 +22,7 @@ function Section({
 }) {
   return (
     <div className={first ? "" : "border-t border-hairline pt-4"}>
-      <div className="mb-2.5 text-eyebrow font-semibold uppercase tracking-[0.08em] text-faint">
+      <div className="mb-2.5 text-eyebrow font-semibold uppercase tracking-eyebrow text-faint">
         {title}
       </div>
       {children}
@@ -75,7 +75,7 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
       </Section>
 
       <Section title="SLA">
-        <div className="flex items-center justify-between rounded-[9px] border border-line bg-wash px-3.5 py-3">
+        <div className="flex items-center justify-between rounded-tile border border-line bg-wash px-3.5 py-3">
           <span className="text-dense font-semibold text-muted">
             {t("rail.resolutionDue")}
           </span>

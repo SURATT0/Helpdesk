@@ -81,7 +81,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
   }
 
   return (
-    <div className="rounded-[9px] border border-line bg-wash p-3">
+    <div className="rounded-tile border border-line bg-wash p-3">
       <div className="flex flex-wrap items-start gap-2">
         <span className="min-w-0 flex-1 text-body font-semibold leading-snug text-ink">
           {ticket.problem.title}
@@ -98,7 +98,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
       {full?.workaround ? (
         // The reason a known error is worth linking: the fix is already known.
         <div className="mt-2 rounded-md border border-warn-edge bg-warn-tint p-2">
-          <div className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-warn">
+          <div className="text-eyebrow font-semibold uppercase tracking-eyebrow text-warn">
             {t("problem.workaround")}
           </div>
           <div className="mt-1 whitespace-pre-wrap text-dense leading-relaxed text-[#78350f]">
@@ -129,7 +129,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
 
       {full?.rootCause ? (
         <div className="mt-2">
-          <div className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-faint">
+          <div className="text-eyebrow font-semibold uppercase tracking-eyebrow text-faint">
             {t("problem.rootCause")}
           </div>
           <div className="mt-0.5 whitespace-pre-wrap text-dense leading-relaxed text-subtle">

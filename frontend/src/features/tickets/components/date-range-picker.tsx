@@ -295,7 +295,7 @@ export function DateRangePicker({
                       mode switch to somewhere already on screen. */}
                   <div
                     className={cn(
-                      "mb-1 text-meta font-semibold tracking-[0.02em]",
+                      "mb-1 text-meta font-semibold tracking-columns",
                       value != null && activePreset === null
                         ? "text-brand-hover"
                         : "text-faint",

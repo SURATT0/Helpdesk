@@ -23,7 +23,7 @@ export function DashboardGreeting() {
 
   return (
     <div className="flex items-baseline gap-3">
-      <h1 className="text-greeting font-bold tracking-[-0.01em] text-ink">
+      <h1 className="text-greeting font-bold tracking-heading text-ink">
         {t(greetingKey(now.getHours()))}
         {firstName ? `, ${firstName}` : ""}
       </h1>

@@ -44,7 +44,7 @@ function Checkbox({ checked }: { checked: boolean }) {
   return (
     <span
       className={cn(
-        "relative inline-block h-3.5 w-3.5 rounded-[4px]",
+        "relative inline-block h-3.5 w-3.5 rounded",
         checked ? "bg-brand" : "border-[1.5px] border-dim",
       )}
     >
@@ -222,7 +222,7 @@ export function TicketTable() {
       {/* header */}
       <div
         className={cn(
-          "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-[0.02em] text-faint",
+          "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-columns text-faint",
           COLS,
         )}
       >
@@ -235,7 +235,7 @@ export function TicketTable() {
           // 40px wide, not the usual 44: the checkbox column is 40px, and a
           // wider box spilled 4px onto the ID sort button beside it, so the far
           // left of that header toggled select-all instead of sorting.
-          className="grid w-fit place-items-center rounded-[4px] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
+          className="grid w-fit place-items-center rounded [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
         >
           <Checkbox checked={allSelected} />
         </button>
@@ -341,7 +341,7 @@ export function TicketTable() {
               // checkbox is not reachable with a finger, which made bulk selection
               // a desktop-only feature by accident. 40px wide to stay inside the
               // column — see the select-all above.
-              className="grid w-fit place-items-center rounded-[4px] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
+              className="grid w-fit place-items-center rounded [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
             >
               <Checkbox checked={isSel} />
             </button>

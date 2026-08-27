@@ -83,9 +83,9 @@ export default function LoginPage() {
           <LanguageToggle />
         </div>
 
-        <div className="rounded-[14px] border border-line bg-panel p-8 shadow-card">
+        <div className="rounded-panel border border-line bg-panel p-8 shadow-card">
           <div className="mb-6">
-            <h1 className="text-hero font-bold tracking-[-0.01em] text-ink">
+            <h1 className="text-hero font-bold tracking-heading text-ink">
               {t("login.welcome")}
             </h1>
             <p className="mt-1.5 text-lead leading-relaxed text-muted">

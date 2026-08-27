@@ -283,7 +283,7 @@ export function ImportTicketsModal({
       padding="sm:p-[44px]"
       panelClassName="max-w-[920px]"
     >
-      <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
+      <div className="overflow-hidden rounded-panel bg-white shadow-modal">
         <div className="flex items-center justify-between border-b border-hairline px-6 py-[18px]">
           <div>
             <div
@@ -330,7 +330,7 @@ export function ImportTicketsModal({
                 loadFile(e.dataTransfer.files?.[0]);
               }}
               className={cn(
-                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[9px] border-[1.5px] border-dashed px-4 py-10 text-center text-control transition-colors",
+                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-tile border-[1.5px] border-dashed px-4 py-10 text-center text-control transition-colors",
                 dragging
                   ? "border-brand bg-accent-soft text-brand-hover"
                   : "border-dim bg-wash text-muted",
@@ -410,7 +410,7 @@ export function ImportTicketsModal({
             <div className="max-h-[52vh] overflow-auto px-6">
               <table className="w-full border-collapse text-body">
                 <thead className="sticky top-0 bg-white">
-                  <tr className="text-left text-meta font-semibold uppercase tracking-[0.04em] text-faint">
+                  <tr className="text-left text-meta font-semibold uppercase tracking-columns text-faint">
                     <th className="w-8 pb-2" />
                     {FIELDS.map((f) => (
                       <th key={f} className="pb-2 pr-2">

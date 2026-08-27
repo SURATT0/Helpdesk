@@ -49,7 +49,7 @@ export function StatusMenu({ ticket }: { ticket: Ticket }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-md border border-line bg-white py-1 shadow-modal">
-            <div className="px-3 py-1 text-eyebrow font-semibold uppercase tracking-[0.06em] text-faint">
+            <div className="px-3 py-1 text-eyebrow font-semibold uppercase tracking-eyebrow text-faint">
               {t("status.moveTo")}
             </div>
             {nextStatuses.map((s) => (

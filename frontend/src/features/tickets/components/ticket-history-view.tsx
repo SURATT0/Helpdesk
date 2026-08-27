@@ -92,7 +92,7 @@ function GapMarker({ gap }: { gap: Gap }) {
   return (
     <div className="flex items-center gap-3 bg-app px-3 py-2 sm:px-4">
       <span className="h-px flex-1 bg-line" />
-      <span className="text-meta font-medium tracking-[0.02em] text-faint">
+      <span className="text-meta font-medium tracking-columns text-faint">
         {t(key, { n: gap.amount })}
       </span>
       <span className="h-px flex-1 bg-line" />
@@ -187,7 +187,7 @@ function FiltersButton({
                 <X size={16} />
               </button>
             </div>
-            <div className="mb-1 px-1 text-meta font-semibold tracking-[0.02em] text-faint">
+            <div className="mb-1 px-1 text-meta font-semibold tracking-columns text-faint">
               {t("closedLog.col.priority")}
             </div>
             {(["", ...PRIORITIES] as (Priority | "")[]).map((value) => {
