@@ -89,7 +89,7 @@ export function KbArticlePicker({
               >
                 <span
                   className={cn(
-                    "mt-[3px] grid h-3.5 w-3.5 flex-none place-items-center rounded-[4px] border",
+                    "mt-[3px] grid h-3.5 w-3.5 flex-none place-items-center rounded border",
                     active ? "border-brand bg-brand text-white" : "border-dim",
                   )}
                 >

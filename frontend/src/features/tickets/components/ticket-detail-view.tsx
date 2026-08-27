@@ -117,7 +117,7 @@ function MessageBubble({
           >
             <span className="text-control font-semibold text-ink">{author}</span>
             {internal ? (
-              <span className="rounded-[9px] bg-warn-bg px-2 py-0.5 text-eyebrow font-bold tracking-[0.06em] text-warn">
+              <span className="rounded-tile bg-warn-bg px-2 py-0.5 text-eyebrow font-bold tracking-eyebrow text-warn">
                 {t("detail.internalNote")}
               </span>
             ) : null}
@@ -489,7 +489,7 @@ export function TicketDetailView({ id }: { id: number }) {
             200-character subject — the longest the API accepts, and it may have
             no spaces in it — from widening the document instead of wrapping. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="min-w-0 break-words text-subject font-bold tracking-[-0.01em] text-ink">
+          <h1 className="min-w-0 break-words text-subject font-bold tracking-heading text-ink">
             {ticket.subject}
           </h1>
           <StatusBadge status={ticket.displayStatus} />
@@ -566,7 +566,7 @@ export function TicketDetailView({ id }: { id: number }) {
                     <React.Fragment key={`unread-${m.key}`}>
                       <div className="my-3 flex items-center gap-2" role="separator">
                         <span className="h-px flex-1 bg-danger-edge" />
-                        <span className="text-meta font-bold uppercase tracking-[0.06em] text-danger">
+                        <span className="text-meta font-bold uppercase tracking-eyebrow text-danger">
                           {t("chat.unreadDivider")}
                         </span>
                         <span className="h-px flex-1 bg-danger-edge" />

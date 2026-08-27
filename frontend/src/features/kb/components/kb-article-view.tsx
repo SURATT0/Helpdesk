@@ -67,7 +67,7 @@ export function KbArticleView({ id }: { id: string }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 font-mono text-eyebrow font-semibold text-brand-hover">
+        <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-eyebrow font-semibold text-brand-hover">
           {a.id}
         </span>
         <span className="rounded-full bg-fill px-2 py-0.5 text-meta font-medium text-subtle">
@@ -80,7 +80,7 @@ export function KbArticleView({ id }: { id: string }) {
         </span>
       </div>
 
-      <h1 className="text-hero font-bold tracking-[-0.01em] text-ink">
+      <h1 className="text-hero font-bold tracking-heading text-ink">
         {a.title}
       </h1>
       <div className="text-caption text-faint">

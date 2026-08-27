@@ -107,7 +107,7 @@ export function Sidebar() {
               href={href}
               onClick={() => setOpen(false)}
               className={cn(
-                "flex items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-control font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-nav px-2.5 py-2 text-control font-medium transition-colors",
                 active
                   ? "bg-accent-soft font-semibold text-brand-hover"
                   : "text-subtle hover:bg-app",
@@ -120,7 +120,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto flex items-center gap-2.5 rounded-[9px] border border-line bg-wash p-2.5">
+      <div className="mt-auto flex items-center gap-2.5 rounded-tile border border-line bg-wash p-2.5">
         <Avatar name={user?.name ?? "…"} size={30} />
         <div className="min-w-0 leading-tight">
           <div className="truncate text-body font-semibold text-ink">

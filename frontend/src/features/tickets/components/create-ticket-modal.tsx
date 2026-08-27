@@ -174,7 +174,7 @@ export function CreateTicketModal({
       padding="sm:p-[44px]"
       panelClassName="max-w-[712px]"
     >
-      <div className="overflow-hidden rounded-[14px] bg-white shadow-modal">
+      <div className="overflow-hidden rounded-panel bg-white shadow-modal">
         <div className="flex items-center justify-between border-b border-hairline px-6 py-[18px]">
           <div>
             <div id="create-ticket-title" className="text-field font-bold text-ink">
@@ -214,8 +214,8 @@ export function CreateTicketModal({
 
           {/* KB deflection — live suggestions from the subject */}
           {suggestions.length > 0 ? (
-            <div className="rounded-[9px] border border-accent-line bg-accent-soft px-3.5 py-3">
-              <div className="mb-2 text-meta font-bold tracking-[0.06em] text-brand-hover">
+            <div className="rounded-tile border border-accent-line bg-accent-soft px-3.5 py-3">
+              <div className="mb-2 text-meta font-bold tracking-eyebrow text-brand-hover">
                 {t("create.suggested")}
               </div>
               <div className="flex flex-col gap-1.5 text-body">
@@ -226,7 +226,7 @@ export function CreateTicketModal({
                     target="_blank"
                     className="flex items-center gap-2 rounded-sm px-1 py-0.5 hover:bg-accent-edge"
                   >
-                    <span className="rounded-[4px] bg-accent-edge px-1.5 py-0.5 font-mono text-counter font-semibold text-brand-hover">
+                    <span className="rounded bg-accent-edge px-1.5 py-0.5 font-mono text-counter font-semibold text-brand-hover">
                       {a.id}
                     </span>
                     <span className="font-medium text-[#2f6b46]">{a.title}</span>
@@ -325,7 +325,7 @@ export function CreateTicketModal({
                 addFiles(e.dataTransfer.files);
               }}
               className={cn(
-                "flex cursor-pointer flex-wrap items-center justify-center gap-1.5 rounded-[9px] border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
+                "flex cursor-pointer flex-wrap items-center justify-center gap-1.5 rounded-tile border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
                 dragging
                   ? "border-brand bg-accent-soft text-brand-hover"
                   : "border-dim bg-wash text-muted",

@@ -109,7 +109,7 @@ export function KbBrowser() {
               className="group flex flex-col gap-2 rounded-lg border border-line bg-panel p-4 transition-colors hover:border-brand"
             >
               <div className="flex items-center gap-2">
-                <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 font-mono text-eyebrow font-semibold text-brand-hover">
+                <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-eyebrow font-semibold text-brand-hover">
                   {a.id}
                 </span>
                 <span className="rounded-full bg-fill px-2 py-0.5 text-meta font-medium text-subtle">

@@ -10,7 +10,7 @@ export function Logo({
   return (
     <div className="flex items-center gap-2.5">
       <div
-        className="grid place-items-center rounded-[7px] bg-brand"
+        className="grid place-items-center rounded-nav bg-brand"
         style={{ width: size, height: size }}
       >
         <svg
@@ -27,7 +27,7 @@ export function Logo({
         </svg>
       </div>
       {showWordmark ? (
-        <span className="text-wordmark font-bold tracking-[-0.01em] text-ink">
+        <span className="text-wordmark font-bold tracking-heading text-ink">
           Deskly
           {ops ? (
             <span className="ml-1.5 align-[2px] rounded bg-brand/15 px-1.5 py-0.5 font-mono text-micro font-semibold text-brand">

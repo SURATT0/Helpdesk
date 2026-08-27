@@ -36,7 +36,7 @@ export function StatusBarChart() {
                     {b.count}
                   </span>
                   <div
-                    className="w-full rounded-t-[5px]"
+                    className="w-full rounded-t-bar"
                     style={{
                       height: `${(b.count / max) * 100}%`,
                       background: meta.color,
@@ -98,7 +98,7 @@ export function PriorityDonut() {
             {data.openByPriority.map((p) => (
               <div key={p.priority} className="flex items-center gap-2">
                 <span
-                  className="h-2.5 w-2.5 rounded-[3px]"
+                  className="h-2.5 w-2.5 rounded-swatch"
                   style={{ background: PRIORITY_CHART[p.priority].color }}
                 />
                 {t(`priority.${p.priority}`)}

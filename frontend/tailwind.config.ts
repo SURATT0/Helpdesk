@@ -160,10 +160,37 @@ const config: Config = {
         sans: ["var(--font-geist-sans)", "Geist", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "Geist Mono", "ui-monospace", "monospace"],
       },
+      /**
+       * Corners. `sm`/`md`/`lg` override Tailwind's; the rest of its scale is
+       * still there, and `rounded` (its 4px DEFAULT) is used directly — eleven
+       * places had written `rounded-[4px]` for the same 4px.
+       *
+       * The five below are the values the design uses that the scale has no
+       * step for. Named for the one thing each is: the design picked them per
+       * element rather than from a ramp, so a size name would be a lie about a
+       * ladder that does not exist.
+       */
       borderRadius: {
         lg: "10px",
         md: "8px",
         sm: "6px",
+        swatch: "3px", // a chart legend's colour chip
+        bar: "5px", // the cap on a chart bar
+        nav: "7px", // a sidebar row, and the logo mark
+        tile: "9px", // an inset box inside a card
+        panel: "14px", // a modal's own corner, and the login card
+      },
+      /**
+       * Letter spacing, by the job it does.
+       *
+       * Tailwind's own steps do not land on any of these (`wide` is 0.025em,
+       * `wider` 0.05em), so folding onto them would move type. Its scale is
+       * still available — `tracking-wide` is used once, deliberately.
+       */
+      letterSpacing: {
+        heading: "-0.01em", // display text, tightened optically
+        columns: "0.02em", // a table's column headers
+        eyebrow: "0.06em", // an uppercase micro label
       },
       boxShadow: {
         card: "0 2px 12px rgba(15,23,42,.08)",
