@@ -1,14 +1,8 @@
 import { z } from "zod";
 import { freeText, TEXT_MAX } from "../../shared/text";
 
-export const ticketStatus = z.enum([
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-  "resolved",
-  "closed",
-]);
+/** What a ticket may be SET to — the three stored values. */
+export const ticketStatus = z.enum(["new", "pending", "closed"]);
 
 export const priority = z.enum(["low", "medium", "high", "critical"]);
 
@@ -24,8 +18,22 @@ export const assigneeFilter = z.union([
   z.coerce.number().int().positive(),
 ]);
 
+/**
+ * The vocabulary a READER filters by — four values, "In Progress" among them.
+ * Deliberately not `ticketStatus`: that is what a row may be stored as, and the
+ * list is narrowed by what was shown (see `displayStatusWhere`). `open` and
+ * `resolved` are not accepted here even while rows still hold them, because
+ * nothing renders those words any more, so nothing can ask for them.
+ */
+export const displayStatus = z.enum([
+  "new",
+  "in_progress",
+  "pending",
+  "closed",
+]);
+
 export const listTicketsQuery = z.object({
-  status: ticketStatus.optional(),
+  status: displayStatus.optional(),
   priority: priority.optional(),
   assigneeId: assigneeFilter.optional(),
 });
@@ -73,13 +81,18 @@ export const closedHistoryQuery = z.object({
     .transform((v) => (v ? v : undefined)),
 });
 
-/** Statuses a reassignment touches by default: the work still in flight. */
-export const ACTIVE_STATUSES = [
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-] as const;
+/**
+ * Statuses a reassignment touches by default, and the same set that decides
+ * whether an account still holds work: everything that is not closed.
+ *
+ * `new` covers New and In Progress alike. `pending` is in here even though the
+ * desk has finished with it — the requester may reject it, and it would come
+ * back as `new` on whoever owned it, so it is not history the way a closed
+ * ticket is. One list, because "what a handover moves" and "what blocks closing
+ * an account" have to be the same set or the documented order (hand over, then
+ * close the account) does not actually clear the way.
+ */
+export const ACTIVE_STATUSES = ["new", "pending"] as const;
 
 /**
  * Hand one person's queue to another — the "agent is on leave / has left" case.

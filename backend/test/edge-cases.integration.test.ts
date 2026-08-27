@@ -393,18 +393,15 @@ describe("concurrent edits to one ticket", () => {
   it("serialised conflicting transitions: the second is refused with 409", async () => {
     const dana = await login("dana.reyes@acme.com");
     const id = await makeTicket(dana);
-    await request(app)
-      .patch(`${API}/tickets/${id}/status`)
-      .set(bearer(dana))
-      .send({ status: "open" });
 
     const first = await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(dana))
-      .send({ status: "resolved" });
+      .send({ status: "closed" });
     expect(first.status).toBe(200);
 
-    // resolved → pending is not in the whitelist.
+    // closed → pending is not in the whitelist: a closed ticket may only be
+    // reopened, so the second screen's move cannot be applied on top.
     const second = await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(dana))
@@ -421,7 +418,7 @@ describe("concurrent edits to one ticket", () => {
       request(app)
         .patch(`${API}/tickets/${id}/status`)
         .set(bearer(dana))
-        .send({ status: "open" }),
+        .send({ status: "pending" }),
       request(app)
         .patch(`${API}/tickets/${id}/priority`)
         .set(bearer(dana))
@@ -432,7 +429,7 @@ describe("concurrent edits to one ticket", () => {
 
     // Neither write may clobber the other — they touch disjoint columns.
     const row = await prisma.ticket.findUniqueOrThrow({ where: { id } });
-    expect(row.status).toBe("open");
+    expect(row.status).toBe("pending");
     expect(row.priority).toBe("critical");
   });
 });

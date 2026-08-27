@@ -28,7 +28,7 @@ function judge(
   return assessSla(
     {
       dueAt: at(3 * HOUR),
-      status: "open",
+      status: "new",
       resolvedAt: null,
       ...over,
     },
@@ -72,27 +72,33 @@ describe("assessSla — the seven states plus no target", () => {
     });
   });
 
-  it("pending is judged by its clock, exactly like any other open status", () => {
-    // There is no paused clock in the spec: `due_at` is set once at creation and
-    // never moved, so waiting on the requester spends the target like any other
-    // half hour. This used to report a flat "paused" instead.
-    expect(judge({ status: "pending", dueAt: at(30 * MINUTE) })).toEqual({
-      state: "at_risk",
-      minutesDelta: 30,
-      label: "30m left",
-    });
-    expect(judge({ status: "pending", dueAt: at(9 * HOUR) }).state).toBe(
-      "on_track",
-    );
+  it("pending is a verdict, not a countdown — the work is already done", () => {
+    // Pending is where the desk finished, so the target was met or missed then.
+    // A countdown here would charge the requester's reply time to the desk: a
+    // ticket answered inside its target would turn red while nobody was idle.
+    expect(
+      judge({
+        status: "pending",
+        dueAt: at(-3 * HOUR),
+        resolvedAt: at(-4 * HOUR),
+      }).state,
+    ).toBe("met");
+    expect(judge({ status: "pending", dueAt: at(30 * MINUTE) }).state).toBe(
+      "met",
+    ); // no recorded finish time → nothing to breach on
   });
 
-  it("pending shows a breach it has already run into, and by how much", () => {
-    // The case the old badge hid: five hours past the target, and the only clue
-    // was a grey "Paused" identical to a ticket with a day in hand.
-    const p = judge({ status: "pending", dueAt: at(-5 * HOUR) });
-    expect(p.state).toBe("breached_open");
-    expect(p.minutesDelta).toBe(-300);
-    expect(p.label).toBe("5h over");
+  it("pending shows the breach it finished into, and by how much", () => {
+    // Finished two hours after the target: the overrun is what the work took,
+    // and it stops growing the moment the ticket reaches pending.
+    const p = judge({
+      status: "pending",
+      dueAt: at(-5 * HOUR),
+      resolvedAt: at(-3 * HOUR),
+    });
+    expect(p.state).toBe("breached_closed");
+    expect(p.minutesDelta).toBe(-120);
+    expect(p.label).toBe("missed by 2h");
   });
 
   it("breached_closed: finished, but after the target", () => {
@@ -127,15 +133,16 @@ describe("assessSla — the seven states plus no target", () => {
 });
 
 describe("assessSla — boundaries", () => {
-  it("judges a resolved ticket without waiting for it to close", () => {
-    // The backend decides met/breached at `resolved`; disagreeing here would put
-    // a different verdict on the list than in the reports.
+  it("judges a finished ticket without waiting for it to close", () => {
+    // The backend decides met/breached when the work finishes — the move into
+    // `pending` — so the list must not still be counting down there; a different
+    // verdict here than in the reports is the bug this pins.
     expect(
-      judge({ status: "resolved", dueAt: at(-HOUR), resolvedAt: at(-2 * HOUR) })
+      judge({ status: "pending", dueAt: at(-HOUR), resolvedAt: at(-2 * HOUR) })
         .state,
     ).toBe("met");
     expect(
-      judge({ status: "resolved", dueAt: at(-2 * HOUR), resolvedAt: at(-HOUR) })
+      judge({ status: "pending", dueAt: at(-2 * HOUR), resolvedAt: at(-HOUR) })
         .state,
     ).toBe("breached_closed");
   });
@@ -176,7 +183,7 @@ describe("compareSla — worst first", () => {
       judge({ status: "closed", dueAt: at(-HOUR), resolvedAt: at(-2 * HOUR) }), // met
       judge({ dueAt: at(-30 * MINUTE) }), // breached_open, a little
       judge({ dueAt: null }), // no_sla
-      judge({ status: "pending", dueAt: at(-6 * HOUR) }), // breached_open, pending
+      judge({ dueAt: at(-6 * HOUR) }), // breached_open, unfinished and worst
       judge({ dueAt: at(-5 * HOUR) }), // breached_open, badly
       judge({ dueAt: at(20 * MINUTE) }), // at_risk
       judge({
@@ -186,8 +193,9 @@ describe("compareSla — worst first", () => {
       }), // breached_closed
     ];
 
-    // The pending row is the worst overrun of the three, so it leads — it used to
-    // sink below the closed ticket, which buried the breach nobody was watching.
+    // Three unfinished overruns lead, worst first, and every settled verdict —
+    // met or breached — sorts below them: an overrun nobody is working on is the
+    // thing a queue view exists to surface.
     expect([...rows].sort(compareSla).map((r) => r.state)).toEqual([
       "breached_open",
       "breached_open",

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prioritySchema, ticketStatusSchema } from "@/features/tickets/schemas";
+import { displayStatusSchema, prioritySchema } from "@/features/tickets/schemas";
 
 export const dashboardSummarySchema = z.object({
   data: z.object({
@@ -13,7 +13,7 @@ export const dashboardSummarySchema = z.object({
       slaBreachUnder1h: z.number(),
     }),
     byStatus: z.array(
-      z.object({ status: ticketStatusSchema, count: z.number() }),
+      z.object({ status: displayStatusSchema, count: z.number() }),
     ),
     openByPriority: z.array(
       z.object({ priority: prioritySchema, count: z.number() }),

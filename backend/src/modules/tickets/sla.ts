@@ -34,22 +34,20 @@ export const SLA_WARN_MS = 4 * HOUR_MS;
 /**
  * Statuses whose SLA clock is running — the only ones an alert can apply to.
  *
- * Everything that has not finished, `pending` included. The spec has no notion of
- * a clock that stops: an SLA policy is `{ first_response_mins, resolution_mins }`
- * with no pause or calendar, `due_at` is computed once at creation and never
- * moved, and the spec's own sweep index is
- * `(due_at) WHERE status NOT IN ('resolved','closed')` — which covers pending.
+ * `new` is the whole of it, which is the whole of unfinished work: New and In
+ * Progress are the same stored value, so both are covered, and `pending` means
+ * the desk has finished and is waiting on the requester. `due_at` is a
+ * resolution target, so it stops when the resolution happens, not when the
+ * conversation does.
  *
- * Leaving pending out was the one place that disagreed, and it disagreed
- * silently: a ticket parked on the requester sailed past its target with no
- * alert, then turned red the moment somebody resumed it.
+ * `pending` used to be in here, deliberately: back when it meant "parked on the
+ * requester" while `resolved` meant "done", a running clock was right — the work
+ * was not finished. Pending has since absorbed that "done, awaiting
+ * confirmation" meaning (it is what the 72h auto-close reads), so a clock that
+ * kept running would breach every ticket whose requester simply did not reply.
  */
-export const SLA_ACTIVE_STATUSES = [
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-] as const satisfies readonly TicketStatus[];
+export const SLA_ACTIVE_STATUSES = ["new"] as const satisfies
+  readonly TicketStatus[];
 
 /** Due timestamp for a ticket created at `createdAt` with the given priority. */
 export function computeDueAt(priority: Priority, createdAt: Date): Date {
@@ -80,7 +78,10 @@ export function deriveSla(
   now: Date,
   resolvedAt: Date | null = null,
 ): { slaDue: string; slaState: SlaState } {
-  if (status === "resolved" || status === "closed") {
+  // Finished: the work is done (pending, waiting on the requester) or the ticket
+  // is over (closed). `resolved_at` is stamped on the move into pending, so both
+  // have a resolution time to judge the target against.
+  if (status === "pending" || status === "closed") {
     // Compare the actual resolution time to the target. Fall back to "met" only
     // when there's no target or no recorded resolution time to judge against.
     if (dueAt && resolvedAt) {

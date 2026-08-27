@@ -28,23 +28,24 @@ describe("computeDueAt", () => {
 });
 
 describe("deriveSla", () => {
-  it("keeps counting while pending, and can breach there", () => {
-    // The spec has no paused clock: `due_at` is set once at creation and never
-    // moved, so waiting on the requester spends the target like any other hour.
-    // Reporting "paused" here hid an overdue ticket behind a calm badge.
-    expect(deriveSla("pending", inHours(0.5), now)).toEqual({
-      slaDue: "0h 30m",
+  it("stops the clock at pending, where the work finished", () => {
+    // Pending means the desk is done and the requester has yet to confirm, so
+    // the resolution target has been either met or missed — there is nothing
+    // left to count down. What it is judged against is `resolved_at`, stamped
+    // on the way in, not the hours the requester takes to answer.
+    expect(deriveSla("pending", inHours(2), now, inHours(1))).toEqual({
+      slaDue: "met",
+      slaState: "met",
+    });
+    expect(deriveSla("pending", inHours(1), now, inHours(3))).toEqual({
+      slaDue: "breached",
       slaState: "danger",
     });
-    expect(deriveSla("pending", inHours(2), now).slaState).toBe("warn");
-    expect(deriveSla("pending", inHours(6), now).slaState).toBe("ok");
-    // Already past the target while still waiting on the requester.
-    expect(deriveSla("pending", inHours(-3), now).slaState).toBe("danger");
   });
 
-  it("marks a resolved/closed ticket met when resolved on or before due", () => {
+  it("marks a finished ticket met when resolved on or before due", () => {
     // due in 2h, resolved at 1h → met
-    expect(deriveSla("resolved", inHours(2), now, inHours(1))).toEqual({
+    expect(deriveSla("pending", inHours(2), now, inHours(1))).toEqual({
       slaDue: "met",
       slaState: "met",
     });
@@ -56,14 +57,14 @@ describe("deriveSla", () => {
 
   it("marks a late resolution as breached", () => {
     // due at 1h, resolved at 3h → breached
-    expect(deriveSla("resolved", inHours(1), now, inHours(3))).toEqual({
+    expect(deriveSla("pending", inHours(1), now, inHours(3))).toEqual({
       slaDue: "breached",
       slaState: "danger",
     });
   });
 
   it("falls back to met when there is no target or no resolution time", () => {
-    expect(deriveSla("resolved", null, now, inHours(1))).toEqual({
+    expect(deriveSla("pending", null, now, inHours(1))).toEqual({
       slaDue: "met",
       slaState: "met",
     });
@@ -74,25 +75,25 @@ describe("deriveSla", () => {
   });
 
   it("shows — / ok for an active ticket with no due date", () => {
-    expect(deriveSla("open", null, now)).toEqual({
+    expect(deriveSla("new", null, now)).toEqual({
       slaDue: "—",
       slaState: "ok",
     });
   });
 
   it("colours active tickets by time remaining", () => {
-    expect(deriveSla("open", inHours(0.5), now).slaState).toBe("danger"); // <1h
-    expect(deriveSla("open", inHours(2), now).slaState).toBe("warn"); // <4h
-    expect(deriveSla("in_progress", inHours(10), now).slaState).toBe("ok"); // ≥4h
+    expect(deriveSla("new", inHours(0.5), now).slaState).toBe("danger"); // <1h
+    expect(deriveSla("new", inHours(2), now).slaState).toBe("warn"); // <4h
+    expect(deriveSla("new", inHours(10), now).slaState).toBe("ok"); // ≥4h
   });
 
   it("formats remaining as Xh Ym under a day, Xd Yh over", () => {
-    expect(deriveSla("open", inHours(2), now).slaDue).toBe("2h 0m");
-    expect(deriveSla("open", inHours(52), now).slaDue).toBe("2d 4h");
+    expect(deriveSla("new", inHours(2), now).slaDue).toBe("2h 0m");
+    expect(deriveSla("new", inHours(52), now).slaDue).toBe("2d 4h");
   });
 
   it("clamps an overdue ticket to zero and flags danger", () => {
-    expect(deriveSla("open", inHours(-1), now)).toEqual({
+    expect(deriveSla("new", inHours(-1), now)).toEqual({
       slaDue: "0h 0m",
       slaState: "danger",
     });
@@ -130,7 +131,7 @@ describe("slaAlertKind", () => {
   it("aligns with the badge deriveSla shows", () => {
     for (const hours of [-1, 0.5, 2, 3.9, 5, 10]) {
       const dueAt = inHours(hours);
-      const badge = deriveSla("open", dueAt, now).slaState;
+      const badge = deriveSla("new", dueAt, now).slaState;
       const alert = slaAlertKind(dueAt, now);
       expect(alert != null).toBe(badge === "warn" || badge === "danger");
     }
@@ -144,15 +145,11 @@ describe("slaAlertKind", () => {
 describe("SLA_ACTIVE_STATUSES", () => {
   // A finished ticket must never raise an alert; the sweep relies on this list
   // rather than repeating the status logic in a query.
-  it("excludes the finished statuses and nothing else", () => {
-    expect(SLA_ACTIVE_STATUSES).not.toContain("resolved");
-    expect(SLA_ACTIVE_STATUSES).not.toContain("closed");
-  });
-
-  it("includes pending, whose clock keeps running", () => {
-    // Matches the spec's sweep index, `WHERE status NOT IN ('resolved','closed')`.
-    // Omitting it let a ticket parked on the requester breach in silence.
-    expect(SLA_ACTIVE_STATUSES).toContain("pending");
+  it("is the unfinished work and nothing else", () => {
+    // `new` covers New and In Progress alike, which is every ticket still being
+    // worked. Pending and closed are finished — pending is where `resolved_at`
+    // is stamped — so neither may raise an alert.
+    expect(SLA_ACTIVE_STATUSES).toEqual(["new"]);
   });
 
   it("covers every status whose clock deriveSla treats as running", () => {

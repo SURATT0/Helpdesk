@@ -32,8 +32,9 @@ export function MyTickets() {
       (t) =>
         user != null &&
         t.assignee === user.name &&
-        t.status !== "closed" &&
-        t.status !== "resolved",
+        // Still on my plate: anything not finished. One check now that Pending
+        // and Closed are the only endings the model has.
+        t.displayStatus !== "closed",
     )
     .slice(0, 4);
 
@@ -84,7 +85,7 @@ export function MyTickets() {
               {t.subject}
             </span>
             <span>
-              <StatusBadge status={t.status} />
+              <StatusBadge status={t.displayStatus} />
             </span>
             <PriorityIndicator priority={t.priority} />
             <span className="text-[12.5px] text-[#475569]">{t.requester}</span>

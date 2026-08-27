@@ -1,27 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { canTransition, STATUS_TRANSITIONS, type TicketStatus } from "./domain";
 
-const ALL: TicketStatus[] = [
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-  "resolved",
-  "closed",
-];
+const ALL: TicketStatus[] = ["new", "pending", "closed"];
 
 describe("STATUS_TRANSITIONS whitelist", () => {
   it("matches the documented flow", () => {
-    expect(STATUS_TRANSITIONS.new).toEqual(["open", "in_progress"]);
-    expect(STATUS_TRANSITIONS.open).toEqual([
-      "in_progress",
-      "pending",
-      "resolved",
-    ]);
-    expect(STATUS_TRANSITIONS.in_progress).toEqual(["pending", "resolved"]);
-    expect(STATUS_TRANSITIONS.pending).toEqual(["in_progress", "resolved"]);
-    expect(STATUS_TRANSITIONS.resolved).toEqual(["open", "closed"]);
-    expect(STATUS_TRANSITIONS.closed).toEqual(["open"]);
+    // New → In Progress is missing on purpose: taking a ticket is an assignment,
+    // not a status change, and both read from the same stored `new`.
+    expect(STATUS_TRANSITIONS.new).toEqual(["pending", "closed"]);
+    expect(STATUS_TRANSITIONS.pending).toEqual(["new", "closed"]);
+    expect(STATUS_TRANSITIONS.closed).toEqual(["new"]);
   });
 });
 
@@ -40,16 +28,22 @@ describe("canTransition", () => {
     for (const s of ALL) expect(canTransition(s, s)).toBe(false);
   });
 
-  it("rejects known illegal jumps", () => {
-    expect(canTransition("new", "resolved")).toBe(false);
-    expect(canTransition("new", "closed")).toBe(false);
-    expect(canTransition("closed", "in_progress")).toBe(false);
-    expect(canTransition("pending", "closed")).toBe(false);
+  it("allows the two ways a finished ticket can go", () => {
+    // The requester rejects it, or it is confirmed (or auto-closed at 72h).
+    expect(canTransition("pending", "new")).toBe(true);
+    expect(canTransition("pending", "closed")).toBe(true);
   });
 
-  it("allows the requester-reject and reopen paths", () => {
-    expect(canTransition("resolved", "open")).toBe(true); // requester rejects
-    expect(canTransition("resolved", "closed")).toBe(true); // confirm/auto-close
-    expect(canTransition("closed", "open")).toBe(true); // reopen
+  it("allows a reopen, and only into the queue", () => {
+    // Back to `new`; the service keeps the assignee, so it returns as that
+    // person's In Progress rather than as unowned work.
+    expect(canTransition("closed", "new")).toBe(true);
+    expect(canTransition("closed", "pending")).toBe(false);
+  });
+
+  it("lets the desk close its own ticket without asking anyone", () => {
+    // The internal-thread case: staff raised it, staff finished it, there is
+    // nobody to confirm — so `new → closed` is a legal end, not a jumped step.
+    expect(canTransition("new", "closed")).toBe(true);
   });
 });

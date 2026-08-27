@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { matchesFilters, matchesQuery, type AssigneeKey } from "./search-context";
-import type { Priority, TicketStatus } from "@/lib/domain";
+import type { DisplayStatus, Priority, TicketStatus } from "@/lib/domain";
 
 const ticket = (over: Partial<Parameters<typeof matchesFilters>[0]> = {}) => ({
   id: 1042,
   subject: "VPN drops every 10 minutes",
   requester: "Marcus Chen",
-  status: "in_progress" as TicketStatus,
+  status: "new" as TicketStatus,
+  // Assigned and unfinished, so what the row shows is In Progress — the facet
+  // filters on this, the SLA judgement on `status`.
+  displayStatus: "in_progress" as DisplayStatus,
   priority: "high" as Priority,
   assignee: "Dana Reyes",
   assigneeId: 7,
@@ -15,12 +18,12 @@ const ticket = (over: Partial<Parameters<typeof matchesFilters>[0]> = {}) => ({
 
 const filters = (over: Partial<{
   query: string;
-  statuses: Set<TicketStatus>;
+  statuses: Set<DisplayStatus>;
   priorities: Set<Priority>;
   assignees: Set<AssigneeKey>;
 }> = {}) => ({
   query: "",
-  statuses: new Set<TicketStatus>(),
+  statuses: new Set<DisplayStatus>(),
   priorities: new Set<Priority>(),
   assignees: new Set<AssigneeKey>(),
   ...over,
@@ -81,12 +84,12 @@ describe("matchesFilters — assignee facet", () => {
 
 describe("matchesFilters — facets combine", () => {
   it("ANDs across facets", () => {
-    const t = ticket({ assigneeId: 7, status: "in_progress", priority: "high" });
+    const t = ticket({ assigneeId: 7, displayStatus: "in_progress", priority: "high" });
     expect(
       matchesFilters(
         t,
         filters({
-          statuses: new Set<TicketStatus>(["in_progress"]),
+          statuses: new Set<DisplayStatus>(["in_progress"]),
           priorities: new Set<Priority>(["high"]),
           assignees: new Set<AssigneeKey>([7]),
         }),
@@ -98,7 +101,7 @@ describe("matchesFilters — facets combine", () => {
       matchesFilters(
         t,
         filters({
-          statuses: new Set<TicketStatus>(["in_progress"]),
+          statuses: new Set<DisplayStatus>(["in_progress"]),
           priorities: new Set<Priority>(["low"]),
           assignees: new Set<AssigneeKey>([7]),
         }),
@@ -108,11 +111,11 @@ describe("matchesFilters — facets combine", () => {
 
   it("ORs within a facet", () => {
     const f = filters({
-      statuses: new Set<TicketStatus>(["new", "in_progress"]),
+      statuses: new Set<DisplayStatus>(["new", "in_progress"]),
     });
-    expect(matchesFilters(ticket({ status: "new" }), f)).toBe(true);
-    expect(matchesFilters(ticket({ status: "in_progress" }), f)).toBe(true);
-    expect(matchesFilters(ticket({ status: "closed" }), f)).toBe(false);
+    expect(matchesFilters(ticket({ displayStatus: "new" }), f)).toBe(true);
+    expect(matchesFilters(ticket({ displayStatus: "in_progress" }), f)).toBe(true);
+    expect(matchesFilters(ticket({ displayStatus: "closed" }), f)).toBe(false);
   });
 
   it("still applies the free-text query alongside facets", () => {

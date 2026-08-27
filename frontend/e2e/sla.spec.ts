@@ -39,7 +39,7 @@ test("the badge separates overdue, at risk and comfortable", async ({
   await expect(page.getByLabel(/^SLA: Paused/)).toHaveCount(0);
 });
 
-test("a pending ticket is judged by its clock like any other", async ({
+test("a pending ticket carries a settled verdict, not a countdown", async ({
   page,
 }) => {
   await login(page);
@@ -56,16 +56,15 @@ test("a pending ticket is judged by its clock like any other", async ({
   const count = await rows.count();
   expect(count).toBeGreaterThan(0);
 
-  // Each one carries a running-clock verdict — never "Paused", which used to
-  // show the same calm grey whether the deadline was a day away or a day gone.
+  // Pending is where the desk's part ended — `resolved_at` is stamped on the way
+  // in — so every row shows the verdict it finished with, met or missed. A
+  // countdown here would be charging the requester's reply time to the desk.
   const verdicts = await page
     .locator('[aria-label^="SLA: "]')
     .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
   expect(verdicts).toHaveLength(count);
   for (const v of verdicts) {
-    expect(v).toMatch(
-      /^SLA: (Breached, still open|At risk|Due soon|On track)/,
-    );
+    expect(v).toMatch(/^SLA: (Met|Breached, closed)/);
   }
 });
 

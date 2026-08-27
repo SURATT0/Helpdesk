@@ -1,14 +1,17 @@
 "use client";
 
 import * as React from "react";
-import type { Priority, TicketStatus } from "@/lib/domain";
+import type { DisplayStatus, Priority, TicketStatus } from "@/lib/domain";
 import { judgeSla, type SlaState } from "./sla";
 
 type TicketLike = {
   subject: string;
   id: number;
   requester: string;
+  /** Stored value — the SLA judgement reads this. */
   status: TicketStatus;
+  /** What the row shows, and therefore what the status facet filters on. */
+  displayStatus: DisplayStatus;
   priority: Priority;
   assignee: string | null;
   assigneeId: number | null;
@@ -30,8 +33,8 @@ export type AssigneeKey = number | "none";
 type SearchValue = {
   query: string;
   setQuery: (q: string) => void;
-  statuses: Set<TicketStatus>;
-  toggleStatus: (s: TicketStatus) => void;
+  statuses: Set<DisplayStatus>;
+  toggleStatus: (s: DisplayStatus) => void;
   priorities: Set<Priority>;
   togglePriority: (p: Priority) => void;
   /** Empty = no assignee filter, which is NOT the same as selecting "none". */
@@ -51,7 +54,7 @@ const SearchContext = React.createContext<SearchValue | null>(null);
 /** Shared ticket search + filter state (topbar search + tickets filter bar). */
 export function SearchProvider({ children }: { children: React.ReactNode }) {
   const [query, setQuery] = React.useState("");
-  const [statuses, setStatuses] = React.useState<Set<TicketStatus>>(
+  const [statuses, setStatuses] = React.useState<Set<DisplayStatus>>(
     () => new Set(),
   );
   const [priorities, setPriorities] = React.useState<Set<Priority>>(
@@ -64,7 +67,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     () => new Set(),
   );
 
-  const toggleStatus = React.useCallback((s: TicketStatus) => {
+  const toggleStatus = React.useCallback((s: DisplayStatus) => {
     setStatuses((prev) => {
       const next = new Set(prev);
       next.has(s) ? next.delete(s) : next.add(s);
@@ -181,7 +184,8 @@ export function matchesFilters(
   now: number = Date.now(),
 ): boolean {
   if (!matchesQuery(t, f.query)) return false;
-  if (f.statuses.size > 0 && !f.statuses.has(t.status)) return false;
+  // The facet lists what the badges say, so it matches on the shown value.
+  if (f.statuses.size > 0 && !f.statuses.has(t.displayStatus)) return false;
   if (f.priorities.size > 0 && !f.priorities.has(t.priority)) return false;
   if (f.assignees.size > 0) {
     // An unassigned ticket only matches the explicit "none" selection.

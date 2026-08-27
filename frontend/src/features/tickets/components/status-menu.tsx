@@ -26,7 +26,7 @@ export function StatusMenu({ ticket }: { ticket: Ticket }) {
   const nextStatuses = STATUS_TRANSITIONS[ticket.status] ?? [];
 
   if (!canWrite || nextStatuses.length === 0) {
-    return <StatusBadge status={ticket.status} />;
+    return <StatusBadge status={ticket.displayStatus} />;
   }
 
   function choose(status: TicketStatus) {
@@ -42,7 +42,7 @@ export function StatusMenu({ ticket }: { ticket: Ticket }) {
         disabled={mutation.isPending}
         className="disabled:opacity-60"
       >
-        <StatusBadge status={ticket.status} caret />
+        <StatusBadge status={ticket.displayStatus} caret />
       </button>
 
       {open ? (

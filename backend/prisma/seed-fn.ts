@@ -164,24 +164,24 @@ const TICKETS: {
 }[] = [
   // --- Acme Corp ---
   // Well past its 8h target: the state the SLA column exists to make unmissable.
-  { id: 1042, subject: "VPN drops every 10 minutes after 4.2 update", status: "in_progress", priority: "high", requester: "Marcus Chen", assignee: "Dana Reyes", category: "Network", customer: "Acme Corp", raisedHoursAgo: 30 },
+  { id: 1042, subject: "VPN drops every 10 minutes after 4.2 update", status: "new", priority: "high", requester: "Marcus Chen", assignee: "Dana Reyes", category: "Network", customer: "Acme Corp", raisedHoursAgo: 30 },
   // Critical, 4h target, raised 3h20m ago — inside the last hour before breach.
   // Not closer than that on purpose: this ticket has to still be "at risk" when a
   // test suite reads it some minutes after seeding, not already over.
   { id: 1044, subject: "Email quarantine releasing spam to whole sales team", status: "new", priority: "critical", requester: "T. Alvarez", assignee: null, category: "Email", customer: "Acme Corp", raisedHoursAgo: 3.33 },
   { id: 1039, subject: "Laptop replacement request — battery swelling", status: "pending", priority: "critical", requester: "S. Okafor", assignee: "Dana Reyes", category: "Hardware", customer: "Acme Corp" },
   // Medium, 24h target, raised 21h ago — 3h left, the tier the sweep warns on.
-  { id: 1035, subject: "Cannot access shared drive after department move", status: "open", priority: "medium", requester: "J. Petrov", assignee: "Dana Reyes", category: "Access", customer: "Acme Corp", raisedHoursAgo: 21 },
-  { id: 1031, subject: "Monitor flickering on dock — Ops floor 3", status: "resolved", priority: "low", requester: "A. Lindqvist", assignee: "Dana Reyes", category: "Hardware", customer: "Acme Corp" },
+  { id: 1035, subject: "Cannot access shared drive after department move", status: "new", priority: "medium", requester: "J. Petrov", assignee: "Dana Reyes", category: "Access", customer: "Acme Corp", raisedHoursAgo: 21 },
+  { id: 1031, subject: "Monitor flickering on dock — Ops floor 3", status: "pending", priority: "low", requester: "A. Lindqvist", assignee: "Dana Reyes", category: "Hardware", customer: "Acme Corp" },
   // Low, 48h target, raised 60h ago — a second breach, on a different queue, so
   // the list has more than one and sorting by SLA has something to order.
-  { id: 1029, subject: "Printer queue stuck — Finance, floor 2", status: "open", priority: "low", requester: "R. Danforth", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", raisedHoursAgo: 60 },
-  { id: 1027, subject: "Onboarding: 6 new hires need accounts by Monday", status: "in_progress", priority: "high", requester: "HR Ops", assignee: "Ana M.", category: "Accounts", customer: "Acme Corp" },
+  { id: 1029, subject: "Printer queue stuck — Finance, floor 2", status: "new", priority: "low", requester: "R. Danforth", assignee: "Kai T.", category: "Hardware", customer: "Acme Corp", raisedHoursAgo: 60 },
+  { id: 1027, subject: "Onboarding: 6 new hires need accounts by Monday", status: "new", priority: "high", requester: "HR Ops", assignee: "Ana M.", category: "Accounts", customer: "Acme Corp" },
   { id: 1025, subject: "Software license request — Figma seats for Design", status: "pending", priority: "medium", requester: "L. Osei", assignee: "Dana Reyes", category: "Software", customer: "Acme Corp" },
   // --- Globex Inc ---
   // Overdue in the other tenant, so a scope bug cannot hide behind "no data".
   { id: 2001, subject: "Door access badge stopped working at HQ", status: "new", priority: "high", requester: "Priya Shah", assignee: "Owen Park", category: "Access", customer: "Globex Inc", raisedHoursAgo: 14 },
-  { id: 2002, subject: "Mailbox over quota — cannot receive mail", status: "open", priority: "medium", requester: "Priya Shah", assignee: null, category: "Email", customer: "Globex Inc" },
+  { id: 2002, subject: "Mailbox over quota — cannot receive mail", status: "new", priority: "medium", requester: "Priya Shah", assignee: null, category: "Email", customer: "Globex Inc" },
 ];
 
 const HOUR_MS = 3_600_000;
@@ -485,9 +485,10 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
       // date was written in by hand.
       dueAt: computeDueAt(t.priority, createdAt),
       createdAt,
-      // Demo resolved/closed tickets were resolved on time (met).
-      resolvedAt:
-        t.status === "resolved" || t.status === "closed" ? now : null,
+      // Demo finished tickets were resolved on time (met). Pending counts as
+      // finished now — the work is done and the requester has yet to confirm —
+      // and `resolved_at` is what the SLA verdict and the 72h sweep read.
+      resolvedAt: t.status === "pending" || t.status === "closed" ? now : null,
     };
     await prisma.ticket.upsert({
       where: { id: t.id },
@@ -540,26 +541,45 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     });
 
     /**
-     * When somebody picked it up: early in the window, and never more than a
+     * When the desk first answered: early in the window, and never more than a
      * working day in, however long the ticket ran.
      *
-     * This row is what the reports page measures both of its time KPIs from —
-     * first response ends here, and handling time starts here. Without it the
-     * only transition on a seeded ticket was the closing one, so every figure
+     * This is what the reports page measures both of its time KPIs from — first
+     * response ends here, and handling time starts here. It is a REPLY rather
+     * than a status change because taking a ticket stopped being a status change
+     * when In Progress became derived; without a reply on the row, every figure
      * came out as zero and both metrics looked broken in the demo.
      */
-    const pickedUpAt = new Date(
+    const answeredAt = new Date(
       createdAt.getTime() + Math.min(t.openHours * 0.3, 8) * HOUR_MS,
     );
 
+    // Deleted by (ticket, author, body) rather than by ticket: a demo thread
+    // someone typed in the app must survive a re-seed, and only the line this
+    // loop writes is the seed's to replace.
+    const answer = "Thanks for reporting this — taking a look now.";
+    await prisma.comment.deleteMany({
+      where: { ticketId: t.id, authorId: assigneeId, body: answer },
+    });
+    await prisma.comment.create({
+      data: {
+        ticketId: t.id,
+        authorId: assigneeId,
+        body: answer,
+        internal: false,
+        createdAt: answeredAt,
+      },
+    });
+
     // A trail rather than one row, so the ticket's history panel reads as a real
-    // lifecycle and the timestamps line up with the log.
+    // lifecycle and the timestamps line up with the log. `pending` is where the
+    // work finished; `closed` is the requester agreeing (or the 72h sweep).
     await prisma.ticketStatusHistory.deleteMany({ where: { ticketId: t.id } });
     await prisma.ticketStatusHistory.createMany({
       data: [
         { ticketId: t.id, fromStatus: null, toStatus: "new", changedById: requesterId, createdAt },
-        { ticketId: t.id, fromStatus: "new", toStatus: "open", changedById: assigneeId, createdAt: pickedUpAt },
-        { ticketId: t.id, fromStatus: "resolved", toStatus: "closed", changedById: assigneeId, createdAt: closedAt },
+        { ticketId: t.id, fromStatus: "new", toStatus: "pending", changedById: assigneeId, createdAt: answeredAt },
+        { ticketId: t.id, fromStatus: "pending", toStatus: "closed", changedById: assigneeId, createdAt: closedAt },
       ],
     });
   }

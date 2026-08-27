@@ -116,6 +116,8 @@ export const userRepository = {
       where: {
         assigneeId: id,
         deletedAt: null,
+        // Anything not closed, pending included: the work is done, but a
+        // rejection would land back on this person. See ACTIVE_STATUSES.
         status: { in: [...ACTIVE_STATUSES] },
         ...(isPlatformWide(actor)
           ? {}

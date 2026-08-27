@@ -232,7 +232,7 @@ describe("tickets — closed history log", () => {
     // `closedAt` is never cleared — the 30-day reopen check reads it back — so
     // the status is what keeps a reopened ticket out of the log.
     await close(1031, inThisMonth);
-    await prisma.ticket.update({ where: { id: 1031 }, data: { status: "open" } });
+    await prisma.ticket.update({ where: { id: 1031 }, data: { status: "new" } });
 
     const dana = await login("dana.reyes@acme.com");
     const res = await get(dana, "?granularity=month");
@@ -616,10 +616,11 @@ describe("tickets — SLA states the seed guarantees", () => {
     ).toBe(true);
   });
 
-  it("reports a pending ticket's clock rather than calling it stopped", async () => {
-    // `due_at` never moves while a ticket waits on its requester, so a pending
-    // ticket carries the same verdict any other unfinished one would — never the
-    // "paused" that used to hide an overrun behind a calm badge.
+  it("judges a pending ticket on when the work finished, not on a countdown", async () => {
+    // Pending is the end of the desk's part: `resolved_at` is stamped on the way
+    // in and the target is judged against it there and then. A countdown would
+    // be charging the requester's reply time to the desk's SLA — which is what
+    // pending did while `resolved` carried the "done" meaning.
     const dana = await login("dana.reyes@acme.com");
     const res = await list(dana);
     const pending = res.body.data.filter(
@@ -627,9 +628,9 @@ describe("tickets — SLA states the seed guarantees", () => {
     );
     expect(pending.length).toBeGreaterThan(0);
     for (const ticket of pending) {
-      expect(["ok", "warn", "danger", "met"]).toContain(ticket.slaState);
-      // And the countdown is a real one, not the literal string it used to be.
-      expect(ticket.slaDue).toMatch(/^\d+[dh] \d+[hm]$/);
+      expect(["met", "danger"]).toContain(ticket.slaState);
+      expect(["met", "breached"]).toContain(ticket.slaDue);
+      expect(ticket.resolvedAt).not.toBeNull();
     }
   });
 });
@@ -652,7 +653,7 @@ describe("tickets — list ordering", () => {
           id,
           subject: `Tied target ${id}`,
           description: "same due_at",
-          status: "open",
+          status: "new",
           priority: "high",
           requesterId: requester.id,
           categoryId: category.id,
@@ -890,7 +891,7 @@ describe("reports — what the resolution clock measures", () => {
       data: {
         subject: "Measured ticket",
         description: "for the resolution clock",
-        status: times.closedAt ? "closed" : "resolved",
+        status: times.closedAt ? "closed" : "pending",
         priority: "medium",
         requesterId: marcus.id,
         categoryId: category.id,
@@ -901,11 +902,18 @@ describe("reports — what the resolution clock measures", () => {
       },
     });
     if (times.openedAt) {
-      await prisma.ticketStatusHistory.create({
+      // What both clocks now start from: the desk's first PUBLIC reply. An
+      // internal note is the desk talking to itself and a status move is not
+      // something the requester sees, so neither counts as having answered.
+      const dana = await prisma.user.findUniqueOrThrow({
+        where: { email: "dana.reyes@acme.com" },
+      });
+      await prisma.comment.create({
         data: {
           ticketId: ticket.id,
-          fromStatus: "new",
-          toStatus: "open",
+          authorId: dana.id,
+          body: "Looking into this now.",
+          internal: false,
           createdAt: times.openedAt,
         },
       });
@@ -921,7 +929,7 @@ describe("reports — what the resolution clock measures", () => {
     return res.body.data;
   };
 
-  it("runs from being picked up to being closed, not from being raised", async () => {
+  it("runs from the first reply to being closed, not from being raised", async () => {
     const marcus = await prisma.user.findUniqueOrThrow({
       where: { email: "marcus.chen@acme.com" },
     });
@@ -934,17 +942,18 @@ describe("reports — what the resolution clock measures", () => {
     });
 
     const data = await summary(await login("marcus.chen@acme.com"));
-    // 4, not 24: the twenty hours before anyone looked at it were never work.
+    // 4, not 24: the twenty hours before anyone answered were never work.
     expect(data.kpis.avgHandlingHours).toBe(4);
     expect(data.kpis.handledCount).toBe(1);
   });
 
-  it("measures to closed, not to resolved", async () => {
+  it("measures to closed, not to the moment the work was finished", async () => {
     const marcus = await prisma.user.findUniqueOrThrow({
       where: { email: "marcus.chen@acme.com" },
     });
     const raised = new Date(Date.now() - 10 * HOUR);
-    // Resolved but never confirmed: no closing time, so no clock to read.
+    // Finished but never confirmed — pending, with no closing time, so there is
+    // no handling clock to read even though the desk's part is over.
     await ticketFor(marcus.id, {
       raised,
       openedAt: new Date(raised.getTime() + 1 * HOUR),
@@ -973,7 +982,7 @@ describe("reports — what the resolution clock measures", () => {
     expect(data.kpis.handledCount).toBe(0);
   });
 
-  it("still times the first response from when the ticket was raised", async () => {
+  it("times the first response from raise to the desk's first reply", async () => {
     const marcus = await prisma.user.findUniqueOrThrow({
       where: { email: "marcus.chen@acme.com" },
     });
@@ -1109,11 +1118,14 @@ describe("tickets — status transitions", () => {
   it("allows a legal transition and appends a history row", async () => {
     const dana = await login("dana.reyes@acme.com");
     const res = await request(app)
-      .patch(`${API}/tickets/1035/status`) // open → in_progress
+      .patch(`${API}/tickets/1035/status`) // new → pending (the work is done)
       .set(bearer(dana))
-      .send({ status: "in_progress" });
+      .send({ status: "pending" });
     expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe("in_progress");
+    expect(res.body.data.status).toBe("pending");
+    // 1035 has an assignee, so before the move it READ as In Progress; now the
+    // work is finished, both values say pending.
+    expect(res.body.data.displayStatus).toBe("pending");
     const history = await prisma.ticketStatusHistory.count({
       where: { ticketId: 1035 },
     });
@@ -1122,31 +1134,41 @@ describe("tickets — status transitions", () => {
 
   it("rejects an illegal transition with 409", async () => {
     const dana = await login("dana.reyes@acme.com");
-    const res = await request(app)
-      .patch(`${API}/tickets/1042/status`) // in_progress → closed (illegal)
+    // Close it first, then try to finish it: closed → pending is not a move the
+    // whitelist has (a closed ticket may only be reopened).
+    await request(app)
+      .patch(`${API}/tickets/1042/status`)
       .set(bearer(dana))
-      .send({ status: "closed" });
+      .send({ status: "closed" })
+      .expect(200);
+    const res = await request(app)
+      .patch(`${API}/tickets/1042/status`)
+      .set(bearer(dana))
+      .send({ status: "pending" });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("ILLEGAL_TRANSITION");
   });
 
   it("never records an illegal transition when two agents race one ticket", async () => {
     const dana = await login("dana.reyes@acme.com");
-    // 1035 is `open`, from which BOTH of these are legal — so both requests
-    // pass the service's guard against their own read. Only one may win:
-    // `resolved → pending` is not in the whitelist, and applying the loser on
+    // 1035 is `new`, from which BOTH of these are legal — so both requests pass
+    // the service's guard against their own read. Only one may win: neither
+    // `pending → closed` nor `closed → pending` may be applied on top of the
+    // other's result without the whitelist saying so, and applying the loser on
     // top of the winner is exactly what used to persist it.
     const [a, b] = await Promise.all([
       request(app)
         .patch(`${API}/tickets/1035/status`)
         .set(bearer(dana))
-        .send({ status: "resolved" }),
+        .send({ status: "closed" }),
       request(app)
         .patch(`${API}/tickets/1035/status`)
         .set(bearer(dana))
         .send({ status: "pending" }),
     ]);
 
+    // Both moves are legal from `new`, so one wins outright. The loser is
+    // refused because the row it read is no longer the row it would write.
     expect([a.status, b.status].sort()).toEqual([200, 409]);
     const loser = a.status === 409 ? a : b;
     // Which 409 depends on whether the loser read before or after the winner
@@ -1178,9 +1200,9 @@ describe("tickets — status transitions", () => {
     const dana = await login("dana.reyes@acme.com");
     const send = () =>
       request(app)
-        .patch(`${API}/tickets/1035/status`) // open → in_progress
+        .patch(`${API}/tickets/1035/status`) // new → pending
         .set(bearer(dana))
-        .send({ status: "in_progress" });
+        .send({ status: "pending" });
 
     expect((await send()).status).toBe(200);
     expect((await send()).status).toBe(200); // double submit
@@ -1195,7 +1217,7 @@ describe("tickets — status transitions", () => {
     const res = await request(app)
       .patch(`${API}/tickets/1042/status`)
       .set(bearer(marcus))
-      .send({ status: "open" });
+      .send({ status: "pending" });
     expect(res.status).toBe(403);
   });
 
@@ -1204,7 +1226,7 @@ describe("tickets — status transitions", () => {
     const res = await request(app)
       .patch(`${API}/tickets/2002/status`) // Globex ticket
       .set(bearer(dana))
-      .send({ status: "in_progress" });
+      .send({ status: "pending" });
     expect(res.status).toBe(404);
   });
 });
@@ -1221,9 +1243,13 @@ describe("tickets — reopen window (30 days)", () => {
     const res = await request(app)
       .patch(`${API}/tickets/1031/status`)
       .set(bearer(dana))
-      .send({ status: "open" });
+      .send({ status: "new" });
     expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe("open");
+    expect(res.body.data.status).toBe("new");
+    // The assignee is kept, so it comes back as their In Progress rather than
+    // dropping into the unassigned queue.
+    expect(res.body.data.assigneeId).not.toBeNull();
+    expect(res.body.data.displayStatus).toBe("in_progress");
   });
 
   it("rejects reopening a ticket closed more than 30 days ago (409)", async () => {
@@ -1235,16 +1261,16 @@ describe("tickets — reopen window (30 days)", () => {
     const res = await request(app)
       .patch(`${API}/tickets/1031/status`)
       .set(bearer(dana))
-      .send({ status: "open" });
+      .send({ status: "new" });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("REOPEN_WINDOW_EXPIRED");
   });
 });
 
-describe("tickets — auto-close (resolved > 72h)", () => {
-  it("closes a ticket left resolved beyond 72h and logs the transition", async () => {
+describe("tickets — auto-close (pending > 72h)", () => {
+  it("closes a ticket left pending beyond 72h and logs the transition", async () => {
     await prisma.ticket.update({
-      where: { id: 1031 }, // seeded as resolved
+      where: { id: 1031 }, // seeded as pending: finished, awaiting confirmation
       data: { resolvedAt: new Date(Date.now() - 73 * 60 * 60 * 1000) },
     });
 
@@ -1260,12 +1286,12 @@ describe("tickets — auto-close (resolved > 72h)", () => {
     expect(hist).not.toBeNull();
   });
 
-  it("leaves recently-resolved tickets open", async () => {
-    // #1031 was seeded resolved just now → not stale
+  it("leaves a ticket that only just finished alone", async () => {
+    // #1031 reached pending as the seed ran → its 72h have not passed
     const closed = await ticketService.autoCloseStale(new Date());
     expect(closed).toBe(0);
     const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1031 } });
-    expect(t.status).toBe("resolved");
+    expect(t.status).toBe("pending");
   });
 });
 
@@ -1358,43 +1384,46 @@ describe("tickets — SLA alert sweep", () => {
   });
 
   /**
-   * A pending ticket is waiting on the requester; its deadline is not waiting on
-   * anything. `due_at` is set once at creation and never moved, so skipping these
-   * meant the one ticket nobody was actively working could run hours past its
-   * target in silence and only surface when somebody resumed it.
+   * A pending ticket is finished work waiting to be confirmed, so its resolution
+   * target has already been met or missed — `resolved_at` is stamped on the way
+   * in. Alerting on it would breach every ticket whose requester simply took
+   * their time answering, over work the desk had already done.
+   *
+   * This is the opposite of what pending meant before the three-value model,
+   * when `resolved` carried "done" and pending meant "parked, still ours". These
+   * tests are that reversal, stated as three cases so it cannot drift back.
    */
-  it("alerts on a pending ticket whose clock has run out", async () => {
-    // 1039 is seeded pending.
+  it("never alerts on a pending ticket, however far past its target", async () => {
+    // 1039 is seeded pending, and deliberately given a clock that is long gone.
     await prisma.ticket.update({
       where: { id: 1039 },
       data: { dueAt: inHours(-5) },
     });
     const res = await ticketService.sweepSlaAlerts(now);
-    expect(res.breached).toBe(1);
-
-    const notes = await slaNotifications(1039);
-    expect(notes).toHaveLength(1);
-    expect(notes[0].type).toBe("ticket.sla_breach");
+    expect(res.breached).toBe(0);
+    expect(await slaNotifications(1039)).toHaveLength(0);
   });
 
-  it("warns a pending ticket that is merely close, like any other", async () => {
+  it("does not warn a pending ticket that is merely close either", async () => {
     await prisma.ticket.update({
       where: { id: 1039 },
       data: { dueAt: inHours(2) },
     });
     const res = await ticketService.sweepSlaAlerts(now);
-    expect(res.warned).toBe(1);
-    expect((await slaNotifications(1039))[0].type).toBe("ticket.sla_warning");
+    expect(res.warned).toBe(0);
+    expect(await slaNotifications(1039)).toHaveLength(0);
   });
 
-  it("still leaves a comfortable pending ticket alone", async () => {
+  it("still alerts on unfinished work, assigned or not", async () => {
+    // The other side of the same rule: `new` covers New and In Progress, and
+    // both are work the desk still owes an answer on.
     await prisma.ticket.update({
-      where: { id: 1039 },
-      data: { dueAt: inHours(20) },
+      where: { id: 1044 }, // new, unassigned
+      data: { dueAt: inHours(-5) },
     });
     const res = await ticketService.sweepSlaAlerts(now);
-    expect(res.warned + res.breached).toBe(0);
-    expect(await slaNotifications(1039)).toHaveLength(0);
+    expect(res.breached).toBe(1);
+    expect((await slaNotifications(1044))[0].type).toBe("ticket.sla_breach");
   });
 
   it("ignores resolved and closed tickets", async () => {
@@ -2117,7 +2146,8 @@ describe("users — deactivation", () => {
       where: {
         assigneeId: dana.id,
         deletedAt: null,
-        status: { in: ["new", "open", "in_progress", "pending"] },
+        // The same set the guard counts — ACTIVE_STATUSES.
+        status: { in: ["new", "pending"] },
       },
     });
     expect(holding).toBeGreaterThan(0);
@@ -2467,7 +2497,7 @@ describe("notifications", () => {
     await request(app)
       .patch(`${API}/tickets/1042/status`)
       .set(bearer(dana))
-      .send({ status: "resolved" })
+      .send({ status: "pending" })
       .expect(200);
 
     const marcusN = await request(app)
@@ -2544,14 +2574,14 @@ describe("tickets — status history", () => {
     await request(app)
       .patch(`${API}/tickets/1042/status`)
       .set(bearer(dana))
-      .send({ status: "resolved" })
+      .send({ status: "pending" })
       .expect(200);
 
     const after = await request(app)
       .get(`${API}/tickets/1042/history`)
       .set(bearer(dana));
     expect(after.body.data).toHaveLength(n0 + 1);
-    expect(after.body.data[0].toStatus).toBe("resolved"); // newest first
+    expect(after.body.data[0].toStatus).toBe("pending"); // newest first
   });
 
   it("404s history for an out-of-scope ticket", async () => {
