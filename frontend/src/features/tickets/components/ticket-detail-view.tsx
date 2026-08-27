@@ -430,199 +430,208 @@ export function TicketDetailView({ id }: { id: number }) {
     : null;
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[1fr_312px] lg:overflow-hidden">
-      {/* thread column */}
-      <div className="flex min-w-0 flex-col border-line lg:overflow-hidden lg:border-r">
-        <header className="border-b border-line bg-panel px-5 py-4 sm:px-7">
-          <div className="mb-2 flex items-center gap-2 text-[12px] text-faint">
-            <Link href="/tickets" className="hover:text-muted">
-              {t("detail.tickets")}
-            </Link>
-            <span>›</span>
-            <span className="font-mono font-medium">#{ticket.id}</span>
-            {canResolve || canDelete || awaitingMyConfirmation ? (
-              // wrap + shrink-0 on the buttons: the confirm state adds a label and
-              // a second button to this strip, which must not widen the header
-              // past the viewport.
-              <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                {canResolve ? (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
+      {/* One header across the full width. It used to sit inside the thread
+          column, which squeezed the title and the badge row into 1fr while the
+          rail stood empty beside them. */}
+      <header className="flex-none border-b border-line bg-panel px-5 py-4 sm:px-7">
+        <div className="mb-2 flex items-center gap-2 text-[12px] text-faint">
+          <Link href="/tickets" className="hover:text-muted">
+            {t("detail.tickets")}
+          </Link>
+          <span>›</span>
+          <span className="font-mono font-medium">#{ticket.id}</span>
+          {canResolve || canDelete || awaitingMyConfirmation ? (
+            // wrap + shrink-0 on the buttons: the confirm state adds a label and
+            // a second button to this strip, which must not widen the header
+            // past the viewport.
+            <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              {canResolve ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    statusMutation.mutate({ id: ticket.id, status: "pending" })
+                  }
+                  disabled={statusMutation.isPending}
+                  className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
+                >
+                  {statusMutation.isPending
+                    ? t("detail.saving")
+                    : t("detail.markResolved")}
+                </button>
+              ) : null}
+              {awaitingMyConfirmation ? (
+                <>
                   <button
                     type="button"
-                    onClick={() =>
-                      statusMutation.mutate({ id: ticket.id, status: "pending" })
-                    }
-                    disabled={statusMutation.isPending}
-                    className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
+                    onClick={() => confirmClosure.mutate(ticket.id)}
+                    disabled={closureBusy}
+                    className="rounded-md border border-[#b4dcc3] bg-[#e4f2ea] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#d7ebe0] disabled:opacity-50"
                   >
-                    {statusMutation.isPending
-                      ? t("detail.saving")
-                      : t("detail.markResolved")}
+                    {closureBusy ? t("detail.saving") : t("closure.confirm")}
                   </button>
-                ) : null}
-                {awaitingMyConfirmation ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => confirmClosure.mutate(ticket.id)}
-                      disabled={closureBusy}
-                      className="rounded-md border border-[#b4dcc3] bg-[#e4f2ea] px-3 py-1.5 text-[12.5px] font-semibold text-brand-hover hover:bg-[#d7ebe0] disabled:opacity-50"
-                    >
-                      {closureBusy ? t("detail.saving") : t("closure.confirm")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRejecting(true)}
-                      disabled={closureBusy}
-                      className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
-                    >
-                      {t("closure.reject")}
-                    </button>
-                  </>
-                ) : null}
-                {canDelete ? <DeleteTicketButton id={ticket.id} /> : null}
-              </span>
-            ) : null}
-          </div>
-          <h1 className="text-[19px] font-bold tracking-[-0.01em] text-ink">
+                  <button
+                    type="button"
+                    onClick={() => setRejecting(true)}
+                    disabled={closureBusy}
+                    className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+                  >
+                    {t("closure.reject")}
+                  </button>
+                </>
+              ) : null}
+              {canDelete ? <DeleteTicketButton id={ticket.id} /> : null}
+            </span>
+          ) : null}
+        </div>
+        {/* Title and badges share one row now that the header has the whole
+            width to spend. `min-w-0 break-words` on the heading is what keeps a
+            200-character subject — the longest the API accepts, and it may have
+            no spaces in it — from widening the document instead of wrapping. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="min-w-0 break-words text-[19px] font-bold tracking-[-0.01em] text-ink">
             {ticket.subject}
           </h1>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
-            <StatusBadge status={ticket.displayStatus} />
-            <span className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-[3px]">
-              <PriorityIndicator priority={ticket.priority} />
-            </span>
-            <span className="text-[12.5px] text-muted">
-              {ticket.category} · {t("detail.opened")}{" "}
-              {formatOpened(ticket.createdAt, lang)} {t("detail.by")}{" "}
-              <strong className="text-ink">{ticket.requester}</strong>
-            </span>
-            {/* The badge names its own state; "SLA" is what says which clock
-                that state belongs to, which the header has no other label for. */}
-            <span className="ml-auto inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5">
-              <span className="text-[11.5px] font-semibold text-muted">SLA</span>
-              <SlaBadge sla={assess(ticket)} />
-            </span>
-          </div>
-        </header>
-
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          data-testid="chat-scroll"
-          className="relative flex flex-1 flex-col gap-4 p-5 sm:p-7 lg:overflow-y-auto"
-        >
-          <div className="flex flex-col">
-            {messages.map((m, i) => {
-              const prev = messages[i - 1];
-              // Group consecutive messages from the same author on the same side.
-              const grouped =
-                !!prev &&
-                prev.author === m.author &&
-                prev.internal === m.internal &&
-                prev.fromAgent === m.fromAgent;
-              const bubble = (
-                <MessageBubble
-                  key={m.key}
-                  author={m.author}
-                  tone={m.tone}
-                  role={t(`role.${m.roleKey}`)}
-                  time={m.time}
-                  internal={m.internal}
-                  fromAgent={m.fromAgent}
-                  grouped={grouped}
-                  status={m.sendStatus}
-                  receipt={m.key === lastOwnKey ? lastOwnReceipt : null}
-                  onRetry={
-                    m.sendStatus === "failed"
-                      ? () =>
-                          retryMessage({
-                            clientId: m.clientId,
-                            body: m.body,
-                            internal: m.internal,
-                          })
-                      : undefined
-                  }
-                >
-                  <p
-                    className={cn(
-                      "whitespace-pre-wrap text-[13.5px] leading-relaxed",
-                      m.internal ? "text-[#57430f]" : "text-[#334155]",
-                    )}
-                  >
-                    {m.body}
-                  </p>
-                </MessageBubble>
-              );
-              if (m.key === firstUnreadKey) {
-                return (
-                  <React.Fragment key={`unread-${m.key}`}>
-                    <div className="my-3 flex items-center gap-2" role="separator">
-                      <span className="h-px flex-1 bg-[#fecaca]" />
-                      <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#dc2626]">
-                        {t("chat.unreadDivider")}
-                      </span>
-                      <span className="h-px flex-1 bg-[#fecaca]" />
-                    </div>
-                    {bubble}
-                  </React.Fragment>
-                );
-              }
-              return bubble;
-            })}
-          </div>
-
-          {commentsQuery.isLoading ? (
-            <LoadingRow label={t("detail.loadingConversation")} />
-          ) : null}
-
-          {typingNames.length > 0 ? (
-            <div
-              className="flex items-center gap-2 px-1 text-[12.5px] text-muted"
-              aria-live="polite"
-            >
-              <TypingDots />
-              <span>
-                {typingNames.length === 1
-                  ? t("chat.typingOne", { name: typingNames[0] })
-                  : t("chat.typingMany")}
-              </span>
-            </div>
-          ) : null}
-
-          {unread > 0 ? (
-            <div className="pointer-events-none sticky bottom-2 z-10 flex justify-center">
-              <button
-                type="button"
-                onClick={jumpToLatest}
-                className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_2px_12px_rgba(15,23,42,.18)] hover:bg-brand-hover"
-              >
-                <ArrowDown size={13} strokeWidth={2.5} />
-                {t("chat.jumpNew", { count: String(unread) })}
-              </button>
-            </div>
-          ) : null}
-
-          {rejecting ? (
-            <RejectClosureDialog
-              ticketId={ticket.id}
-              onClose={() => setRejecting(false)}
-              onRejected={() => setRejecting(false)}
-            />
-          ) : null}
-
-          <Composer
-            ticketId={ticket.id}
-            requester={ticket.requester}
-            requesterEmail={ticket.requesterEmail}
-            canAddNote={canWrite}
-            internalOnly={isInternalThread(ticket.requesterRole)}
-          />
-          <div ref={bottomRef} aria-hidden />
+          <StatusBadge status={ticket.displayStatus} />
+          <span className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-[3px]">
+            <PriorityIndicator priority={ticket.priority} />
+          </span>
+          <span className="text-[12.5px] text-muted">
+            {ticket.category} · {t("detail.opened")}{" "}
+            {formatOpened(ticket.createdAt, lang)} {t("detail.by")}{" "}
+            <strong className="text-ink">{ticket.requester}</strong>
+          </span>
+          {/* The badge names its own state; "SLA" is what says which clock
+              that state belongs to, which the header has no other label for. */}
+          <span className="ml-auto inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5">
+            <span className="text-[11.5px] font-semibold text-muted">SLA</span>
+            <SlaBadge sla={assess(ticket)} />
+          </span>
         </div>
-      </div>
+      </header>
 
-      <div className="border-t border-line lg:overflow-y-auto lg:border-t-0">
-        <PropertiesRail ticket={ticket} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_312px] lg:overflow-hidden">
+        {/* thread column */}
+        <div className="flex min-w-0 flex-col border-line lg:overflow-hidden lg:border-r">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            data-testid="chat-scroll"
+            className="relative flex flex-1 flex-col gap-4 p-5 sm:p-7 lg:overflow-y-auto"
+          >
+            <div className="flex flex-col">
+              {messages.map((m, i) => {
+                const prev = messages[i - 1];
+                // Group consecutive messages from the same author on the same side.
+                const grouped =
+                  !!prev &&
+                  prev.author === m.author &&
+                  prev.internal === m.internal &&
+                  prev.fromAgent === m.fromAgent;
+                const bubble = (
+                  <MessageBubble
+                    key={m.key}
+                    author={m.author}
+                    tone={m.tone}
+                    role={t(`role.${m.roleKey}`)}
+                    time={m.time}
+                    internal={m.internal}
+                    fromAgent={m.fromAgent}
+                    grouped={grouped}
+                    status={m.sendStatus}
+                    receipt={m.key === lastOwnKey ? lastOwnReceipt : null}
+                    onRetry={
+                      m.sendStatus === "failed"
+                        ? () =>
+                            retryMessage({
+                              clientId: m.clientId,
+                              body: m.body,
+                              internal: m.internal,
+                            })
+                        : undefined
+                    }
+                  >
+                    <p
+                      className={cn(
+                        "whitespace-pre-wrap text-[13.5px] leading-relaxed",
+                        m.internal ? "text-[#57430f]" : "text-[#334155]",
+                      )}
+                    >
+                      {m.body}
+                    </p>
+                  </MessageBubble>
+                );
+                if (m.key === firstUnreadKey) {
+                  return (
+                    <React.Fragment key={`unread-${m.key}`}>
+                      <div className="my-3 flex items-center gap-2" role="separator">
+                        <span className="h-px flex-1 bg-[#fecaca]" />
+                        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#dc2626]">
+                          {t("chat.unreadDivider")}
+                        </span>
+                        <span className="h-px flex-1 bg-[#fecaca]" />
+                      </div>
+                      {bubble}
+                    </React.Fragment>
+                  );
+                }
+                return bubble;
+              })}
+            </div>
+
+            {commentsQuery.isLoading ? (
+              <LoadingRow label={t("detail.loadingConversation")} />
+            ) : null}
+
+            {typingNames.length > 0 ? (
+              <div
+                className="flex items-center gap-2 px-1 text-[12.5px] text-muted"
+                aria-live="polite"
+              >
+                <TypingDots />
+                <span>
+                  {typingNames.length === 1
+                    ? t("chat.typingOne", { name: typingNames[0] })
+                    : t("chat.typingMany")}
+                </span>
+              </div>
+            ) : null}
+
+            {unread > 0 ? (
+              <div className="pointer-events-none sticky bottom-2 z-10 flex justify-center">
+                <button
+                  type="button"
+                  onClick={jumpToLatest}
+                  className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_2px_12px_rgba(15,23,42,.18)] hover:bg-brand-hover"
+                >
+                  <ArrowDown size={13} strokeWidth={2.5} />
+                  {t("chat.jumpNew", { count: String(unread) })}
+                </button>
+              </div>
+            ) : null}
+
+            {rejecting ? (
+              <RejectClosureDialog
+                ticketId={ticket.id}
+                onClose={() => setRejecting(false)}
+                onRejected={() => setRejecting(false)}
+              />
+            ) : null}
+
+            <Composer
+              ticketId={ticket.id}
+              requester={ticket.requester}
+              requesterEmail={ticket.requesterEmail}
+              canAddNote={canWrite}
+              internalOnly={isInternalThread(ticket.requesterRole)}
+            />
+            <div ref={bottomRef} aria-hidden />
+          </div>
+        </div>
+
+        <div className="border-t border-line lg:overflow-y-auto lg:border-t-0">
+          <PropertiesRail ticket={ticket} />
+        </div>
       </div>
     </div>
   );
