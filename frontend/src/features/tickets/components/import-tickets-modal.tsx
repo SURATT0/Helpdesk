@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
+import { PRIORITIES_ASCENDING } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useCategories, useImportTickets } from "../queries";
@@ -16,7 +17,8 @@ import { DB_STATUSES } from "@/lib/ticket-status";
 import type { ImportTicketRow } from "../api";
 import type { ImportErrorReason } from "../schemas";
 
-const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+// Mildest first, like the create form: the same picker, over a parsed row.
+const PRIORITIES = PRIORITIES_ASCENDING;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Draft = {

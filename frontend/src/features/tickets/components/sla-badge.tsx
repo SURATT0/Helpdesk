@@ -4,6 +4,7 @@ import * as React from "react";
 import { AlertTriangle, Check, Clock, Minus } from "lucide-react";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
+import { SLA_STATES_AT_STAKE } from "../sla";
 import type { SlaAssessment, SlaState } from "../sla";
 
 type Look = {
@@ -38,14 +39,12 @@ const LOOK: Record<SlaState, Look> = {
   no_sla: { icon: Minus, className: "text-sla-idle" },
 };
 
-/** States whose label carries a duration worth repeating to a screen reader. */
-const HAS_DETAIL = new Set<SlaState>([
-  "breached_open",
-  "at_risk",
-  "due_soon",
-  "on_track",
-  "breached_closed",
-]);
+/**
+ * States whose label carries a duration worth repeating to a screen reader —
+ * which is the same set as "something is still at stake", so it reads that list
+ * rather than keeping a second copy of it.
+ */
+const HAS_DETAIL = new Set<SlaState>(SLA_STATES_AT_STAKE);
 
 /**
  * The state on its own, without a countdown — for places that name a state

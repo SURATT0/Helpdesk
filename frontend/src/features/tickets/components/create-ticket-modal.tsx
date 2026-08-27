@@ -14,7 +14,7 @@ import { uploadAttachment } from "@/features/attachments/api";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
 import { useCategories, useCreateTicket } from "../queries";
-import { TEXT_MAX, type Priority } from "@/lib/domain";
+import { PRIORITIES_ASCENDING, TEXT_MAX, type Priority } from "@/lib/domain";
 
 // Images + common help-desk data files (mirrors the backend allowlist).
 const ACCEPT =
@@ -28,7 +28,9 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
+// Mildest first — a person filling this in is choosing on a scale, not working
+// a queue. The one list lives in lib/domain; this names which way up it goes.
+const PRIORITIES = PRIORITIES_ASCENDING;
 
 export function CreateTicketModal({
   open,

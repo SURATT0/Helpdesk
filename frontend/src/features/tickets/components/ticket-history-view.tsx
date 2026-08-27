@@ -8,7 +8,7 @@ import { ErrorState, LoadingRow } from "@/components/ui/states";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
-import { PRIORITY_META, type Priority } from "@/lib/domain";
+import { PRIORITIES, type Priority } from "@/lib/domain";
 import {
   groupClosedLog,
   yearsIn,
@@ -30,8 +30,6 @@ const DOT: Record<Priority, string> = {
   medium: "bg-priority-medium",
   low: "bg-priority-low",
 };
-
-const PRIORITIES = Object.keys(PRIORITY_META) as Priority[];
 
 /**
  * The closing day on a row: day and month, no year. The section heading above

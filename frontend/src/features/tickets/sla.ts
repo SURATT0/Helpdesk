@@ -1,4 +1,5 @@
 import type { TicketStatus } from "@/lib/domain";
+import { isFinished } from "@/lib/ticket-status";
 import { formatDuration, type DurationLabels } from "./duration";
 
 /**
@@ -16,14 +17,34 @@ import { formatDuration, type DurationLabels } from "./duration";
  * `slaDue`/`slaState` remain the server's authoritative snapshot; this is the
  * same judgement made against a live clock.
  */
-export type SlaState =
-  | "breached_open"
-  | "at_risk"
-  | "due_soon"
-  | "on_track"
-  | "breached_closed"
-  | "met"
-  | "no_sla";
+export const SLA_STATES = [
+  "breached_open",
+  "at_risk",
+  "due_soon",
+  "on_track",
+  "breached_closed",
+  "met",
+  "no_sla",
+] as const;
+export type SlaState = (typeof SLA_STATES)[number];
+
+/**
+ * The states with something still at stake, worst first — the same order the
+ * SLA column sorts in.
+ *
+ * `met` and `no_sla` are left out: they are the states with nothing to act on.
+ * Two places want exactly this subset — the filter facet, because narrowing is
+ * for work that needs doing, and the badge, which reads a duration out to a
+ * screen reader only when there is one. They each kept their own copy of the
+ * list, so a new state reached one and not the other.
+ */
+export const SLA_STATES_AT_STAKE = [
+  "breached_open",
+  "at_risk",
+  "due_soon",
+  "on_track",
+  "breached_closed",
+] as const satisfies readonly SlaState[];
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -116,8 +137,9 @@ export function judgeSla(
   if (Number.isNaN(due)) return { state: "no_sla", minutesDelta: null };
 
   // Finished: pending means the work is done and `resolved_at` is stamped, so
-  // there is a verdict rather than a countdown. Same rule as the API's deriveSla.
-  if (status === "pending" || status === "closed") {
+  // there is a verdict rather than a countdown. Same rule as the API's deriveSla,
+  // and `isFinished` is where that rule lives on this side.
+  if (isFinished(status)) {
     const done = resolvedAt ? Date.parse(resolvedAt) : NaN;
     // No recorded finish time leaves nothing to judge against; the backend calls
     // that "met" rather than inventing a breach, and so do we.

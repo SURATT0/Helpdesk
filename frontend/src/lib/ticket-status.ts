@@ -75,6 +75,27 @@ export function getDisplayStatus(ticket: {
 }
 
 /**
+ * The statuses where the desk's work is over.
+ *
+ * `pending` counts: the work is done and `resolved_at` is stamped, so the SLA
+ * clock has stopped and there is a verdict rather than a countdown — the
+ * requester still has to answer, but that is their clock, not the desk's. Same
+ * rule as the API's `deriveSla`.
+ */
+export const FINISHED_STATUSES = [
+  "pending",
+  "closed",
+] as const satisfies readonly TicketStatus[];
+
+/** Is the desk's work on this ticket over? Accepts the historical words too. */
+export function isFinished(status: TicketStatusRecord): boolean {
+  return (
+    (FINISHED_STATUSES as readonly string[]).includes(status) ||
+    status === "resolved"
+  );
+}
+
+/**
  * Allowed status transitions (whitelist). The service returns
  * 409 ILLEGAL_TRANSITION for anything not listed here.
  *

@@ -9,27 +9,15 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
-import type { Priority } from "@/lib/domain";
+import { PRIORITIES } from "@/lib/domain";
 import { DISPLAY_STATUSES } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { toneForName } from "../data";
 import { useSearch, type AssigneeKey } from "../search-context";
-import type { SlaState } from "../sla";
+import { SLA_STATES_AT_STAKE } from "../sla";
 import { SlaStateLabel } from "./sla-badge";
 
 const STATUSES = DISPLAY_STATUSES;
-const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];
-
-// Worst first, same order the SLA column sorts in. `met` and `no_sla` are left
-// out on purpose: they are the states with nothing at stake, and a facet is for
-// narrowing to work that needs doing.
-const SLA_STATES: SlaState[] = [
-  "breached_open",
-  "at_risk",
-  "due_soon",
-  "on_track",
-  "breached_closed",
-];
 
 // `T` allows numbers as well as strings so the same control can list assignee
 // ids alongside the `"none"` sentinel, not just string enums.
@@ -213,7 +201,7 @@ export function FilterBar() {
       />
       <FacetDropdown
         label={t("filter.sla")}
-        options={SLA_STATES}
+        options={SLA_STATES_AT_STAKE}
         selected={slaStates}
         onToggle={toggleSla}
         renderOption={(s) => <SlaStateLabel state={s} />}
