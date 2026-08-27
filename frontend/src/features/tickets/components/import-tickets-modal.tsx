@@ -410,7 +410,7 @@ export function ImportTicketsModal({
             <div className="max-h-[52vh] overflow-auto px-6">
               <table className="w-full border-collapse text-body">
                 <thead className="sticky top-0 bg-white">
-                  <tr className="text-left text-meta font-semibold uppercase tracking-[0.04em] text-faint">
+                  <tr className="text-left text-meta font-semibold uppercase tracking-columns text-faint">
                     <th className="w-8 pb-2" />
                     {FIELDS.map((f) => (
                       <th key={f} className="pb-2 pr-2">

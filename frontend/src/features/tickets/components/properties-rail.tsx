@@ -22,7 +22,7 @@ function Section({
 }) {
   return (
     <div className={first ? "" : "border-t border-hairline pt-4"}>
-      <div className="mb-2.5 text-eyebrow font-semibold uppercase tracking-[0.08em] text-faint">
+      <div className="mb-2.5 text-eyebrow font-semibold uppercase tracking-eyebrow text-faint">
         {title}
       </div>
       {children}
