@@ -1,24 +1,31 @@
-import type { DisplayStatus, Priority } from "@/lib/domain";
+import { PRIORITY_META, type DisplayStatus, type Priority } from "@/lib/domain";
+import { DISPLAY_STATUSES, STATUS_META } from "@/lib/ticket-status";
 
-/** Bar colours for the "Tickets by status" chart (presentational). */
-export const STATUS_CHART: Record<
-  DisplayStatus,
-  { label: string; color: string }
-> = {
-  new: { label: "New", color: "#3b82f6" },
-  in_progress: { label: "In Progress", color: "#f59e0b" },
-  pending: { label: "Pending", color: "#8b5cf6" },
-  closed: { label: "Closed", color: "#cbd5e1" },
-};
+/**
+ * Chart colours, taken from the badge palettes rather than chosen again here.
+ *
+ * They used to be a second set of hand-picked hex, and all five had drifted: a
+ * Pending ticket was #6d28d9 in its badge and #8b5cf6 in the bar beside it, a
+ * Closed one #475569 and #cbd5e1. Same screen, same status, two colours — which
+ * is exactly the thing a legend is supposed to rule out. A chart is a second
+ * rendering of the badge, so it reads the badge's colour.
+ *
+ * `fg` is the right half of the pair: `bg` is the pale wash a badge sits on and
+ * disappears against the card, while `fg` is the weight the text is drawn in.
+ */
+export const STATUS_CHART: Record<DisplayStatus, { color: string }> =
+  Object.fromEntries(
+    DISPLAY_STATUSES.map((s) => [s, { color: STATUS_META[s].fg }]),
+  ) as Record<DisplayStatus, { color: string }>;
 
-/** Donut colours for "Open by priority". */
-export const PRIORITY_CHART: Record<Priority, { label: string; color: string }> =
-  {
-    critical: { label: "Critical", color: "#dc2626" },
-    high: { label: "High", color: "#f59e0b" },
-    medium: { label: "Medium", color: "#3b82f6" },
-    low: { label: "Low", color: "#cbd5e1" },
-  };
+/** Donut colours for "Open by priority" — the dot colour off PRIORITY_META. */
+export const PRIORITY_CHART: Record<Priority, { color: string }> =
+  Object.fromEntries(
+    (Object.keys(PRIORITY_META) as Priority[]).map((p) => [
+      p,
+      { color: PRIORITY_META[p].dot },
+    ]),
+  ) as Record<Priority, { color: string }>;
 
 /** Build a conic-gradient string from ordered {value,color} slices. */
 export function conicGradient(slices: { value: number; color: string }[]): string {

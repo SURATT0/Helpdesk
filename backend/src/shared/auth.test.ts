@@ -46,6 +46,33 @@ describe("permissionsFor", () => {
   it("requester can only read + create tickets", () => {
     expect(permissionsFor("user")).toEqual(["ticket:read", "ticket:create"]);
   });
+
+  /**
+   * A tripwire, not a behaviour test.
+   *
+   * The web app keeps a copy of these grants in
+   * `frontend/src/lib/permissions.ts` so its Permissions page can DERIVE what
+   * each role may do instead of restating it — and a hand-written copy is how
+   * that page came to claim only a super_admin may assign a ticket. Changing an
+   * admin's grants here without updating that file puts a wrong answer on
+   * screen, so this fails until both move together.
+   */
+  it("pins the admin grant list (mirrored in frontend/src/lib/permissions.ts)", () => {
+    expect(permissionsFor("admin")).toEqual([
+      "ticket:read",
+      "ticket:write",
+      "ticket:create",
+      "ticket:import",
+      "user:read",
+      "asset:write",
+      "problem:write",
+      "asset:read",
+      "problem:read",
+      "project:read",
+      "audit:read",
+      "kb:write",
+    ]);
+  });
 });
 
 describe("hasPermission", () => {
