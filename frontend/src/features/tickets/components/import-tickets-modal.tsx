@@ -10,6 +10,7 @@ import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
 import { PRIORITIES_ASCENDING } from "@/lib/domain";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useCategories, useImportTickets } from "../queries";
 import { parseImportCsv, IMPORT_COLUMNS, type ImportColumn } from "../csv";
@@ -46,12 +47,20 @@ type Draft = {
 
 const FIELDS: ImportColumn[] = [...IMPORT_COLUMNS];
 
-/** A small example file so the user knows the exact shape we expect. */
-function templateCsv(sampleCategory: string): string {
+/**
+ * A small example file so the user knows the exact shape we expect.
+ *
+ * Both the category and the requester email come from the signed-in session, so
+ * the template is importable as it stands. It used to name two seeded fixture
+ * addresses, which a real customer downloading it would have had rejected as
+ * unknown requesters — the one column where a placeholder cannot work, since the
+ * server resolves it against the actual directory.
+ */
+function templateCsv(sampleCategory: string, sampleEmail: string): string {
   return [
     "subject,description,priority,category,requester email",
-    `"VPN keeps dropping","Reconnects every 10 minutes after the 4.2 update",high,${sampleCategory},marcus.chen@acme.com`,
-    `"Cannot access shared drive","Lost access after the department move",medium,${sampleCategory},j.petrov@acme.com`,
+    `"VPN keeps dropping","Reconnects every 10 minutes after the 4.2 update",high,${sampleCategory},${sampleEmail}`,
+    `"Cannot access shared drive","Lost access after the department move",medium,${sampleCategory},${sampleEmail}`,
   ].join("\n");
 }
 
@@ -64,6 +73,7 @@ export function ImportTicketsModal({
 }) {
   const { t } = useI18n();
   const router = useRouter();
+  const { user } = useAuth();
   const { data: categories = [] } = useCategories();
   const importTickets = useImportTickets();
 
@@ -358,7 +368,12 @@ export function ImportTicketsModal({
               type="button"
               onClick={() => {
                 const blob = new Blob(
-                  [templateCsv(categoryNames[0] ?? "General")],
+                  [
+                    templateCsv(
+                      categoryNames[0] ?? "General",
+                      user?.email ?? "requester@example.com",
+                    ),
+                  ],
                   { type: "text/csv" },
                 );
                 const url = URL.createObjectURL(blob);

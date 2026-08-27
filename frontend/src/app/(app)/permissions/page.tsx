@@ -1,5 +1,5 @@
 import { Topbar } from "@/components/layout/topbar";
-import { PermissionsView } from "@/features/permissions/permissions-view";
+import { PermissionsView } from "@/features/permissions/components/permissions-view";
 
 export default function PermissionsPage() {
   return (

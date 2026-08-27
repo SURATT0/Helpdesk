@@ -4,10 +4,29 @@ import type { Config } from "tailwindcss";
  * Deskly design tokens. Theme: brown primary · cream background · green accent.
  * ink #0f172a · borders #e6e8ee.
  */
+/**
+ * The shell's two fixed measurements, written once.
+ *
+ * The sidebar's width was stated twice and in two notations — a `224px` grid
+ * track in the app layout and a `w-56` on the aside — so the two could stop
+ * agreeing without anything looking wrong at either site. Both now come from
+ * here, and so does the topbar's height.
+ */
+const SIDEBAR_W = "224px";
+const TOPBAR_H = "56px";
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      spacing: {
+        sidebar: SIDEBAR_W,
+        topbar: TOPBAR_H,
+      },
+      gridTemplateColumns: {
+        // The app shell: fixed sidebar, then everything else.
+        shell: `${SIDEBAR_W} 1fr`,
+      },
       colors: {
         brand: {
           DEFAULT: "#7d5329",

@@ -2,7 +2,7 @@
 
 import { PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
-import { AttachmentsPanel } from "@/features/attachments/attachments-panel";
+import { AttachmentsPanel } from "@/features/attachments/components/attachments-panel";
 import { ProblemPanel } from "@/features/problems/components/problem-panel";
 import { useI18n } from "@/features/i18n/context";
 import { SlaBadge } from "./sla-badge";

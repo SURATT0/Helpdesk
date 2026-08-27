@@ -12,6 +12,16 @@ import { useI18n } from "@/features/i18n/context";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
+/**
+ * The seeded demo account, in one place.
+ *
+ * It used to be spelled out four times, and one of those was the email field's
+ * initial state — so a real deployment shipped a login screen prefilled with a
+ * fixture address. It belongs behind the demo button and in the hint under it,
+ * nowhere else.
+ */
+const DEMO = { email: "dana.reyes@acme.com", password: "password123" };
+
 export default function LoginPage() {
   const { login, status } = useAuth();
   const { t } = useI18n();
@@ -20,7 +30,9 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showForgot, setShowForgot] = React.useState(false);
-  const [email, setEmail] = React.useState("dana.reyes@acme.com");
+  // Empty. The demo account belongs behind the "demo login" button below, not
+  // prefilled into the field a real deployment's users type into.
+  const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
 
   // Already signed in (or just signed in) → leave the login screen.
@@ -48,9 +60,9 @@ export default function LoginPage() {
 
   // One-click demo: fill the seeded credentials and sign in immediately.
   function demoLogin() {
-    setEmail("dana.reyes@acme.com");
-    setPassword("password123");
-    void signIn("dana.reyes@acme.com", "password123");
+    setEmail(DEMO.email);
+    setPassword(DEMO.password);
+    void signIn(DEMO.email, DEMO.password);
   }
 
   return (
@@ -181,7 +193,7 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-5 text-center text-[11.5px] leading-relaxed text-faint">
-          {t("login.demo", { pw: "password123" })}
+          {t("login.demo", { pw: DEMO.password })}
         </div>
       </div>
     </div>

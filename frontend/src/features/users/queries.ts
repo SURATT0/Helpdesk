@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchUsers, updateUser, type UpdateUserInput } from "./api";
+import {
+  fetchUsers,
+  updateMyProfile,
+  updateUser,
+  type UpdateMyProfileInput,
+  type UpdateUserInput,
+} from "./api";
 
 export const userKeys = { all: ["users"] as const };
 
@@ -30,6 +36,30 @@ export function useUpdateUser() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: userKeys.all });
       qc.invalidateQueries({ queryKey: ["tickets"] });
+    },
+  });
+}
+
+/**
+ * Self-service edit of your own profile — the name on your account, or your
+ * away state.
+ *
+ * Lives here rather than in the Settings view that calls it: `queries.ts` is
+ * where this feature's server calls are, and Settings was reaching across to
+ * `users/api` and `users/queries` to build the mutation itself. `onSaved`
+ * receives the server's user so the caller can patch the session with the
+ * answer rather than an optimistic guess — the away flag decides where real
+ * tickets route.
+ */
+export function useUpdateMyProfile(
+  onSaved?: (user: Awaited<ReturnType<typeof updateMyProfile>>) => void,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateMyProfileInput) => updateMyProfile(input),
+    onSuccess: (user) => {
+      onSaved?.(user);
+      qc.invalidateQueries({ queryKey: userKeys.all });
     },
   });
 }
