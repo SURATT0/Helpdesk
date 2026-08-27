@@ -129,7 +129,17 @@ export const IMPORT_COLUMNS = [
   "requesterEmail",
 ] as const;
 
-export type ImportColumn = (typeof IMPORT_COLUMNS)[number];
+/**
+ * Columns the file MAY carry. Not required, and never reported as missing —
+ * `status` is here so a file that has one is read and judged rather than
+ * silently dropped: a row saying `Open` would otherwise import as New while the
+ * reader believed it had imported something else.
+ */
+export const OPTIONAL_IMPORT_COLUMNS = ["status"] as const;
+
+export type ImportColumn =
+  | (typeof IMPORT_COLUMNS)[number]
+  | (typeof OPTIONAL_IMPORT_COLUMNS)[number];
 
 // Accept a few header spellings so a hand-made CSV still maps cleanly.
 const HEADER_ALIASES: Record<string, ImportColumn> = {
@@ -144,6 +154,8 @@ const HEADER_ALIASES: Record<string, ImportColumn> = {
   requester: "requesterEmail",
   email: "requesterEmail",
   requester_email: "requesterEmail",
+  status: "status",
+  state: "status",
 };
 
 function normaliseHeader(h: string): string {
