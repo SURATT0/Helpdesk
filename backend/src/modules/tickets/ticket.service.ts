@@ -12,6 +12,8 @@ import {
   NotFound,
   ReopenWindowExpired,
 } from "../../shared/errors";
+import { auditRepository } from "../audit/audit.repository";
+import { commentService } from "../comments/comment.service";
 import { notificationRepository } from "../notifications/notification.repository";
 import { mayImportForRequester, mayReceiveAssignment } from "./ticket.scope";
 import { resolvePeriod, type Granularity, type Period } from "./history.period";
@@ -326,6 +328,91 @@ export const ticketService = {
     const updated = await ticketRepository.setAffectedAssets(id, assetIds, user);
     if (!updated) throw NotFound(`Ticket #${id} not found`);
     return updated;
+  },
+
+  /**
+   * The requester's half of closing a ticket.
+   *
+   * A ticket reaches `pending` when the desk says the work is done. Until now
+   * only the desk could take it from there, so "closed" was one side's opinion:
+   * the person who raised it either agreed in silence or watched the 72h sweep
+   * close it over their head. These two actions are the other side of that.
+   *
+   *   confirm  pending → closed   "yes, this is fixed"
+   *   reject   pending → new      "no, it is not" — back to the desk, assignee kept
+   *
+   * Deliberately NOT a loosening of `PATCH /:id/status`. That endpoint is the
+   * desk's, gated on `ticket:write`, and it accepts any legal move; these accept
+   * exactly one each, from exactly one status, and only from the person the
+   * ticket is about. Widening the general endpoint with a per-row exception would
+   * have put "which move is this, and who is asking" into one place that has to
+   * get both right every time.
+   *
+   * Reuses `changeStatus` for the write itself, so the status-history row, the
+   * audit entry and the notification to the assignee all happen exactly as they
+   * do for a desk-driven move — plus one audit row naming what this was, since
+   * "pending → closed" alone cannot say whether a person agreed or a sweep gave up.
+   */
+  async confirmClosure(id: number, user: AuthUser): Promise<Ticket> {
+    const ticket = await this.requireOwnPendingTicket(id, user);
+    const closed = await this.changeStatus(ticket.id, "closed", user);
+    await auditRepository.record({
+      userId: user.id,
+      action: "ticket.closure_confirmed",
+      entity: "ticket",
+      entityId: ticket.id,
+      meta: { via: "in_app" },
+    });
+    return closed;
+  },
+
+  /**
+   * Reject the closure. The reason is optional but goes in as a public comment
+   * rather than a column: it is a message to the person who did the work, it
+   * belongs in the thread they will read, and a column would have been a second
+   * place to look for the same sentence.
+   */
+  async rejectClosure(
+    id: number,
+    reason: string | undefined,
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const ticket = await this.requireOwnPendingTicket(id, user);
+    if (reason) {
+      await commentService.create(ticket.id, { body: reason, internal: false }, user);
+    }
+    const reopened = await this.changeStatus(ticket.id, "new", user);
+    await auditRepository.record({
+      userId: user.id,
+      action: "ticket.closure_rejected",
+      entity: "ticket",
+      entityId: ticket.id,
+      meta: { via: "in_app", withReason: Boolean(reason) },
+    });
+    return reopened;
+  },
+
+  /**
+   * The gate both closure actions share: this ticket is yours, and it is waiting
+   * on you.
+   *
+   * Keyed on being the REQUESTER of this row, not on a role — an admin who
+   * raised their own ticket confirms it the same way anyone else does, and an
+   * admin who did not raise it uses the desk's endpoint. 403 rather than 404
+   * because `get` has already established that the caller can see the ticket;
+   * hiding it a second time would be a lie about which of the two facts failed.
+   */
+  async requireOwnPendingTicket(id: number, user: AuthUser): Promise<Ticket> {
+    const ticket = await this.get(id, user); // row scope → 404 if out of reach
+    if (ticket.requesterId !== user.id) {
+      throw Forbidden("Only the person who raised a ticket can answer its closure");
+    }
+    if (ticket.status !== "pending") {
+      throw BadRequest(
+        `Ticket #${id} is not waiting to be confirmed (it is ${ticket.displayStatus})`,
+      );
+    }
+    return ticket;
   },
 
   async changeStatus(

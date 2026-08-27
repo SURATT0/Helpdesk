@@ -79,6 +79,12 @@ export type Ticket = {
   requester: string;
   requesterEmail: string;
   /**
+   * The requester's id, so a client can tell "this is my ticket" without
+   * comparing display names or email strings. Exposed for the same reason
+   * `assigneeId` is: identity questions must be answered on the id.
+   */
+  requesterId: number;
+  /**
    * The requester's role, which decides whether this ticket has an external side
    * — see `isInternalThread`. A ticket raised by staff is worked as an internal
    * thread, so the client needs the role to know which composer to offer; the
@@ -205,6 +211,7 @@ function toTicketDto(row: TicketRow): Ticket {
     priority: row.priority,
     requester: row.requester.name,
     requesterEmail: row.requester.email,
+    requesterId: row.requesterId,
     requesterRole: row.requester.role,
     assignee: row.assignee?.name ?? null,
     assigneeId: row.assigneeId,

@@ -13,6 +13,7 @@ import {
   ticketIdParam,
   reassignBody,
   updateAssigneeBody,
+  rejectClosureBody,
   updatePriorityBody,
   updateStatusBody,
 } from "./ticket.validators";
@@ -136,6 +137,29 @@ export const ticketController = {
     const { id } = ticketIdParam.parse(req.params);
     const { status } = updateStatusBody.parse(req.body);
     const ticket = await ticketService.changeStatus(id, status, currentUser(req));
+    res.json({ data: ticket });
+  },
+
+  /**
+   * The requester confirming their ticket is fixed. No body: the action is the
+   * whole message, and the only ticket it can apply to is one of theirs that is
+   * waiting on them.
+   */
+  async confirmClosure(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    const ticket = await ticketService.confirmClosure(id, currentUser(req));
+    res.json({ data: ticket });
+  },
+
+  /** The requester saying it is not fixed, optionally saying why. */
+  async rejectClosure(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    const { reason } = rejectClosureBody.parse(req.body ?? {});
+    const ticket = await ticketService.rejectClosure(
+      id,
+      reason,
+      currentUser(req),
+    );
     res.json({ data: ticket });
   },
 

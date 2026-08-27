@@ -68,6 +68,19 @@ router.patch(
   requirePermission("ticket:write"),
   asyncHandler(ticketController.updatePriority),
 );
+/**
+ * The requester's half of closing a ticket: confirm the work, or send it back.
+ *
+ * No `requirePermission`, on purpose. Every other write here is the desk's and
+ * rides on `ticket:write`; these two are the requester's, and the right to use
+ * them comes from being the person the ticket is about — a fact about the ROW,
+ * which a middleware that only sees the role cannot check. The service does it
+ * (ticketService.requireOwnPendingTicket) and 403s anyone else, staff included:
+ * an admin who did not raise the ticket has the status endpoint above.
+ */
+router.post("/:id/closure/confirm", asyncHandler(ticketController.confirmClosure));
+router.post("/:id/closure/reject", asyncHandler(ticketController.rejectClosure));
+
 // Affected parties are replace-the-whole-set (PUT), which is what a multi-select
 // picker produces. Sending an empty array clears the field — both are optional.
 router.put(

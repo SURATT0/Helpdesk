@@ -115,6 +115,17 @@ export const updateStatusBody = z.object({
   status: ticketStatus,
 });
 
+/**
+ * The requester's answer when the desk says a ticket is done.
+ *
+ * The reason is optional — "it is still broken" is a complete answer — and is
+ * bounded like any other typed text. It becomes a public comment on the ticket
+ * rather than a column; see ticketService.rejectClosure.
+ */
+export const rejectClosureBody = z.object({
+  reason: freeText({ max: TEXT_MAX.BODY }).optional(),
+});
+
 export const updateAssigneeBody = z.object({
   assigneeId: z.number().int().positive().nullable(),
 });
