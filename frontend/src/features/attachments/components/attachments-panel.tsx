@@ -20,13 +20,13 @@ import {
   downloadAttachment,
   fetchAttachmentObjectUrl,
   viewAttachment,
-} from "./api";
+} from "../api";
 import {
   useAttachments,
   useDeleteAttachment,
   useUploadAttachment,
-} from "./queries";
-import type { Attachment } from "./schemas";
+} from "../queries";
+import type { Attachment } from "../schemas";
 
 const MANAGE_ROLES = new Set(["super_admin", "admin"]);
 

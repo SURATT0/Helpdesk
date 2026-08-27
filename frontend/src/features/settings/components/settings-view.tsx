@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,8 +11,7 @@ import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
-import { updateMyProfile } from "@/features/users/api";
-import { userKeys } from "@/features/users/queries";
+import { useUpdateMyProfile } from "@/features/users/queries";
 import { IntegrationsPanel } from "@/features/integrations/components/integrations-panel";
 import type { Lang } from "@/features/i18n/dictionary";
 
@@ -51,29 +49,18 @@ export function SettingsView() {
   const { t, lang, setLang } = useI18n();
   const { user, patchUser, logout } = useAuth();
   const router = useRouter();
-  const qc = useQueryClient();
-
   const [name, setName] = React.useState(user?.name ?? "");
   const [saved, setSaved] = React.useState(false);
 
-  const save = useMutation({
-    mutationFn: (n: string) => updateMyProfile({ name: n }),
-    onSuccess: (u) => {
-      patchUser({ name: u.name });
-      qc.invalidateQueries({ queryKey: userKeys.all });
-      setSaved(true);
-    },
+  const save = useUpdateMyProfile((u) => {
+    patchUser({ name: u.name });
+    setSaved(true);
   });
 
-  const availability = useMutation({
-    mutationFn: (next: boolean) =>
-      updateMyProfile({ availableForAssignment: next }),
-    onSuccess: (u) => {
-      // Patch the session user so the toggle reflects the server's answer, not
-      // an optimistic guess — this flag decides where real tickets go.
-      patchUser({ availableForAssignment: u.availableForAssignment });
-      qc.invalidateQueries({ queryKey: userKeys.all });
-    },
+  // Patch the session user so the toggle reflects the server's answer, not an
+  // optimistic guess — this flag decides where real tickets go.
+  const availability = useUpdateMyProfile((u) => {
+    patchUser({ availableForAssignment: u.availableForAssignment });
   });
 
   if (!user) return null;
@@ -125,7 +112,7 @@ export function SettingsView() {
 
         <div className="mt-4 flex items-center gap-3">
           <Button
-            onClick={() => save.mutate(trimmed)}
+            onClick={() => save.mutate({ name: trimmed })}
             disabled={!dirty || save.isPending}
           >
             {save.isPending ? t("settings.saving") : t("settings.save")}
@@ -156,7 +143,9 @@ export function SettingsView() {
             type="checkbox"
             checked={user.availableForAssignment}
             disabled={availability.isPending}
-            onChange={(e) => availability.mutate(e.target.checked)}
+            onChange={(e) =>
+              availability.mutate({ availableForAssignment: e.target.checked })
+            }
             className="h-4 w-4 cursor-pointer accent-accent"
           />
           <span className="font-medium text-ink">

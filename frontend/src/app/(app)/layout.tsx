@@ -24,7 +24,7 @@ export default function AppLayout({
                 bottom of the scroll container (the ticket composer, the ticket
                 list footer). `dvh` tracks the bar as it shows and hides. The
                 two are identical on desktop. */}
-            <div className="h-dvh overflow-hidden bg-app lg:grid lg:grid-cols-[224px_1fr]">
+            <div className="h-dvh overflow-hidden bg-app lg:grid lg:grid-cols-shell">
               <Sidebar />
               <div className="flex h-dvh min-w-0 flex-col overflow-hidden lg:h-auto">
                 {children}

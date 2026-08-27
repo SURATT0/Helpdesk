@@ -1,5 +1,5 @@
 import { Topbar } from "@/components/layout/topbar";
-import { SettingsView } from "@/features/settings/settings-view";
+import { SettingsView } from "@/features/settings/components/settings-view";
 
 export default function SettingsPage() {
   return (

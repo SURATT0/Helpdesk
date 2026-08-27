@@ -64,7 +64,12 @@ export function NotificationsBell() {
       {open ? (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-2 w-[340px] overflow-hidden rounded-lg border border-line bg-white shadow-modal">
+          {/* 340px is the design's width, but it is not a floor: anchored to
+              the right edge of a topbar with px-4, a fixed 340 hangs ~36px off
+              the LEFT edge of a 320px screen — and leftward overflow is not
+              scrollable, so the document-width check in mobile-tables.spec.ts
+              cannot see it. `min()` gives it the width it has room for. */}
+          <div className="absolute right-0 z-50 mt-2 w-[min(340px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-line bg-white shadow-modal">
             <div className="flex items-center justify-between border-b border-[#eef1f5] px-4 py-2.5">
               <span className="text-[13px] font-bold text-ink">
                 {t("topbar.notifications")}

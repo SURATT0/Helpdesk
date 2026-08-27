@@ -85,7 +85,9 @@ export function Sidebar() {
       ) : null}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-panel px-3 py-4 transition-transform lg:static lg:z-auto lg:translate-x-0",
+          // `w-sidebar` is the same 224px the shell's grid track reserves —
+          // both read it from tailwind.config, so they cannot drift apart.
+          "fixed inset-y-0 left-0 z-50 flex w-sidebar flex-col border-r border-line bg-panel px-3 py-4 transition-transform lg:static lg:z-auto lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >

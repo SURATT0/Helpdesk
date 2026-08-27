@@ -142,3 +142,29 @@ test("no table page scrolls the document sideways at 320px", async ({ page }) =>
     expect(overflow.doc, `${label} pushes the document sideways`).toBeLessThanOrEqual(0);
   }
 });
+
+/**
+ * A dropdown anchored to the right edge can run off the LEFT one.
+ *
+ * The notifications panel was a fixed 340px. Anchored `right-0` inside a topbar
+ * with `px-4`, that is 36px past the left edge of a 320px screen — where a third
+ * of the newest notification, and the "mark all read" control's row, simply are
+ * not on the screen. The document-width check above cannot catch it: overflow to
+ * the left is not scrollable, so `scrollWidth` never grows.
+ *
+ * So this measures the panel itself against the viewport.
+ */
+test("the notifications panel stays on screen at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await loginAs(page, SUPER_ADMIN);
+  await page.goto("/dashboard");
+
+  await page.getByRole("button", { name: "Notifications" }).click();
+  const panel = page.getByText("Notifications", { exact: true }).locator("..").locator("..");
+  await expect(panel).toBeVisible();
+
+  const box = (await panel.boundingBox())!;
+  expect(box).toBeTruthy();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(320);
+});

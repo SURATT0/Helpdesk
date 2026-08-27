@@ -45,7 +45,7 @@ export function Topbar({
     // here, which is ~520px of controls — no phone fits that on a line, and
     // anything that refuses to wrap simply pushes the last controls off the
     // right edge where they cannot be reached or scrolled to.
-    <header className="flex min-h-14 flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-line bg-panel px-4 py-2.5 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0">
+    <header className="flex min-h-topbar flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-line bg-panel px-4 py-2.5 lg:h-topbar lg:flex-nowrap lg:px-6 lg:py-0">
       <button
         type="button"
         onClick={toggleNav}

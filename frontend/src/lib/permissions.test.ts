@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ROLES, ROLE_PERMISSIONS, holds, rolesHolding } from "./permissions";
-import { CAPABILITIES } from "@/features/permissions/permissions-view";
+import { CAPABILITIES } from "@/features/permissions/components/permissions-view";
 
 describe("holds", () => {
   it("gives super_admin everything through the wildcard", () => {
