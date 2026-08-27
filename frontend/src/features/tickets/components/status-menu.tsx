@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { STATUS_TRANSITIONS, type TicketStatus } from "@/lib/domain";
+import { STATUS_TRANSITIONS, type TicketStatus } from "@/lib/ticket-status";
 import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";

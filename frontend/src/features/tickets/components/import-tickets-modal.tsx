@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useCategories, useImportTickets } from "../queries";
 import { parseImportCsv, IMPORT_COLUMNS, type ImportColumn } from "../csv";
+import { DB_STATUSES } from "@/lib/ticket-status";
 import type { ImportTicketRow } from "../api";
 import type { ImportErrorReason } from "../schemas";
 
@@ -24,6 +25,13 @@ type Draft = {
   priority: string;
   category: string;
   requesterEmail: string;
+  /**
+   * Only present when the file carried a status column. Imported tickets always
+   * start as New; this is read so a file naming a status the system does not
+   * have (Open, Resolved) is refused with a reason rather than imported as
+   * New behind the reader's back.
+   */
+  status?: string;
   /**
    * Why the server refused this row, as its code. The wording is built at render
    * time from this app's dictionary — the server's own `error` string is written
@@ -140,6 +148,7 @@ export function ImportTicketsModal({
             // Normalise category to the canonical name; blank if unrecognised.
             category: categoryByLower.get(rawCategory.toLowerCase()) ?? "",
             requesterEmail: at("requesterEmail"),
+            ...(cols.status === undefined ? {} : { status: at("status") }),
           };
         });
         setBanner(t("import.rowsFound", { n: next.length }));
@@ -170,6 +179,12 @@ export function ImportTicketsModal({
       case "requesterEmail":
         if (!v) return t("import.err.required");
         return EMAIL_RE.test(v) ? null : t("import.err.email");
+      case "status":
+        // Absent or blank is the normal case — the column is optional.
+        if (!v) return null;
+        return (DB_STATUSES as readonly string[]).includes(v.toLowerCase())
+          ? null
+          : t("import.err.status");
     }
   }
 
@@ -220,6 +235,7 @@ export function ImportTicketsModal({
       priority: d.priority.trim() as ImportTicketRow["priority"],
       category: d.category.trim(),
       requesterEmail: d.requesterEmail.trim(),
+      ...(d.status ? { status: d.status.trim() } : {}),
     }));
     try {
       const result = await importTickets.mutateAsync(payload);

@@ -61,12 +61,15 @@ const en: Dict = {
   "notif.markAll": "Mark all read",
   "notif.empty": "You're all caught up.",
 
+  // The four a ticket can show. See lib/ticket-status.
   "status.new": "New",
-  "status.open": "Open",
   "status.in_progress": "In Progress",
   "status.pending": "Pending",
-  "status.resolved": "Resolved",
   "status.closed": "Closed",
+  // History only: no ticket is stored this way any more, but ticket_status_history
+  // is append-only and its older rows still say these words.
+  "status.open": "Open",
+  "status.resolved": "Resolved",
 
   "priority.low": "Low",
   "priority.medium": "Medium",
@@ -455,6 +458,7 @@ const en: Dict = {
   "import.err.email": "Invalid email",
   "import.err.priority": "Must be low / medium / high / critical",
   "import.err.category": "Unknown category",
+  "import.err.status": "Must be New / Pending / Closed — imports always start as New",
   // Rejections that only the server can decide, keyed by its reason code.
   "import.srv.unknownCategory": "No category named “{category}”",
   "import.srv.unknownRequester": "No user with the email {email}",
@@ -697,12 +701,16 @@ const th: Dict = {
   "notif.markAll": "อ่านทั้งหมด",
   "notif.empty": "อ่านครบแล้ว",
 
+  // The four a ticket can show. "รอข้อมูลเพิ่มเติม" is the required wording for
+  // pending — it says what the desk is waiting for, which "รอดำเนินการ" (waiting
+  // to be worked on) got backwards: the work is done by then.
   "status.new": "ใหม่",
-  "status.open": "เปิด",
   "status.in_progress": "กำลังดำเนินการ",
-  "status.pending": "รอดำเนินการ",
-  "status.resolved": "แก้ไขแล้ว",
+  "status.pending": "รอข้อมูลเพิ่มเติม",
   "status.closed": "ปิดแล้ว",
+  // History only — see the English block.
+  "status.open": "เปิด",
+  "status.resolved": "แก้ไขแล้ว",
 
   "priority.low": "ต่ำ",
   "priority.medium": "ปานกลาง",
@@ -1072,6 +1080,7 @@ const th: Dict = {
   "import.err.email": "อีเมลไม่ถูกต้อง",
   "import.err.priority": "ต้องเป็น low / medium / high / critical",
   "import.err.category": "ไม่รู้จักหมวดหมู่นี้",
+  "import.err.status": "ต้องเป็น New / Pending / Closed — ที่นำเข้าจะเริ่มที่ New เสมอ",
   "import.srv.unknownCategory": "ไม่มีหมวดหมู่ชื่อ “{category}”",
   "import.srv.unknownRequester": "ไม่พบผู้ใช้ที่ใช้อีเมล {email}",
   "import.srv.failed": "สร้าง Ticket นี้ไม่สำเร็จ",

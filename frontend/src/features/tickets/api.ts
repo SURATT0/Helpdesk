@@ -191,6 +191,12 @@ export type ImportTicketRow = {
   priority: Priority;
   category: string;
   requesterEmail: string;
+  /**
+   * Sent only when the file had a status column. The API validates it against
+   * the three stored statuses and refuses anything else; every imported ticket
+   * is created as New either way.
+   */
+  status?: string;
 };
 
 export async function importTickets(

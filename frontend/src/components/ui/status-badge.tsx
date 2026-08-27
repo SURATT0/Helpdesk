@@ -1,7 +1,9 @@
 "use client";
 
-import { STATUS_META, PRIORITY_META } from "@/lib/domain";
-import type { DisplayStatus, Priority, TicketStatusRecord } from "@/lib/domain";
+import { PRIORITY_META } from "@/lib/domain";
+import type { Priority } from "@/lib/domain";
+import { STATUS_META } from "@/lib/ticket-status";
+import type { DisplayStatus, TicketStatusRecord } from "@/lib/ticket-status";
 import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 

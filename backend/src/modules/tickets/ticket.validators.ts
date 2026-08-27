@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DB_STATUSES } from "../../shared/ticket-status";
 import { freeText, TEXT_MAX } from "../../shared/text";
 
 /** What a ticket may be SET to — the three stored values. */
@@ -150,6 +151,30 @@ export const importTicketRow = z.object({
   priority: priority.default("medium"),
   category: z.string().min(1),
   requesterEmail: z.string().email(),
+  /**
+   * A `status` column, if the file has one.
+   *
+   * Every imported ticket is created as New regardless — the importer files
+   * work, it does not decide where that work already got to. The column is
+   * validated rather than ignored so a file carrying a status this system
+   * retired (`Open`, `Resolved`) is refused with a sentence naming what it
+   * could have said, instead of being silently dropped and importing as New
+   * while the reader believes otherwise.
+   */
+  status: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) =>
+        v == null ||
+        v === "" ||
+        (DB_STATUSES as readonly string[]).includes(v.toLowerCase()),
+      {
+        message:
+          "must be one of New, Pending, Closed — imported tickets always start as New",
+      },
+    ),
 });
 
 export const importTicketsBody = z.object({

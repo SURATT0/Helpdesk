@@ -1,6 +1,6 @@
 "use client";
 
-import { STATUS_META } from "@/lib/domain";
+import { STATUS_META } from "@/lib/ticket-status";
 import { useI18n } from "@/features/i18n/context";
 import { useTicketHistory } from "../queries";
 

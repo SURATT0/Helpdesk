@@ -4,7 +4,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { env } from "../src/config/env";
-import { canTransition, type TicketStatus } from "../src/shared/domain";
+import {
+  canTransition,
+  type TicketStatus,
+} from "../src/shared/ticket-status";
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { notificationService } from "../src/modules/notifications/notification.service";
 import { authService } from "../src/modules/auth/auth.service";
@@ -1085,6 +1088,80 @@ describe("tickets — assignee identity and filter", () => {
     for (const row of res.body.data as Array<{ assigneeId: number }>) {
       expect(row.assigneeId).toBe(danaRow.id);
     }
+  });
+
+  /**
+   * The status facet asks for what the reader was SHOWN, and the two derived
+   * values share a stored one — so this is the pair that can go wrong: New and
+   * In Progress are both `status = 'new'`, separated only by the assignee.
+   */
+  describe("the status facet", () => {
+    const list = (token: string, status: string) =>
+      request(app).get(`${API}/tickets?status=${status}`).set(bearer(token));
+
+    it("gives In Progress only the taken tickets", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const res = await list(dana, "in_progress");
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      for (const t of res.body.data as Array<{
+        status: string;
+        displayStatus: string;
+        assigneeId: number | null;
+      }>) {
+        expect(t.displayStatus).toBe("in_progress");
+        expect(t.status).toBe("new");
+        expect(t.assigneeId).not.toBeNull();
+      }
+    });
+
+    it("gives New only the untaken ones", async () => {
+      const dana = await login("dana.reyes@acme.com");
+      const res = await list(dana, "new");
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      for (const t of res.body.data as Array<{
+        status: string;
+        displayStatus: string;
+        assigneeId: number | null;
+      }>) {
+        expect(t.displayStatus).toBe("new");
+        expect(t.status).toBe("new");
+        expect(t.assigneeId).toBeNull();
+      }
+    });
+
+    it("adds up: the four facets are the whole list, counted once each", async () => {
+      // Nothing lost between two filters, nothing counted by both — the
+      // property that makes the facet counts trustworthy at all.
+      const dana = await login("dana.reyes@acme.com");
+      const all = await request(app).get(`${API}/tickets`).set(bearer(dana));
+      const allIds = (all.body.data as Array<{ id: number }>).map((t) => t.id);
+
+      const perFacet = await Promise.all(
+        ["new", "in_progress", "pending", "closed"].map(async (s) => {
+          const res = await list(dana, s);
+          expect(res.status).toBe(200);
+          return (res.body.data as Array<{ id: number }>).map((t) => t.id);
+        }),
+      );
+
+      const union = perFacet.flat();
+      expect(union.length).toBe(allIds.length);
+      expect(new Set(union).size).toBe(union.length); // no id twice
+      expect([...union].sort()).toEqual([...allIds].sort());
+    });
+
+    it("refuses a status the model retired", async () => {
+      // `open` and `resolved` are not values a reader can be shown, so they are
+      // not values the facet accepts — 400 rather than an empty list, which
+      // would read as "there are none" instead of "there is no such thing".
+      const dana = await login("dana.reyes@acme.com");
+      for (const gone of ["open", "resolved"]) {
+        const res = await list(dana, gone);
+        expect(res.status).toBe(400);
+      }
+    });
   });
 
   it("filters the list to the unassigned queue", async () => {
@@ -2650,6 +2727,42 @@ describe("tickets — CSV import (importMany)", () => {
     expect(res.body.data.created).toBe(2);
     expect(res.body.data.failed).toBe(0);
     expect(res.body.data.results.every((r: { ok: boolean }) => r.ok)).toBe(true);
+  });
+
+  /**
+   * A file exported from the old model — or from another help desk — carries a
+   * status column, and `Open` is the value that model had. Refusing it names
+   * what the statuses are; ignoring the column would import the row as New while
+   * the reader believed the file's status had been honoured.
+   */
+  it("refuses a status the model retired, and says what the statuses are", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row({ status: "Open" })] });
+
+    expect(res.status).toBe(400);
+    const message = JSON.stringify(res.body);
+    expect(message).toMatch(/New, Pending, Closed/);
+    expect(message).toMatch(/always start as New/);
+  });
+
+  it("accepts a status column that names a real status, and still creates it as New", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const res = await request(app)
+      .post(`${API}/tickets/import`)
+      .set(bearer(dana))
+      .send({ rows: [row({ status: "Pending" })] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.created).toBe(1);
+    // The importer files work; it does not decide where that work already got
+    // to, so the column is validated and then ignored.
+    const created = await prisma.ticket.findFirstOrThrow({
+      orderBy: { id: "desc" },
+    });
+    expect(created.status).toBe("new");
   });
 
   it("fails a row with an unknown category, tagging the field", async () => {
