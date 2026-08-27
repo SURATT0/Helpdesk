@@ -1,6 +1,6 @@
 "use client";
 
-import { BADGE, type BadgePair } from "@/lib/badge-pairs";
+import { BADGE, type ColourPair } from "@/lib/palette";
 import { useI18n } from "@/features/i18n/context";
 import type { ProblemStatus } from "../schemas";
 
@@ -14,7 +14,7 @@ import type { ProblemStatus } from "../schemas";
  * `known_error` is the one that matters day to day — it means a workaround is
  * documented — so it takes the warm pair rather than a neutral grey.
  */
-const STYLE: Record<ProblemStatus, BadgePair> = {
+const STYLE: Record<ProblemStatus, ColourPair> = {
   investigating: BADGE.sky,
   known_error: BADGE.amber,
   resolved: BADGE.green,

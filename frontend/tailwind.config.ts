@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { BADGE, PRIORITY_DOT } from "./src/lib/palette";
 
 /**
  * Deskly design tokens. Theme: brown primary · cream background · green accent.
@@ -120,20 +121,30 @@ const config: Config = {
           tint: "#fffbeb",
           wash: "#fff7ed",
         },
-        // Status foreground / background pairs
+        /**
+         * Status foreground / background pairs, read from `src/lib/palette` —
+         * the same object `STATUS_META` builds the badges from.
+         *
+         * They used to be twelve hex values written out here as well, so the
+         * class `bg-status-pending-bg` and the value behind a Pending badge were
+         * two independent statements of one colour. `status` keeps the token
+         * NAMES (`pending-bg`, not `violet-bg`) because that is what a class
+         * needs to say — the mapping from a status to a tone lives in
+         * lib/ticket-status, and this mirrors it.
+         */
         status: {
-          "new-fg": "#1d4ed8",
-          "new-bg": "#dbeafe",
-          "open-fg": "#0369a1",
-          "open-bg": "#e0f2fe",
-          "progress-fg": "#b45309",
-          "progress-bg": "#fef3c7",
-          "pending-fg": "#6d28d9",
-          "pending-bg": "#ede9fe",
-          "resolved-fg": "#15803d",
-          "resolved-bg": "#dcfce7",
-          "closed-fg": "#475569",
-          "closed-bg": "#f1f5f9",
+          "new-fg": BADGE.blue.fg,
+          "new-bg": BADGE.blue.bg,
+          "open-fg": BADGE.sky.fg,
+          "open-bg": BADGE.sky.bg,
+          "progress-fg": BADGE.amber.fg,
+          "progress-bg": BADGE.amber.bg,
+          "pending-fg": BADGE.violet.fg,
+          "pending-bg": BADGE.violet.bg,
+          "resolved-fg": BADGE.green.fg,
+          "resolved-bg": BADGE.green.bg,
+          "closed-fg": BADGE.slate.fg,
+          "closed-bg": BADGE.slate.bg,
         },
         // SLA urgency. Semantic like the status palette: a breach is always the
         // same red wherever it appears, and `risk-line` is the row stripe, which
@@ -149,12 +160,8 @@ const config: Config = {
           idle: "#94a3b8",
           met: "#16a34a",
         },
-        priority: {
-          critical: "#dc2626",
-          high: "#f59e0b",
-          medium: "#3b82f6",
-          low: "#94a3b8",
-        },
+        /** The dots, from the same place `PRIORITY_META` reads them. */
+        priority: PRIORITY_DOT,
       },
       fontFamily: {
         sans: ["var(--font-geist-sans)", "Geist", "system-ui", "sans-serif"],

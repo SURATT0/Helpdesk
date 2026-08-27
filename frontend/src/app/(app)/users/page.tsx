@@ -16,11 +16,11 @@ import { HandoverQueueModal } from "@/features/users/components/handover-queue-m
 import { ProjectSelect } from "@/features/users/components/project-select";
 import { useI18n } from "@/features/i18n/context";
 import type { User, UserRole } from "@/features/users/schemas";
-import { BADGE, type BadgePair } from "@/lib/badge-pairs";
+import { BADGE, type ColourPair } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 
 // Descending privilege, so the badge colours read as a ladder at a glance.
-const ROLE_STYLE: Record<UserRole, BadgePair> = {
+const ROLE_STYLE: Record<UserRole, ColourPair> = {
   super_admin: BADGE.violet,
   admin: BADGE.green,
   user: BADGE.slate,

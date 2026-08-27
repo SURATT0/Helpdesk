@@ -1,4 +1,4 @@
-import { BADGE, type BadgePair } from "./badge-pairs";
+import { BADGE, type ColourPair } from "./palette";
 
 /**
  * Everything true about ticket status, in one file — the client's half of
@@ -119,7 +119,7 @@ export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
  */
 export const STATUS_META: Record<
   DisplayStatus | TicketStatusRecord,
-  { label: string } & BadgePair
+  { label: string } & ColourPair
 > = {
   new: { label: "New", ...BADGE.blue },
   in_progress: { label: "In Progress", ...BADGE.amber },
