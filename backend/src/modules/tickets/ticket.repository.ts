@@ -1,13 +1,13 @@
 import { Prisma } from "@prisma/client";
+import type { Priority, Role } from "../../shared/domain";
 import {
   canTransition,
-  displayStatus,
+  getDisplayStatus,
+  toQueryFilter,
   type DisplayStatus,
-  type Priority,
-  type Role,
   type TicketStatus,
   type TicketStatusRecord,
-} from "../../shared/domain";
+} from "../../shared/ticket-status";
 import type { AuthUser } from "../../shared/auth";
 import {
   BadRequest,
@@ -26,7 +26,6 @@ import {
   type SlaState,
 } from "./sla";
 import {
-  displayStatusWhere,
   ticketScopeWhere,
   type AssignmentCandidate,
   type RequesterCandidate,
@@ -202,7 +201,7 @@ function toTicketDto(row: TicketRow): Ticket {
     subject: row.subject,
     description: row.description,
     status: row.status,
-    displayStatus: displayStatus(row),
+    displayStatus: getDisplayStatus(row),
     priority: row.priority,
     requester: row.requester.name,
     requesterEmail: row.requester.email,
@@ -258,7 +257,7 @@ export const ticketRepository = {
           ticketScopeWhere(user),
           // The status filter selects what the reader was SHOWN, so it goes
           // through the same derivation the badge does — see displayStatusWhere.
-          filter.status ? displayStatusWhere(filter.status) : {},
+          filter.status ? toQueryFilter(filter.status) : {},
           {
             ...(filter.priority ? { priority: filter.priority } : {}),
             // `"none"` is the unassigned queue; a number is one agent's load.

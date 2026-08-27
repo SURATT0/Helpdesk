@@ -3,76 +3,16 @@
  * `src/lib/domain.ts` and the architecture spec.
  */
 /**
- * What a ticket is stored as.
- *
- *   new      nobody has finished it — the queue, whether or not someone is on it
- *   pending  the work is done and it is waiting on the requester
- *   closed   over
- *
- * "In Progress" is not here on purpose: it is `new` with an assignee, derived on
- * read (see `displayStatus`). The flow a person sees is
- * New → In Progress → Pending → Closed; the flow the column sees is three
- * values, which is why `assigneeId` is part of every status decision.
+ * Ticket status lives in `./ticket-status` — the stored vocabulary, the
+ * displayed one, the derivation between them and the transition whitelist, all
+ * in one file. Re-exported here ONLY as types so existing imports of the domain
+ * vocabulary keep working; import the helpers from ticket-status directly.
  */
-export type TicketStatus = "new" | "pending" | "closed";
-
-/**
- * The vocabulary `ticket_status_history` holds, which is wider than what can be
- * stored on a ticket today. That table is append-only, so rows written before
- * the three-value model still say `open`, `in_progress` and `resolved`, and
- * anything that renders history has to accept them.
- */
-export type TicketStatusRecord =
-  | TicketStatus
-  | "open"
-  | "in_progress"
-  | "resolved";
-
-/**
- * What a reader is shown, which is not the same set as what is stored.
- *
- * "In Progress" is not a status a ticket can be put into — it is the answer to
- * "is anyone on this?", and the row already knows: an unfinished ticket with an
- * assignee is being worked on. Deriving it means the two facts can never
- * disagree, which they could when it was a status of its own: assigning a `new`
- * ticket left it reading as New, and moving one to `in_progress` without an
- * assignee claimed work nobody was doing (the seed still holds one of those).
- */
-export type DisplayStatus = "new" | "in_progress" | "pending" | "closed";
-
-/** Display statuses in flow order — the order a board or a filter lists them. */
-export const DISPLAY_STATUSES: readonly DisplayStatus[] = [
-  "new",
-  "in_progress",
-  "pending",
-  "closed",
-];
-
-/**
- * The one definition of the derived state. Every badge, board column, chart and
- * filter goes through this — a second copy is a second answer.
- *
- * Tolerates the pre-migration vocabulary on purpose: `open` reads as New (nobody
- * has taken it) or In Progress (someone has), and a stored `in_progress` /
- * `resolved` maps to what it always meant. That is what lets the UI move to the
- * derived vocabulary before the column is narrowed, rather than in one jump.
- */
-export function displayStatus(ticket: {
-  status: TicketStatusRecord;
-  assigneeId: number | null;
-}): DisplayStatus {
-  switch (ticket.status) {
-    case "closed":
-      return "closed";
-    case "pending":
-    case "resolved": // pre-migration: done, waiting on the requester
-      return "pending";
-    case "in_progress":
-      return "in_progress";
-    default: // new | open — taken or not is what separates them
-      return ticket.assigneeId != null ? "in_progress" : "new";
-  }
-}
+export type {
+  DisplayStatus,
+  TicketStatus,
+  TicketStatusRecord,
+} from "./ticket-status";
 
 export type Priority = "low" | "medium" | "high" | "critical";
 
@@ -116,27 +56,4 @@ export function roleAtLeast(role: Role, minimum: Role): boolean {
  */
 export function isInternalThread(requesterRole: Role): boolean {
   return requesterRole !== "user";
-}
-
-/**
- * Allowed status transitions (whitelist). Anything else → 409.
- *
- *   new     → pending   the work is done; the requester is asked to confirm
- *   new     → closed    the desk raised it and finished it, with nobody to ask
- *   pending → new       the requester rejected it, or more work turned up
- *   pending → closed    confirmed, or the 72h sweep closed it
- *   closed  → new       reopened within 30 days (the assignee is kept, so it
- *                       comes back as In Progress rather than into the queue)
- *
- * Taking a ticket is not in here, because taking a ticket is not a status
- * change: assigning it is what turns New into In Progress, and both are `new`.
- */
-export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  new: ["pending", "closed"],
-  pending: ["new", "closed"],
-  closed: ["new"],
-};
-
-export function canTransition(from: TicketStatus, to: TicketStatus): boolean {
-  return STATUS_TRANSITIONS[from]?.includes(to) ?? false;
 }

@@ -1,5 +1,5 @@
+import { canTransition } from "../../shared/ticket-status";
 import {
-  canTransition,
   type Priority,
   type TicketStatus,
 } from "../../shared/domain";

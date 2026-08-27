@@ -1,10 +1,10 @@
+import type { Priority } from "../../shared/domain";
 import {
-  displayStatus,
   DISPLAY_STATUSES,
+  getDisplayStatus,
   type DisplayStatus,
-  type Priority,
   type TicketStatus,
-} from "../../shared/domain";
+} from "../../shared/ticket-status";
 import type { AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { ticketScopeWhere } from "../tickets/ticket.scope";
@@ -62,7 +62,7 @@ export const dashboardRepository = {
 
     const statusCount = new Map<DisplayStatus, number>();
     for (const g of grouped) {
-      const key = displayStatus(g);
+      const key = getDisplayStatus(g);
       statusCount.set(key, (statusCount.get(key) ?? 0) + g._count._all);
     }
     const byStatus = DISPLAY_STATUSES.map((status) => ({

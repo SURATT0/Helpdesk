@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { canTransition, STATUS_TRANSITIONS, type TicketStatus } from "./domain";
+import {
+  canTransition,
+  STATUS_TRANSITIONS,
+  type TicketStatus,
+} from "./ticket-status";
 
 const ALL: TicketStatus[] = ["new", "pending", "closed"];
 
