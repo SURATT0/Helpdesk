@@ -52,6 +52,29 @@ These are load-bearing invariants — get them right in whatever layer you touch
   **`pending` means finished work awaiting confirmation** (what `resolved` used to mean), so
   `resolved_at` is stamped on the first arrival there and the SLA resolution clock stops —
   `SLA_ACTIVE_STATUSES` is `["new"]` alone.
+- **A ticket closes only when both sides have said so.** The desk finishing the work is not the end
+  of it: submitting a fix moves the ticket to `pending`, and the person who raised it still has to
+  answer. Two endpoints are theirs, and theirs alone:
+  `POST /tickets/:id/closure/confirm` (`pending → closed`) and
+  `POST /tickets/:id/closure/reject` (`pending → new`, the assignee KEPT so it returns to whoever
+  did the work, with an optional `{ reason }` posted as a public comment).
+  The right to use them is **keyed on being the requester of that row, never on a role** — one gate,
+  `requireOwnPendingTicket` in the ticket service, checks row scope (404), then ownership (403),
+  then that the ticket is actually `pending` (400, naming the state it is in). So an admin who
+  raised their own ticket answers it like anyone else, and an admin who did not is refused and uses
+  the desk's `PATCH /:id/status` instead.
+  **Silence is the only other way it closes.** If nobody answers, the 72h sweep
+  (`autoCloseStale`, reading `resolved_at`) closes it — that is the fallback the requester's answer
+  sits on, and it deliberately records no confirmation: `ticket.closure_confirmed` /
+  `ticket.closure_rejected` audit rows say a person decided, and a `pending → closed` with neither
+  says the clock ran out.
+  **This one is a norm, not a lock.** The whitelist still allows `pending → closed` through the
+  desk's `PATCH /:id/status`, so an agent *can* close a ticket the requester has not answered.
+  Doing it to tidy a queue is exactly the one-sided close the rule exists to prevent, and it leaves
+  the same trail as the sweep — no record that anyone agreed. If this ever has to be impossible
+  rather than merely wrong, the change is to drop `closed` from `pending`'s transitions and give the
+  desk an audited force-close of its own; until then, do not add code paths that close a `pending`
+  ticket without a person or the clock behind it.
   **History keeps the old vocabulary.** `ticket_status_history` is append-only and the SLA source of
   truth, so rows written before this model still say `open`, `in_progress` and `resolved`; its columns
   use the wider `TicketStatusRecord` enum and readers map them through `displayStatus`. Do not rewrite
