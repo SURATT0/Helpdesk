@@ -5,16 +5,15 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
-import type { Priority, TicketStatus } from "@/lib/domain";
+import { PRIORITIES } from "@/lib/domain";
+import { DB_STATUSES } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { useBulkTicketAction, type BulkAction } from "../queries";
 
-const STATUSES: TicketStatus[] = [
-  "new",
-  "pending",
-  "closed",
-];
-const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];
+// The three STORED values — a bulk write sends `status`, so this menu offers
+// what a write may carry. "In Progress" is absent because it is derived: it is
+// `new` with an assignee, which the Assign menu beside this one is for.
+const STATUSES = DB_STATUSES;
 const ASSIGNABLE_ROLES = ["super_admin", "admin"];
 
 function Menu({

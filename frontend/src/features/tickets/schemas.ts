@@ -1,32 +1,35 @@
 import { z } from "zod";
 import { roleSchema } from "@/features/auth/schemas";
+import { PRIORITIES } from "@/lib/domain";
+import {
+  DB_STATUSES,
+  DISPLAY_STATUSES,
+  HISTORY_STATUSES,
+} from "@/lib/ticket-status";
+
+/**
+ * The parse boundary reads the vocabulary rather than restating it.
+ *
+ * This is the file that decides what the app ACCEPTS, so a list here that has
+ * fallen behind `lib/ticket-status` does not read as a stale constant — it reads
+ * as the ticket list going to its error state, because a legitimate row failed
+ * to parse. All four enums were hand-written copies.
+ */
 
 /** What a ticket may be stored as, and therefore what a write may send. */
-export const ticketStatusSchema = z.enum(["new", "pending", "closed"]);
+export const ticketStatusSchema = z.enum(DB_STATUSES);
 
 /**
  * What a history row may say. Wider than the above: the table is append-only, so
  * rows from before the three-value model still carry `open`, `in_progress` and
  * `resolved`.
  */
-export const ticketStatusRecordSchema = z.enum([
-  "new",
-  "open",
-  "in_progress",
-  "pending",
-  "resolved",
-  "closed",
-]);
+export const ticketStatusRecordSchema = z.enum(HISTORY_STATUSES);
 
-export const prioritySchema = z.enum(["low", "medium", "high", "critical"]);
+export const prioritySchema = z.enum(PRIORITIES);
 
 /** What the reader sees. Four values — "In Progress" is derived server-side. */
-export const displayStatusSchema = z.enum([
-  "new",
-  "in_progress",
-  "pending",
-  "closed",
-]);
+export const displayStatusSchema = z.enum(DISPLAY_STATUSES);
 
 export const ticketSchema = z.object({
   id: z.number(),

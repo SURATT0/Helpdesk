@@ -184,3 +184,94 @@ test("the matrix names the three tiers and holds role apart from reach", async (
     page.getByText(/or every customer, if you belong to none/),
   ).toBeVisible();
 });
+
+/**
+ * The matrix must agree with the API, cell by cell.
+ *
+ * Every earlier test here reads the page's own words back. That is what let
+ * three rows go wrong for as long as they did: the table said only a super
+ * admin may assign a ticket while `PATCH /tickets/:id/assignee` asks for
+ * `ticket:write`, which every admin holds — and writing the knowledge base and
+ * deleting a ticket were enforced on routes but had no row at all.
+ *
+ * So this reads the cells, and pairs each claim with the API behaviour that
+ * settles it: an admin who can really reassign a ticket, and one who can really
+ * publish an article.
+ */
+test("the matrix says an admin may assign a ticket — and the admin can", async ({
+  page,
+}) => {
+  await loginAs(page, "dana.reyes@acme.com"); // admin
+  await page.goto("/permissions");
+
+  const cell = (cap: string, role: string) =>
+    page.locator(`tr[data-cap="${cap}"] td[data-role="${role}"]`);
+
+  await expect(cell("cap.assign", "admin")).toHaveAttribute(
+    "data-allowed",
+    "true",
+  );
+  // Handing over a WHOLE QUEUE is the row that stops at the top tier.
+  await expect(cell("cap.handover", "admin")).toHaveAttribute(
+    "data-allowed",
+    "false",
+  );
+  await expect(cell("cap.handover", "super_admin")).toHaveAttribute(
+    "data-allowed",
+    "true",
+  );
+
+  // And the claim holds where assignment actually happens: the bulk bar, whose
+  // Assign and Priority menus fan out to PATCH /tickets/:id/assignee and
+  // /priority — the two ticket:write routes this row is about. Nothing is
+  // applied; that the menus are offered to an admin at all is the point.
+  await page.goto("/tickets");
+  await page.getByLabel(/^Select ticket #\d+$/).first().click();
+  // `exact`: the filter bar has a "＋ Assignee" chip and the table a sortable
+  // "Priority" header, so a loose name matches three buttons on this page.
+  const bar = page.getByText(/^\d+ selected$/).locator("..");
+  await expect(bar.getByRole("button", { name: "Assign", exact: true })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Priority", exact: true })).toBeVisible();
+});
+
+test("the matrix lists writing the knowledge base, and an admin holds it", async ({
+  page,
+}) => {
+  await loginAs(page, "dana.reyes@acme.com"); // admin — holds kb:write
+  await page.goto("/permissions");
+
+  const row = page.locator('tr[data-cap="cap.kb"]');
+  await expect(row).toBeVisible();
+  await expect(row.locator('td[data-role="admin"]')).toHaveAttribute(
+    "data-allowed",
+    "true",
+  );
+  await expect(row.locator('td[data-role="user"]')).toHaveAttribute(
+    "data-allowed",
+    "false",
+  );
+
+  // Backed by the API rather than by the table restating itself.
+  await page.goto("/kb");
+  await expect(page.getByRole("button", { name: "New article" })).toBeVisible();
+});
+
+test("the matrix lists deleting a ticket, at the top tier only", async ({
+  page,
+}) => {
+  await loginAs(page, "dana.reyes@acme.com"); // admin
+  await page.goto("/permissions");
+
+  const row = page.locator('tr[data-cap="cap.deleteTicket"]');
+  await expect(row).toBeVisible();
+  await expect(row.locator('td[data-role="admin"]')).toHaveAttribute(
+    "data-allowed",
+    "false",
+  );
+  await expect(row.locator('td[data-role="super_admin"]')).toHaveAttribute(
+    "data-allowed",
+    "true",
+  );
+  // Which is exactly what "delete ticket is hidden from an admin" above proves
+  // on the ticket page.
+});

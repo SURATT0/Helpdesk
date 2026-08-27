@@ -24,6 +24,8 @@ import { useAssessSla, useSlaNow } from "../use-sla";
 import { useTickets } from "../queries";
 import type { Ticket } from "../schemas";
 import { TOUCH_TARGET } from "@/components/ui/touch";
+import { PRIORITIES } from "@/lib/domain";
+import { DISPLAY_STATUSES } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 
 // SLA sits next to Status: the two answer "where is this?" and "how long have I
@@ -68,22 +70,15 @@ type SortKey =
 
 type SortState = { key: SortKey; dir: "asc" | "desc" };
 
-// Flow order of what the column actually shows, so sorting agrees with the
-// badges: New → In Progress → Pending → Closed.
-const STATUS_ORDER: Record<Ticket["displayStatus"], number> = {
-  new: 0,
-  in_progress: 1,
-  pending: 2,
-  closed: 3,
-};
+// Sorting agrees with the badges because it reads the same ordered lists they
+// do: DISPLAY_STATUSES is already New → In Progress → Pending → Closed, and
+// PRIORITIES is already most-severe-first, so ascending puts Critical on top.
+// Both were a fourth hand-written copy of an order that exists once.
+const rank = <T extends string>(order: readonly T[]) =>
+  Object.fromEntries(order.map((v, i) => [v, i])) as Record<T, number>;
 
-// critical is most severe → lowest rank, so ascending puts Critical first
-const PRIORITY_ORDER: Record<Ticket["priority"], number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
+const STATUS_ORDER = rank(DISPLAY_STATUSES);
+const PRIORITY_ORDER = rank(PRIORITIES);
 
 // SLA is not here: it is compared on the assessed clock (see `compareSla`),
 // not on any field of the row. It used to be re-parsed out of the display

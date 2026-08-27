@@ -18,7 +18,7 @@
  */
 
 import { orderRange, startOfDay, type DateRange } from "./date-range";
-import { PRIORITY_META, type Priority } from "@/lib/domain";
+import { PRIORITIES, type Priority } from "@/lib/domain";
 
 export type HistoryFilters = {
   priority: Priority | "";
@@ -31,8 +31,6 @@ export const EMPTY_FILTERS: HistoryFilters = {
   range: null,
   query: "",
 };
-
-const PRIORITIES = Object.keys(PRIORITY_META) as Priority[];
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -59,7 +57,7 @@ export function parseDay(value: string | null): Date | null {
 }
 
 function parsePriority(value: string | null): Priority | "" {
-  return value && (PRIORITIES as string[]).includes(value)
+  return value && (PRIORITIES as readonly string[]).includes(value)
     ? (value as Priority)
     : "";
 }

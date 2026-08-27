@@ -15,7 +15,25 @@ export type {
   TicketStatusRecord,
 } from "./ticket-status";
 
-export type Priority = "low" | "medium" | "high" | "critical";
+/**
+ * Priority, most urgent first — the order a triage surface lists it in (the
+ * filter facet, the bulk menu, the history filter).
+ *
+ * Four components used to declare this list themselves, in TWO different
+ * orders, so the same menu read top-down differently on Create Ticket than on
+ * the filter bar. One list, and the places that want it the other way up say so
+ * by name below.
+ */
+export const PRIORITIES = ["critical", "high", "medium", "low"] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+/**
+ * Mildest first — the order a FORM offers, matching the API's enum. A person
+ * filling in a new ticket is choosing on a scale, and a scale that starts at
+ * "critical" invites the top of the list; a triage queue is the opposite, which
+ * is why both orders exist and neither is wrong.
+ */
+export const PRIORITIES_ASCENDING = [...PRIORITIES].reverse() as Priority[];
 
 /**
  * Roles, mirroring the API's enum. `features/auth/schemas.ts` owns the runtime
@@ -41,6 +59,11 @@ export function isInternalThread(requesterRole: Role): boolean {
   return requesterRole !== "user";
 }
 
+/**
+ * Keyed on `Priority`, so a value added to `PRIORITIES` and not here is a type
+ * error rather than a blank dot. Insertion order matches `PRIORITIES`, which is
+ * what `Object.keys` on this used to be relied on for.
+ */
 export const PRIORITY_META: Record<
   Priority,
   { label: string; dot: string }
