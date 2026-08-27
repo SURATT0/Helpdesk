@@ -3,6 +3,8 @@
  * caps. Ticket status has its own file, `./ticket-status`.
  */
 
+import { PRIORITY_DOT } from "./palette";
+
 /**
  * Ticket status lives in `./ticket-status` — the stored vocabulary, the
  * displayed one, the derivation between them, the transition whitelist and the
@@ -63,15 +65,20 @@ export function isInternalThread(requesterRole: Role): boolean {
  * Keyed on `Priority`, so a value added to `PRIORITIES` and not here is a type
  * error rather than a blank dot. Insertion order matches `PRIORITIES`, which is
  * what `Object.keys` on this used to be relied on for.
+ *
+ * The colours come from `lib/palette`, which the Tailwind config also reads —
+ * these four hex values used to be written here AND as `colors.priority.*`, so
+ * the dot beside a word and the `bg-priority-*` chip in the closed log could
+ * drift apart.
  */
 export const PRIORITY_META: Record<
   Priority,
   { label: string; dot: string }
 > = {
-  critical: { label: "Critical", dot: "#dc2626" },
-  high: { label: "High", dot: "#f59e0b" },
-  medium: { label: "Medium", dot: "#3b82f6" },
-  low: { label: "Low", dot: "#94a3b8" },
+  critical: { label: "Critical", dot: PRIORITY_DOT.critical },
+  high: { label: "High", dot: PRIORITY_DOT.high },
+  medium: { label: "Medium", dot: PRIORITY_DOT.medium },
+  low: { label: "Low", dot: PRIORITY_DOT.low },
 };
 
 /**

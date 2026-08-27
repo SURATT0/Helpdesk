@@ -1,12 +1,6 @@
+import { AVATAR_TONE, type AvatarTone } from "@/lib/palette";
 import { initials } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-
-const PALETTES: Record<string, { bg: string; fg: string }> = {
-  blue: { bg: "#dbeafe", fg: "#1d4ed8" },
-  green: { bg: "#d1fae5", fg: "#047857" },
-  pink: { bg: "#fce7f3", fg: "#be185d" },
-  red: { bg: "#fee2e2", fg: "#b91c1c" },
-};
 
 export function Avatar({
   name,
@@ -16,10 +10,10 @@ export function Avatar({
 }: {
   name: string;
   size?: number;
-  tone?: keyof typeof PALETTES;
+  tone?: AvatarTone;
   className?: string;
 }) {
-  const p = PALETTES[tone] ?? PALETTES.blue;
+  const p = AVATAR_TONE[tone] ?? AVATAR_TONE.blue;
   return (
     <span
       className={cn(

@@ -9,7 +9,7 @@ import { TableScroll } from "@/components/ui/table-scroll";
 import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
-import { BADGE, type BadgePair } from "@/lib/badge-pairs";
+import { BADGE, type ColourPair } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 import { useAuditActions, useAuditLog } from "../queries";
 import type { AuditEntry } from "../schemas";
@@ -19,7 +19,7 @@ const PAGE_SIZE = 50;
 const COLS = "grid-cols-[150px_1.1fr_170px_90px_1fr]";
 
 /** Colour the action family so a long trail is scannable at a glance. */
-const FAMILY_STYLE: Record<string, BadgePair> = {
+const FAMILY_STYLE: Record<string, ColourPair> = {
   ticket: BADGE.sky,
   comment: BADGE.green,
   user: BADGE.violet,
