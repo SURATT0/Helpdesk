@@ -27,6 +27,18 @@ export type ProjectOwnerDto = {
   available: boolean;
 } | null;
 
+/**
+ * What a deletion would disturb: the project's identity, and how many people
+ * route through it. `members` counts listed members plus the owner and backup
+ * owner, de-duplicated — see `findDeletionImpact`.
+ */
+export type ProjectDeletionImpact = {
+  id: number;
+  name: string;
+  customerId: number;
+  members: number;
+};
+
 export type ProjectDto = {
   id: number;
   name: string;
@@ -218,6 +230,103 @@ export const projectRepository = {
         tx,
       );
       return toDto(updated);
+    });
+  },
+
+  /**
+   * What deleting this project would disturb, for the confirmation dialog and
+   * for the guard behind it — both read this, so the number a person is shown is
+   * the number the server refuses on.
+   *
+   * "Members" is everyone the project is pointed at: its listed members plus the
+   * owner and backup owner, who route work through it without necessarily
+   * belonging to it. Scoped, so an out-of-scope id reads as "not found".
+   */
+  async findDeletionImpact(
+    id: number,
+    actor: AuthUser,
+  ): Promise<ProjectDeletionImpact | null> {
+    const row = await prisma.project.findFirst({
+      where: { AND: [{ id }, projectScopeWhere(actor)] },
+      select: {
+        id: true,
+        name: true,
+        customerId: true,
+        ownerId: true,
+        backupOwnerId: true,
+        _count: { select: { members: true } },
+      },
+    });
+    if (!row) return null;
+    // Owner and backup are counted only when they are not already listed as
+    // members, which `_count` cannot express — so they are added as distinct
+    // ids rather than incremented blindly.
+    const extra = new Set<number>();
+    if (row.ownerId != null) extra.add(row.ownerId);
+    if (row.backupOwnerId != null) extra.add(row.backupOwnerId);
+    const alsoMembers = extra.size
+      ? await prisma.user.count({
+          where: { id: { in: [...extra] }, projectId: id },
+        })
+      : 0;
+    return {
+      id: row.id,
+      name: row.name,
+      customerId: row.customerId,
+      members: row._count.members + extra.size - alsoMembers,
+    };
+  },
+
+  /**
+   * Soft-delete: stamp `deletedAt`/`deletedById` and write the trail.
+   *
+   * An UPDATE rather than a DELETE, so the audit row's `entityId` still resolves
+   * to something and the routing history stays readable. `projectScopeWhere`
+   * hides it from every read afterwards, membership included.
+   *
+   * Re-checked inside the transaction like `update` above: the impact count the
+   * caller validated was read outside it, so a member added in between must not
+   * slip through. `members: { none: {} }` is that check, expressed as part of the
+   * same statement that does the write — a second read could still race it.
+   */
+  async softDelete(
+    id: number,
+    actor: AuthUser,
+    snapshot: { name: string; customerId: number; members: number },
+  ): Promise<boolean> {
+    return prisma.$transaction(async (tx) => {
+      const claimed = await tx.project.updateMany({
+        where: {
+          AND: [
+            { id },
+            projectScopeWhere(actor),
+            { members: { none: {} }, ownerId: null, backupOwnerId: null },
+          ],
+        },
+        data: { deletedAt: new Date(), deletedById: actor.id },
+      });
+      if (claimed.count === 0) return false;
+
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "project.delete",
+          entity: "project",
+          entityId: id,
+          // Denormalised on purpose. `audit_logs.entityId` is a plain integer
+          // with no foreign key, so nothing stops the row being deleted out from
+          // under it — but nothing resolves the id back to a name either. The
+          // trail has to be readable on its own years later.
+          meta: {
+            name: snapshot.name,
+            customerId: snapshot.customerId,
+            members: snapshot.members,
+            actorRole: actor.role,
+          },
+        },
+        tx,
+      );
+      return true;
     });
   },
 };

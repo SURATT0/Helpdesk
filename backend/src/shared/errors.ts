@@ -89,6 +89,26 @@ export const HasOpenQueue = (count: number) =>
     `This person still has ${count} unfinished ticket${count === 1 ? "" : "s"} assigned — hand the queue over first`,
   );
 
+/**
+ * Thrown when deleting a project that people still route through.
+ *
+ * Same shape and reasoning as `HasOpenQueue` above, deliberately: a 409, because
+ * the request is well formed and will succeed once the members have been moved.
+ *
+ * Members rather than tickets. A ticket carries no project — routing reads the
+ * REQUESTER's project when the ticket is created and keeps only the assignee it
+ * chose — so "tickets in this project" is not a question the data can answer.
+ * What deletion would actually break is routing, and membership is exactly what
+ * routing reads, so that is what this guards. Owners and backup owners count as
+ * members here: an empty project is one nobody is pointed at.
+ */
+export const ProjectHasMembers = (count: number) =>
+  new AppError(
+    409,
+    "PROJECT_HAS_MEMBERS",
+    `This project still has ${count} member${count === 1 ? "" : "s"} routing through it — move them first`,
+  );
+
 /** Thrown when reopening a ticket closed more than 30 days ago. */
 export const ReopenWindowExpired = (
   message = "Reopen window (30 days) has expired — open a new ticket instead",

@@ -37,4 +37,19 @@ export const projectController = {
     const project = await projectService.update(id, input, currentUser(req));
     res.json({ data: project });
   },
+
+  /** What deleting this project would disturb — read by the confirm dialog. */
+  async deletionImpact(req: Request, res: Response) {
+    const { id } = projectIdParam.parse(req.params);
+    const impact = await projectService.deletionImpact(id, currentUser(req));
+    res.json({ data: impact });
+  },
+
+  async remove(req: Request, res: Response) {
+    const { id } = projectIdParam.parse(req.params);
+    await projectService.remove(id, currentUser(req));
+    // 204: there is no representation of a deleted project to return, and the
+    // client's next move is to drop it from the list it already holds.
+    res.status(204).end();
+  },
 };

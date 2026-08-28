@@ -14,15 +14,20 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
   }) as AuthUser;
 
 describe("projectScopeWhere", () => {
-  it("gives a platform admin an unfiltered clause", () => {
+  it("gives a platform admin an unfiltered reach", () => {
+    // Unfiltered on the tenant axis. `deletedAt` is not a reach clause and is
+    // never waived — see the deleted-row test below.
     expect(projectScopeWhere(user({ role: "super_admin", customerId: null }))).toEqual(
-      {},
+      { deletedAt: null },
     );
   });
 
   it("confines everyone else to their own customer", () => {
     for (const role of ["super_admin", "admin", "user"] as const) {
-      expect(projectScopeWhere(user({ role }))).toEqual({ customerId: 7 });
+      expect(projectScopeWhere(user({ role }))).toEqual({
+        customerId: 7,
+        deletedAt: null,
+      });
     }
   });
 
@@ -31,13 +36,35 @@ describe("projectScopeWhere", () => {
     // by design — so the sentinel case has to name a role that is not.
     expect(projectScopeWhere(user({ role: "admin", customerId: null }))).toEqual({
       id: -1,
+      deletedAt: null,
     });
   });
 
   it("gives a platform-wide principal every customer's projects", () => {
     expect(
       projectScopeWhere(user({ role: "super_admin", customerId: null })),
-    ).toEqual({});
+    ).toEqual({ deletedAt: null });
+  });
+
+  /**
+   * The clause that makes the soft delete a delete.
+   *
+   * Every role, every reach — including the platform-wide principal who is
+   * exempt from the tenant filter. A deleted project is out of everyone's
+   * scope, which is what lets one function stand in for "and remember to
+   * exclude deleted ones" at six call sites, the member picker among them.
+   */
+  it("excludes deleted projects for every principal, platform-wide included", () => {
+    const principals = [
+      user({ role: "super_admin", customerId: null }),
+      user({ role: "super_admin" }),
+      user({ role: "admin" }),
+      user({ role: "user" }),
+      user({ role: "admin", customerId: null }),
+    ];
+    for (const p of principals) {
+      expect(projectScopeWhere(p).deletedAt, p.role).toBeNull();
+    }
   });
 });
 

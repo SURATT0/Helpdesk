@@ -50,6 +50,7 @@ export const CAPABILITIES: { key: string; perms: readonly string[] }[] = [
   // is the normal end of a ticket's life and this is the escape hatch for a row
   // that should never have existed.
   { key: "cap.deleteTicket", perms: ["ticket:delete"] },
+  { key: "cap.deleteProject", perms: ["project:delete"] },
 ];
 
 /**

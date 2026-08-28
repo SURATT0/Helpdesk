@@ -31,6 +31,29 @@ export const projectListSchema = z.object({
 
 export const projectEnvelopeSchema = z.object({ data: projectSchema });
 
+/**
+ * What deleting a project would disturb.
+ *
+ * `members` counts everyone routing through it — its listed members plus the
+ * owner and backup owner. Deliberately NOT a ticket count: a ticket carries no
+ * project (routing reads the requester's project once, at creation, and keeps
+ * only the assignee it picked), so "tickets in this project" is not a question
+ * the data can answer. What deletion would break is routing, and membership is
+ * what routing reads.
+ */
+export const projectDeletionImpactSchema = z.object({
+  data: z.object({
+    id: z.number(),
+    name: z.string(),
+    customerId: z.number(),
+    members: z.number(),
+  }),
+});
+
+export type ProjectDeletionImpact = z.infer<
+  typeof projectDeletionImpactSchema
+>["data"];
+
 export type Project = z.infer<typeof projectSchema>;
 export type ProjectOwner = z.infer<typeof projectOwnerSchema>;
 
