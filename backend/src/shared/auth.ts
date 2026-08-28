@@ -44,6 +44,42 @@ export function isPlatformWide(user: {
 }
 
 /**
+ * May this principal see how much work OTHER people are carrying?
+ *
+ * The one place that decides it, for the same reason `isPlatformWide` is one
+ * place: this predicate is a policy about staff privacy, and the moment it is
+ * re-derived inline in a route or a component, the two copies answer differently
+ * and one of them is a leak.
+ *
+ * Keyed on the ROLE alone, deliberately — unlike `isPlatformWide`, reach is not
+ * part of this question. A customer's own super_admin manages that customer's
+ * desk and needs to see its workload; `ticketScopeWhere` already confines every
+ * figure they get to their own tenant, so role is the whole of the decision here
+ * and adding reach would leave a real manager unable to manage.
+ *
+ * NOT a `permissions` entry: `super_admin` holds `*`, so a grant string would be
+ * satisfied by the wildcard and could never distinguish this from anything else
+ * an admin may do. The gate has to name the role.
+ */
+export function maySeeTeamWorkload(user: { role: Role }): boolean {
+  return user.role === "super_admin";
+}
+
+/**
+ * May this principal see the workload figures of user `targetId`?
+ *
+ * Your own numbers are always yours: an agent has to be able to see what is on
+ * their own desk, and that is not a comparison between people. Everything else —
+ * one named colleague, or the table that ranks them — needs the role above.
+ */
+export function maySeeWorkloadOf(
+  user: { id: number; role: Role },
+  targetId: number,
+): boolean {
+  return targetId === user.id || maySeeTeamWorkload(user);
+}
+
+/**
  * Coarse permission grants per role. `*` = all (admin). Reads are gated by
  * row-level scoping rather than a permission (everyone may read what their
  * scope allows), so `ticket:read` is granted broadly; writes are permissioned.

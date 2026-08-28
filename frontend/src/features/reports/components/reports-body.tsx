@@ -2,25 +2,22 @@
 
 import { Card } from "@/components/ui/card";
 import { Skeleton, ErrorState } from "@/components/ui/states";
-import { Avatar } from "@/components/ui/avatar";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { PRIORITY_META } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
-import { toneForName } from "@/features/tickets/data";
 import { formatDuration } from "@/features/tickets/duration";
 import { trendDayLabels } from "../export";
 import { useReportsSummary } from "../queries";
 
 const ROW = "grid-cols-[130px_1fr_70px_90px]";
-const AGENT_ROW = "grid-cols-[1fr_120px_120px]";
 
 // 290px of fixed columns + 40px of row padding. The `1fr` column holds the
 // compliance bar next to a 44px percentage, so it needs real width or the bar
-// reads as empty; these floors give it ~190px and ~160px respectively, and the
-// columns scroll below that rather than compressing into it.
+// reads as empty; this floor gives it ~190px, and the columns scroll below that
+// rather than compressing into it. (The agent table's own floor moved with the
+// table to workload-view.tsx.)
 const ROW_MIN_WIDTH = 520;
-const AGENT_ROW_MIN_WIDTH = 440;
 
 // Chart geometry (viewBox units). The series is *scaled* to this box — the old
 // code plotted raw counts as y-pixels, so the line was stuck at the top.
@@ -298,8 +295,8 @@ export function ReportsBody() {
 
       {/* SLA by category. The heading stays even with nothing to show — an empty
           list used to remove the whole block, so a reader with no judged tickets
-          never learned the section existed. The agent table below says "not
-          enough data yet" in the same situation; these two now behave alike. */}
+          never learned the section existed. (The agent table this used to be
+          compared with has moved to /reports/workload.) */}
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="border-b border-hairline px-5 py-3.5">
           <div className="text-lead font-semibold text-ink">
@@ -359,58 +356,18 @@ export function ReportsBody() {
         )}
       </div>
 
-      {/* Throughput by agent */}
-      <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="border-b border-hairline px-5 py-3.5">
-          <div className="text-lead font-semibold text-ink">
-            {t("report.byAgent.title")}
-          </div>
-          <div className="text-caption text-faint">
-            {t("report.byAgent.sub")}
-          </div>
-        </div>
-        {data.byAgent.length === 0 ? (
-          // No columns to hold apart, so no scroller — a centred sentence
-          // inside a width floor would be pushed off to the left.
-          <div className="px-5 py-6 text-center text-body text-faint">
-            {t("report.sectionEmpty")}
-          </div>
-        ) : (
-          <TableScroll minWidth={AGENT_ROW_MIN_WIDTH}>
-            <div
-              className={`grid ${AGENT_ROW} border-b border-hairline bg-wash px-5 py-2.5 text-caption font-semibold text-faint`}
-            >
-              <span>{t("report.col.agent")}</span>
-              <span>{t("report.col.resolved")}</span>
-              <span>{t("report.col.avgRes")}</span>
-            </div>
-            {data.byAgent.map((r, i) => (
-              <div
-                key={r.agent}
-                className={cn(
-                  `grid ${AGENT_ROW} items-center px-5 py-2.5 text-body`,
-                  i < data.byAgent.length - 1 && "border-b border-rule",
-                )}
-              >
-                <span className="flex items-center gap-2 truncate text-ink">
-                  <Avatar
-                    name={r.agent}
-                    tone={toneForName(r.agent)}
-                    size={22}
-                  />
-                  {r.agent}
-                </span>
-                <span className="font-mono text-dense font-medium text-subtle">
-                  {r.handled}
-                </span>
-                <span className="font-mono text-dense font-medium text-subtle">
-                  {hours(r.avgHandlingHours)}
-                </span>
-              </div>
-            ))}
-          </TableScroll>
-        )}
-      </div>
+      {/*
+        The "Throughput by agent" table used to close this page. It is not
+        hidden here — it is not part of this page any more, for anyone. It lives
+        on /reports/workload behind the super-admin gate, and this component no
+        longer receives the data to draw it, so there is no DOM node, no
+        placeholder and no "you don't have access" box telling a reader that a
+        table they cannot see exists. The link to it is offered in the topbar
+        (ReportActions), to the readers who can follow it.
+
+        The container is `flex flex-col gap-4`, so dropping the last child leaves
+        no trailing gap — nothing below needed rebalancing.
+      */}
     </div>
   );
 }

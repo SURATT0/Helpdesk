@@ -1,4 +1,4 @@
-import type { ReportsSummary } from "./schemas";
+import type { AgentWorkload, ReportsSummary } from "./schemas";
 
 /**
  * Calendar-day labels for the last `count` days (oldest → today).
@@ -42,12 +42,23 @@ function toRows(cells: (string | number)[][]): string {
   return cells.map((row) => row.map(csvEscape).join(",")).join("\r\n");
 }
 
-/** Flatten the reports summary into a single CSV document (KPIs + trend + SLA table). */
+/**
+ * Flatten the reports summary into a single CSV document (KPIs + trend + SLA
+ * tables).
+ *
+ * It used to end with an `Agent, Resolved, Avg resolution (h)` section. That is
+ * gone from this document for everyone, rather than trimmed per reader: the
+ * function is handed a `ReportsSummary`, and a summary no longer HAS per-agent
+ * rows to write. A branch on the reader's role would have been one `if` away
+ * from shipping the names in a file that outlives the screen it came from — and
+ * a CSV is exactly the artefact that gets mailed on. Per-agent figures have
+ * their own export, on the page behind the gate (`workloadToCsv`).
+ */
 export function reportsToCsv(
   summary: ReportsSummary,
   trendLabels: string[],
 ): string {
-  const { kpis, closureTrend, byPriority, byCategory, byAgent } = summary;
+  const { kpis, closureTrend, byPriority, byCategory } = summary;
   const sections: (string | number)[][] = [
     ["Metric", "Value"],
     // Named for what they measure: the CSV outlives the screen it came from.
@@ -70,11 +81,20 @@ export function reportsToCsv(
       r.judged,
       r.breached,
     ]),
-    [],
-    ["Agent", "Resolved", "Avg resolution (h)"],
-    ...byAgent.map((r) => [r.agent, r.handled, r.avgHandlingHours]),
   ];
   return toRows(sections);
+}
+
+/**
+ * The per-agent export, kept apart from the one above so that no reader can
+ * receive it by accident. Only the workload page offers it, and only a super
+ * admin can open that page.
+ */
+export function workloadToCsv(rows: readonly AgentWorkload[]): string {
+  return toRows([
+    ["Agent", "Resolved", "Avg resolution (h)"],
+    ...rows.map((r) => [r.agent, r.handled, r.avgHandlingHours]),
+  ]);
 }
 
 /** Trigger a browser download of a CSV string. */

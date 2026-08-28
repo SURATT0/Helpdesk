@@ -788,15 +788,22 @@ describe("scope — a requester sees only their own, except the KB", () => {
       .get(`${API}/reports/sla-summary`)
       .set(bearer(marcus));
     expect(res.status).toBe(200);
-    // Marcus is in nobody's closed history, so his own report has nothing in it —
-    // while the same call as an admin is full of the customer's agents.
-    expect(res.body.data.byAgent).toEqual([]);
-
+    // Row scope narrows every figure to Marcus's own tickets, so his SLA sample
+    // is a subset of what an admin of the same customer is judged over.
     const dana = await login("dana.reyes@acme.com");
     const asAdmin = await request(app)
       .get(`${API}/reports/sla-summary`)
       .set(bearer(dana));
-    expect(asAdmin.body.data.byAgent.length).toBeGreaterThan(0);
+    expect(res.body.data.kpis.judgedCount).toBeLessThan(
+      asAdmin.body.data.kpis.judgedCount,
+    );
+
+    // This used to compare the two `byAgent` tables. That field is gone from
+    // this endpoint entirely — per-agent throughput moved behind its own gate
+    // (test/workload-visibility.integration.test.ts), and a requester was never
+    // meant to be handed a list of the staff who worked their tickets.
+    expect(res.body.data.byAgent).toBeUndefined();
+    expect(asAdmin.body.data.byAgent).toBeUndefined();
   });
 
   it("cannot browse the asset register", async () => {
@@ -1036,17 +1043,34 @@ describe("reports — what the resolution clock measures", () => {
   });
 
   it("gives an agent's average the same clock as the headline", async () => {
-    const dana = await login("dana.reyes@acme.com");
-    const data = await summary(dana);
-    const rows = data.byAgent as {
+    // The per-agent table lives on its own gated route now, so this reads it
+    // there — but the property under test is unchanged and still worth pinning:
+    // the two figures must be one measurement. They are computed from shared
+    // helpers in the repository precisely so this cannot drift.
+    const morgan = await login("morgan.lee@acme.com"); // super_admin
+    const data = await summary(morgan);
+    const table = await request(app)
+      .get(`${API}/reports/workload/agents`)
+      .set(bearer(morgan));
+    expect(table.status).toBe(200);
+
+    const rows = table.body.data as {
       agent: string;
+      handled: number;
       avgHandlingHours: number;
     }[];
     expect(rows.length).toBeGreaterThan(0);
-    // Two tables on one page must not answer different questions: every agent's
-    // average is drawn from the same measurement, so none can exceed the span of
-    // the archive it is measured over.
     expect(rows.every((r) => r.avgHandlingHours >= 0)).toBe(true);
+
+    // The check that actually binds them: the per-agent rows are the ASSIGNED
+    // subset of the very tickets the headline is averaged over, so their counts
+    // must sum to no more than the headline's sample. A second clock — measuring
+    // to `resolved_at`, say, or from creation — would change which tickets have a
+    // handling time at all and break this.
+    const kpis = data.kpis as { handledCount: number };
+    const counted = rows.reduce((n, r) => n + r.handled, 0);
+    expect(counted).toBeGreaterThan(0);
+    expect(counted).toBeLessThanOrEqual(kpis.handledCount);
   });
 });
 
@@ -1177,17 +1201,29 @@ describe("tickets — assignee identity and filter", () => {
     }
   });
 
-  // The assignee filter is AND-ed with row scope, never a way around it.
+  // The assignee filter is AND-ed with row scope, never a way around it — and it
+  // is now permissioned on top of that, so the two guards are checked separately.
   it("cannot reach another customer's tickets through the filter", async () => {
-    const dana = await login("dana.reyes@acme.com"); // Acme
     const owen = await prisma.user.findUniqueOrThrow({
       where: { email: "owen.park@acme.com" }, // Globex agent
     });
-    const res = await request(app)
+
+    // An Acme admin is stopped by the workload gate before scope even applies:
+    // naming a colleague is refused whoever the colleague is.
+    const dana = await login("dana.reyes@acme.com"); // Acme, admin
+    const refused = await request(app)
       .get(`${API}/tickets?assigneeId=${owen.id}`)
       .set(bearer(dana));
-    expect(res.status).toBe(200);
-    expect(res.body.data).toHaveLength(0);
+    expect(refused.status).toBe(403);
+
+    // Acme's own super admin passes that gate — and then row scope is what keeps
+    // Globex out, which is the property this test has always been about.
+    const morgan = await login("morgan.lee@acme.com"); // Acme, super_admin
+    const scoped = await request(app)
+      .get(`${API}/tickets?assigneeId=${owen.id}`)
+      .set(bearer(morgan));
+    expect(scoped.status).toBe(200);
+    expect(scoped.body.data).toHaveLength(0);
   });
 });
 

@@ -10,6 +10,7 @@ import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
 import { PRIORITIES } from "@/lib/domain";
+import { maySeeTeamWorkload } from "@/lib/permissions";
 import { DISPLAY_STATUSES } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { toneForName } from "../data";
@@ -165,10 +166,24 @@ export function FilterBar() {
     [assignable],
   );
 
-  const assigneeOptions: AssigneeKey[] = React.useMemo(
-    () => ["none", ...assignable.map((u) => u.id)],
-    [assignable],
-  );
+  /**
+   * Who the facet may be pointed at.
+   *
+   * Narrowing the list to one colleague is how the ticket page answers "how big
+   * is their queue" — every count on it follows the filter: the footer's "x of
+   * y", the SLA tiles, the board's column headers. So the options are the same
+   * set the API will accept (`ticketService.list` 403s the rest): the unassigned
+   * queue, which belongs to nobody, yourself, and — for a super admin — anyone.
+   *
+   * Not a security measure. The server refuses either way; this keeps the menu
+   * from offering a choice that would come back forbidden.
+   */
+  const assigneeOptions: AssigneeKey[] = React.useMemo(() => {
+    const visible = maySeeTeamWorkload(user?.role)
+      ? assignable
+      : assignable.filter((u) => u.id === user?.id);
+    return ["none", ...visible.map((u) => u.id)];
+  }, [assignable, user]);
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-4 sm:px-6">
