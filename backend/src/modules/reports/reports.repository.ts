@@ -73,13 +73,88 @@ export type ReportsSummary = {
     breached: number;
     compliancePct: number;
   }[];
-  byAgent: {
-    agent: string;
-    /** Tickets of theirs that reached `closed` — the set their average covers. */
-    handled: number;
-    avgHandlingHours: number;
-  }[];
 };
+
+/**
+ * One person's throughput. Deliberately NOT part of `ReportsSummary` any more.
+ *
+ * It used to ride along in the SLA summary, which meant every caller of that
+ * endpoint — a requester included — was handed a table naming each agent and
+ * how long they take. Splitting it out is what lets the gate be a gate: the
+ * summary now has no field that could carry it, so there is nothing for a
+ * forgotten `if` to leak. See `maySeeTeamWorkload` in shared/auth.
+ */
+export type AgentWorkload = {
+  /**
+   * The assignee's id. The aggregate used to be keyed on the NAME, which merged
+   * two people who happen to share one — and, more to the point here, left the
+   * rows with nothing to check "is this me?" against.
+   */
+  agentId: number;
+  agent: string;
+  /** Tickets of theirs that reached `closed` — the set their average covers. */
+  handled: number;
+  avgHandlingHours: number;
+};
+
+/**
+ * The first PUBLIC desk reply on every ticket in scope, oldest first.
+ *
+ * Extracted so the team's handling average and any one person's are drawn from
+ * the SAME clock. They used to be computed side by side in one function, which
+ * kept them honest by accident; now that they are two endpoints with two gates,
+ * sharing this is what keeps "your average" and "the team's average" comparable
+ * instead of two numbers that merely look alike.
+ */
+function firstDeskReplies(scope: ReturnType<typeof ticketScopeWhere>) {
+  return prisma.comment.findMany({
+    where: {
+      internal: false,
+      deletedAt: null,
+      author: { role: { not: "user" } },
+      ticket: scope,
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      ticketId: true,
+      createdAt: true,
+      ticket: { select: { createdAt: true } },
+    },
+  });
+}
+
+/** When the desk first replied on each ticket, by ticket id. */
+function openedAtByTicket(
+  replies: { ticketId: number; createdAt: Date }[],
+): Map<number, Date> {
+  const openedAt = new Map<number, Date>();
+  for (const h of replies) {
+    if (!openedAt.has(h.ticketId)) openedAt.set(h.ticketId, h.createdAt);
+  }
+  return openedAt;
+}
+
+/**
+ * Resolution time runs from the moment the ticket was opened to the moment it
+ * reached `closed` — not from when it was raised, and not to when it was merely
+ * marked resolved.
+ *
+ * Measuring from creation charged the team for the queue: a ticket raised at 2am
+ * and picked up at 9 counted seven hours nobody could have worked. And
+ * `resolved` is a claim, `closed` is the agreement — the requester confirming,
+ * or the 72h auto-close standing in for them.
+ *
+ * The consequence, worth knowing when reading the number: a ticket resolved
+ * correctly but left for the auto-close carries up to 72 hours of waiting in
+ * this figure. That is real elapsed time to a requester, but it is not effort.
+ */
+function handlingHoursWith(openedAt: Map<number, Date>) {
+  return (t: { id: number; closedAt: Date | null }): number | null => {
+    const from = openedAt.get(t.id);
+    if (!from || !t.closedAt) return null;
+    return (t.closedAt.getTime() - from.getTime()) / HOUR;
+  };
+}
 
 export const reportsRepository = {
   async getSlaSummary(now: Date, user: AuthUser): Promise<ReportsSummary> {
@@ -90,6 +165,9 @@ export const reportsRepository = {
         // Finished work. `pending` counts: the desk is done with it and the
         // resolution clock has stopped — only the requester has yet to confirm.
         where: { AND: [scope, { status: { in: ["pending", "closed"] } }] },
+        // No `assignee` here, on purpose: this response is readable by everyone
+        // who may read a ticket, so it must not be able to name who worked one.
+        // Per-person figures come from `getAgentWorkload`, behind its own gate.
         select: {
           id: true,
           priority: true,
@@ -98,7 +176,6 @@ export const reportsRepository = {
           resolvedAt: true,
           closedAt: true,
           category: { select: { name: true } },
-          assignee: { select: { name: true } },
         },
       }),
       /**
@@ -116,50 +193,11 @@ export const reportsRepository = {
        * internal note is the desk talking to itself, and a note or a status move
        * is not something the requester ever sees, so neither is a response.
        */
-      prisma.comment.findMany({
-        where: {
-          internal: false,
-          deletedAt: null,
-          author: { role: { not: "user" } },
-          ticket: scope,
-        },
-        orderBy: { createdAt: "asc" },
-        select: {
-          ticketId: true,
-          createdAt: true,
-          ticket: { select: { createdAt: true } },
-        },
-      }),
+      firstDeskReplies(scope),
     ]);
 
-    /** When the desk first replied on each ticket, by ticket id. */
-    const openedAt = new Map<number, Date>();
-    for (const h of firstReplies) {
-      if (!openedAt.has(h.ticketId)) openedAt.set(h.ticketId, h.createdAt);
-    }
-
-    /**
-     * Resolution time runs from the moment the ticket was opened to the moment it
-     * reached `closed` — not from when it was raised, and not to when it was
-     * merely marked resolved.
-     *
-     * Measuring from creation charged the team for the queue: a ticket raised at
-     * 2am and picked up at 9 counted seven hours nobody could have worked. And
-     * `resolved` is a claim, `closed` is the agreement — the requester confirming,
-     * or the 72h auto-close standing in for them.
-     *
-     * The consequence, worth knowing when reading the number: a ticket resolved
-     * correctly but left for the auto-close carries up to 72 hours of waiting in
-     * this figure. That is real elapsed time to a requester, but it is not effort.
-     */
-    const handlingHours = (t: {
-      id: number;
-      closedAt: Date | null;
-    }): number | null => {
-      const from = openedAt.get(t.id);
-      if (!from || !t.closedAt) return null;
-      return (t.closedAt.getTime() - from.getTime()) / HOUR;
-    };
+    const openedAt = openedAtByTicket(firstReplies);
+    const handlingHours = handlingHoursWith(openedAt);
 
     const resHours = terminal
       .map(handlingHours)
@@ -205,25 +243,6 @@ export const reportsRepository = {
         compliancePct: c.total ? round1((c.met / c.total) * 100) : 0,
       }))
       .sort((a, b) => b.judged - a.judged);
-
-    // Throughput per assignee, busiest first. Same clock as the headline figure:
-    // an agent's average and the team's have to be the same measurement, or the
-    // two tables on one page answer different questions.
-    const agentMap = new Map<string, number[]>();
-    for (const t of terminal) {
-      const hrs = handlingHours(t);
-      if (hrs == null || !t.assignee) continue;
-      const arr = agentMap.get(t.assignee.name) ?? [];
-      arr.push(hrs);
-      agentMap.set(t.assignee.name, arr);
-    }
-    const byAgent = [...agentMap.entries()]
-      .map(([agent, hrs]) => ({
-        agent,
-        handled: hrs.length,
-        avgHandlingHours: round1(hrs.reduce((a, b) => a + b, 0) / hrs.length),
-      }))
-      .sort((a, b) => b.handled - a.handled);
 
     const firstByTicket = new Map<number, number>();
     for (const h of firstReplies) {
@@ -280,7 +299,70 @@ export const reportsRepository = {
       closureTrend,
       byPriority,
       byCategory,
-      byAgent,
     };
+  },
+
+  /**
+   * Throughput per assignee, busiest first — the figures the workload gate
+   * protects.
+   *
+   * `assigneeId` narrows it to one person. That is not an optimisation: it is how
+   * "an agent may see their own numbers" is expressed at the layer that reads the
+   * data, so a self-scoped call cannot accidentally compute anyone else's row and
+   * then rely on a caller to drop it.
+   *
+   * Row scope still applies on top. A customer's own super_admin asking for the
+   * whole table gets their own tenant's staff and no one else's, exactly as they
+   * do everywhere else — the gate decides WHOSE numbers, `ticketScopeWhere`
+   * decides WHICH tickets those numbers are drawn from.
+   */
+  async getAgentWorkload(
+    user: AuthUser,
+    assigneeId?: number,
+  ): Promise<AgentWorkload[]> {
+    const scope = ticketScopeWhere(user);
+    const [terminal, firstReplies] = await Promise.all([
+      prisma.ticket.findMany({
+        where: {
+          AND: [
+            scope,
+            { status: { in: ["pending", "closed"] } },
+            // A ticket nobody holds has no one to credit; `assigneeId` narrows
+            // to one person when the caller may only see themselves.
+            assigneeId != null ? { assigneeId } : { assigneeId: { not: null } },
+          ],
+        },
+        select: {
+          id: true,
+          closedAt: true,
+          assigneeId: true,
+          assignee: { select: { name: true } },
+        },
+      }),
+      firstDeskReplies(scope),
+    ]);
+
+    const handlingHours = handlingHoursWith(openedAtByTicket(firstReplies));
+
+    // Keyed on the id, not the name — two people called "J. Petrov" are two rows.
+    const byId = new Map<number, { name: string; hours: number[] }>();
+    for (const t of terminal) {
+      const hrs = handlingHours(t);
+      if (hrs == null || t.assigneeId == null || !t.assignee) continue;
+      const row = byId.get(t.assigneeId) ?? { name: t.assignee.name, hours: [] };
+      row.hours.push(hrs);
+      byId.set(t.assigneeId, row);
+    }
+
+    return [...byId.entries()]
+      .map(([agentId, row]) => ({
+        agentId,
+        agent: row.name,
+        handled: row.hours.length,
+        avgHandlingHours: round1(
+          row.hours.reduce((a, b) => a + b, 0) / row.hours.length,
+        ),
+      }))
+      .sort((a, b) => b.handled - a.handled);
   },
 };

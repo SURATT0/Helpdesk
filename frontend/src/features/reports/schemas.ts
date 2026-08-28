@@ -30,14 +30,30 @@ export const reportsSummarySchema = z.object({
         compliancePct: z.number(),
       }),
     ),
-    byAgent: z.array(
-      z.object({
-        agent: z.string(),
-        handled: z.number(),
-        avgHandlingHours: z.number(),
-      }),
-    ),
   }),
 });
 
 export type ReportsSummary = z.infer<typeof reportsSummarySchema>["data"];
+
+/**
+ * Per-agent throughput — its own document, from its own endpoint.
+ *
+ * It used to be a `byAgent` field on the summary above, which meant the object
+ * every reader of the reports page held in memory contained a table of who works
+ * how fast. Keeping it in a separate type is what lets the page never fetch it
+ * at all for a reader who may not see it: there is no field to leave undefined
+ * and no branch that could forget to.
+ */
+export const agentWorkloadSchema = z.object({
+  data: z.array(
+    z.object({
+      /** Ids, not names: two people can share a name, and "is this me?" is an id question. */
+      agentId: z.number(),
+      agent: z.string(),
+      handled: z.number(),
+      avgHandlingHours: z.number(),
+    }),
+  ),
+});
+
+export type AgentWorkload = z.infer<typeof agentWorkloadSchema>["data"][number];

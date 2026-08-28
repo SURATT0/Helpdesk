@@ -63,3 +63,33 @@ export function holds(role: Role, permission: string): boolean {
 export function rolesHolding(permissions: readonly string[]): Role[] {
   return ROLES.filter((role) => permissions.every((p) => holds(role, p)));
 }
+
+/**
+ * May this person see how much work OTHERS are carrying? Mirrors
+ * `maySeeTeamWorkload` in the API's `shared/auth.ts`.
+ *
+ * NOT expressible through `holds()` above, and that is the point: `super_admin`
+ * holds `*`, so any grant name invented for this would be satisfied by the
+ * wildcard and by nothing else — the same answer as checking the role, reached
+ * by a longer route that also passes for every string nobody ever defined. So it
+ * names the role, on both sides, in one function each.
+ *
+ * The server refuses the data outright (403 from `/reports/workload/agents`);
+ * this exists so the UI can avoid ASKING for what it may not have, and so a
+ * per-agent surface is never mounted. It is not the gate.
+ */
+export function maySeeTeamWorkload(role: Role | undefined): boolean {
+  return role === "super_admin";
+}
+
+/**
+ * May this person see `targetId`'s workload figures? Your own are always yours.
+ * Mirrors `maySeeWorkloadOf` in the API's `shared/auth.ts`.
+ */
+export function maySeeWorkloadOf(
+  user: { id: number; role: Role } | null | undefined,
+  targetId: number,
+): boolean {
+  if (!user) return false;
+  return targetId === user.id || maySeeTeamWorkload(user.role);
+}

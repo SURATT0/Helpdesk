@@ -3,7 +3,7 @@ import {
   type Priority,
   type TicketStatus,
 } from "../../shared/domain";
-import type { AuthUser } from "../../shared/auth";
+import { maySeeWorkloadOf, type AuthUser } from "../../shared/auth";
 import {
   AppError,
   BadRequest,
@@ -123,7 +123,27 @@ export type ImportResult = {
  * notifications module lands.
  */
 export const ticketService = {
+  /**
+   * The live ticket list.
+   *
+   * `assigneeId` is the one filter that has to be permissioned rather than merely
+   * scoped. Row scope decides which tickets exist for this reader; it cannot stop
+   * them narrowing to one colleague and reading the size of that person's queue
+   * off the footer, the board's column counts or the SLA tiles — every count on
+   * the page follows the filter. So the same predicate that guards the workload
+   * report guards this: your own id, or the role that may compare people.
+   *
+   * `"none"` (the unassigned queue) is deliberately not gated. It is a property
+   * of the QUEUE, not of a person — knowing how much work nobody has picked up is
+   * exactly what an agent needs to pick some up.
+   */
   list(filter: TicketFilter, user: AuthUser): Promise<Ticket[]> {
+    if (
+      typeof filter.assigneeId === "number" &&
+      !maySeeWorkloadOf(user, filter.assigneeId)
+    ) {
+      throw Forbidden("You may only filter the ticket list by your own queue");
+    }
     return ticketRepository.findMany(filter, user);
   },
 

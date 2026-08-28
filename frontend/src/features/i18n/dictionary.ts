@@ -8,6 +8,9 @@ const en: Dict = {
   "nav.history": "Ticket history",
   "nav.users": "Users",
   "nav.reports": "Reports",
+  // A page title, not a nav entry: the workload report is reached from Reports
+  // and deliberately has no sidebar row of its own.
+  "nav.workload": "Workload by agent",
   "nav.kb": "Knowledge Base",
   "nav.projects": "Projects",
   "nav.settings": "Settings",
@@ -415,6 +418,12 @@ const en: Dict = {
   "report.col.judged": "JUDGED",
   "report.byAgent.title": "Throughput by agent",
   "report.byAgent.sub": "tickets closed & average handling time",
+  "report.byAgent.link": "By agent",
+  "report.workload.note":
+    "Visible to super admins only. Figures cover your customer's tickets.",
+  // Deliberately says nothing about WHICH report was refused — see report-denied.tsx.
+  "report.denied": "You don't have access to this report",
+  "report.denied.dismiss": "Dismiss",
   "report.col.agent": "AGENT",
   "report.col.resolved": "CLOSED",
   "report.col.avgRes": "AVG TIME",
@@ -668,6 +677,7 @@ const th: Dict = {
   "nav.history": "ประวัติ Ticket",
   "nav.users": "ผู้ใช้",
   "nav.reports": "รายงาน",
+  "nav.workload": "ปริมาณงานแยกตามเจ้าหน้าที่",
   "nav.kb": "ฐานความรู้",
   "nav.projects": "โปรเจกต์",
   "nav.settings": "ตั้งค่า",
@@ -1053,6 +1063,11 @@ const th: Dict = {
   "report.col.judged": "ตัดสิน",
   "report.byAgent.title": "ปริมาณงานแยกตามเจ้าหน้าที่",
   "report.byAgent.sub": "จำนวน Ticket ที่ปิด & เวลาดำเนินการเฉลี่ย",
+  "report.byAgent.link": "รายเจ้าหน้าที่",
+  "report.workload.note":
+    "เห็นได้เฉพาะผู้ดูแลระบบสูงสุด ตัวเลขนับเฉพาะ Ticket ในองค์กรของคุณ",
+  "report.denied": "คุณไม่มีสิทธิ์เข้าถึงรายงานนี้",
+  "report.denied.dismiss": "ปิด",
   "report.col.agent": "เจ้าหน้าที่",
   "report.col.resolved": "ปิดแล้ว",
   "report.col.avgRes": "เวลาเฉลี่ย",
