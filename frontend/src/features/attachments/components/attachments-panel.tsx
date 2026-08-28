@@ -136,7 +136,7 @@ function ImageThumb({
   }, [file.id]);
 
   const open = () =>
-    url && onOpen({ id: file.id, filename: file.filename, url });
+    url && onOpen({ id: file.id, filename: file.displayName, url });
 
   return (
     <div className="flex items-center gap-2.5 rounded-md border border-line px-2.5 py-2 text-dense hover:bg-app">
@@ -145,7 +145,7 @@ function ImageThumb({
         type="button"
         onClick={open}
         disabled={!url}
-        aria-label={t("att.previewFile", { name: file.filename })}
+        aria-label={t("att.previewFile", { name: file.displayName })}
         className="flex-none overflow-hidden rounded border border-line bg-fill"
         style={{ width: 40, height: 40 }}
       >
@@ -153,7 +153,7 @@ function ImageThumb({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={url}
-            alt={file.filename}
+            alt={file.displayName}
             className="h-full w-full object-cover"
           />
         ) : failed ? (
@@ -168,8 +168,13 @@ function ImageThumb({
       </button>
 
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-strong">
-          {file.filename}
+        {/* The system name is what is shown and downloaded; the uploader's own
+            name is on hover, for anyone who wants to know what it arrived as. */}
+        <div
+          className="truncate font-medium text-strong"
+          title={t("attachment.originalName", { name: file.filename })}
+        >
+          {file.displayName}
         </div>
         <div className="text-meta text-faint">
           {formatSize(file.sizeBytes)}
@@ -190,14 +195,14 @@ function ImageThumb({
         type="button"
         onClick={onDownload}
         title={t("att.download")}
-        aria-label={t("att.downloadFile", { name: file.filename })}
+        aria-label={t("att.downloadFile", { name: file.displayName })}
         className="flex-none text-faint hover:text-brand-hover"
       >
         <Download size={13} strokeWidth={2} />
       </button>
       {onDelete ? (
         <DeleteButton
-          name={file.filename}
+          name={file.displayName}
           onConfirm={onDelete}
           busy={!!deleting}
         />
@@ -227,10 +232,10 @@ function FileRow({
       <button
         type="button"
         onClick={onView}
-        title={t("att.view")}
+        title={t("attachment.originalName", { name: file.filename })}
         className="min-w-0 flex-1 truncate text-left font-medium text-strong hover:text-brand-hover"
       >
-        {file.filename}
+        {file.displayName}
       </button>
       <span className="flex-none text-meta text-faint">
         {formatSize(file.sizeBytes)}
@@ -239,7 +244,7 @@ function FileRow({
         type="button"
         onClick={onView}
         title={t("att.view")}
-        aria-label={t("att.viewFile", { name: file.filename })}
+        aria-label={t("att.viewFile", { name: file.displayName })}
         className="flex-none text-faint hover:text-brand-hover"
       >
         <Eye size={14} strokeWidth={2} />
@@ -248,14 +253,14 @@ function FileRow({
         type="button"
         onClick={onDownload}
         title={t("att.download")}
-        aria-label={t("att.downloadFile", { name: file.filename })}
+        aria-label={t("att.downloadFile", { name: file.displayName })}
         className="flex-none text-faint hover:text-brand-hover"
       >
         <Download size={13} strokeWidth={2} />
       </button>
       {onDelete ? (
         <DeleteButton
-          name={file.filename}
+          name={file.displayName}
           onConfirm={onDelete}
           busy={!!deleting}
         />
@@ -339,7 +344,7 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
     setDeletingId(file.id);
     del.mutate(file.id, {
       onError: () =>
-        setActionError(t("att.deleteError", { name: file.filename })),
+        setActionError(t("att.deleteError", { name: file.displayName })),
       onSettled: () => setDeletingId(null),
     });
   }
@@ -355,12 +360,12 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
   async function download(file: Attachment) {
     setActionError(null);
     try {
-      await downloadAttachment(file.id, file.filename);
+      await downloadAttachment(file.id, file.displayName);
     } catch (err) {
       setActionError(
         err instanceof ApiError && err.status === 404
-          ? t("att.missing", { name: file.filename })
-          : t("att.downloadError", { name: file.filename }),
+          ? t("att.missing", { name: file.displayName })
+          : t("att.downloadError", { name: file.displayName }),
       );
     }
   }
@@ -371,8 +376,8 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
     } catch (err) {
       setActionError(
         err instanceof ApiError && err.status === 404
-          ? t("att.missing", { name: file.filename })
-          : t("att.downloadError", { name: file.filename }),
+          ? t("att.missing", { name: file.displayName })
+          : t("att.downloadError", { name: file.displayName }),
       );
     }
   }

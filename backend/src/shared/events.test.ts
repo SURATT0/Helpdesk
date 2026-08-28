@@ -15,6 +15,9 @@ const event = (ticketId: number): CommentCreatedEvent => ({
     channel: "web",
     createdAt: "2026-01-01T00:00:00.000Z",
     author: { id: 2, name: "Dana Reyes", role: "admin" },
+    // A message with no files. The realtime payload carries the same shape the
+    // REST thread does, so a file arriving over SSE needs no second mapper.
+    attachments: [],
   },
 });
 

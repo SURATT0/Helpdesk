@@ -16,9 +16,15 @@ export async function fetchAttachments(
 export async function uploadAttachment(
   ticketId: number,
   file: File,
+  /**
+   * The message this file was sent with, so the thread can draw it inside that
+   * bubble. Omitted for a file attached to the ticket from the sidebar.
+   */
+  commentId?: number,
 ): Promise<Attachment> {
   const form = new FormData();
   form.append("file", file);
+  if (commentId != null) form.append("commentId", String(commentId));
   const body = await apiRequest(`/tickets/${ticketId}/attachments`, {
     method: "POST",
     body: form,
@@ -30,16 +36,27 @@ export async function deleteAttachment(id: number): Promise<void> {
   await apiRequest(`/attachments/${id}`, { method: "DELETE" });
 }
 
-/** Fetch an attachment's bytes with the bearer token (authed binary endpoint). */
-async function fetchBlob(id: number, disposition: "inline" | "attachment") {
+/**
+ * Fetch an attachment's bytes with the bearer token (authed binary endpoint).
+ *
+ * `variant: "thumb"` asks for the resized copy. The server falls back to the
+ * original when no thumbnail was produced, so the caller never has to branch on
+ * whether one exists.
+ */
+async function fetchBlob(
+  id: number,
+  disposition: "inline" | "attachment",
+  variant: "full" | "thumb" = "full",
+) {
   const token = tokenStore.get();
-  const res = await fetch(
-    `${API_BASE_URL}/attachments/${id}?disposition=${disposition}`,
-    {
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    },
-  );
+  const path =
+    variant === "thumb"
+      ? `/attachments/${id}/thumb`
+      : `/attachments/${id}?disposition=${disposition}`;
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) {
     throw new ApiError(res.status, "ATTACHMENT_ERROR", "Couldn't open file");
   }
@@ -49,6 +66,11 @@ async function fetchBlob(id: number, disposition: "inline" | "attachment") {
 /**
  * Download is a binary, authed endpoint — fetch it with the bearer token and
  * push the blob to the browser (a plain <a href> couldn't send the token).
+ *
+ * `filename` is the server's `displayName`. The browser uses this rather than the
+ * `Content-Disposition` header because the blob is local by the time it is
+ * saved — which is precisely why the header's RFC 5987 form matters too: an API
+ * client without this code path still gets the right name.
  */
 export async function downloadAttachment(
   id: number,
@@ -66,12 +88,19 @@ export async function downloadAttachment(
 }
 
 /**
- * Fetch an attachment as an object URL for inline `<img>` display. The endpoint
- * is authed (needs the bearer token), so a plain URL can't be used as a src —
- * the caller must revoke the returned URL when the element unmounts.
+ * Fetch an attachment as an object URL for inline `<img>` display.
+ *
+ * The endpoint needs the bearer token, and an `<img src>` cannot send one — the
+ * token is deliberately kept in memory rather than in a cookie, so there is no
+ * ambient credential a plain URL could ride on. Fetching the bytes and wrapping
+ * them in an object URL is what keeps the route authenticated; the caller must
+ * revoke the URL when the element unmounts.
  */
-export async function fetchAttachmentObjectUrl(id: number): Promise<string> {
-  const blob = await fetchBlob(id, "inline");
+export async function fetchAttachmentObjectUrl(
+  id: number,
+  variant: "full" | "thumb" = "full",
+): Promise<string> {
+  const blob = await fetchBlob(id, "inline", variant);
   return URL.createObjectURL(blob);
 }
 

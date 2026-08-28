@@ -377,6 +377,9 @@ model Comment {
   deletedAt DateTime?      @map("deleted_at")
   createdAt DateTime       @default(now()) @map("created_at")
   updatedAt DateTime       @updatedAt @map("updated_at")
+  /// Files sent with this message. The thread draws these inside the bubble;
+  /// files attached to the ticket without a message are not here.
+  attachments Attachment[]
 
   @@index([ticketId])
   @@map("comments")
@@ -388,15 +391,51 @@ model Attachment {
   id          Int      @id @default(autoincrement())
   ticketId    Int      @map("ticket_id")
   ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  // The message this file was sent with, so the thread can draw it inside that
+  // bubble. Nullable, and it has to be: a file added from the sidebar belongs to
+  // the ticket and to no message, and every row written before this column
+  // existed is in the same position. A null means "show it in the sidebar only",
+  // never "orphaned".
+  commentId   Int?     @map("comment_id")
+  comment     Comment? @relation(fields: [commentId], references: [id])
   uploaderId  Int      @map("uploader_id")
   uploader    User     @relation(fields: [uploaderId], references: [id])
+  /// The name the uploader's own machine had. Kept verbatim, shown on hover, and
+  /// never used to build a path — see `storageKey` below.
   filename    String
+  /// The name the app shows and downloads as: `T<ticket>-<seq>-<slug>.<ext>`.
+  ///
+  /// Nullable only so the column could be added without inventing values in SQL.
+  /// The slug rules (Thai kept, 40-char cut, 100-char cap, sequence widening)
+  /// live in one TypeScript function, and expressing them a second time in a
+  /// migration would be two implementations of one rule that could drift.
+  /// `prisma/backfill-display-names.ts` fills the old rows using that same
+  /// function; every row written since carries it.
+  displayName String?  @map("display_name")
   contentType String   @map("content_type")
   sizeBytes   Int      @map("size_bytes")
+  /// Opaque object key. Random + a extension verified from the file's own magic
+  /// bytes — no part of it comes from user input, and it carries no ticket id.
   storageKey  String   @map("storage_key")
+  /// Key of the 800px-wide copy the thread loads. Null when the image was
+  /// already small enough, or when resizing failed — the reader falls back to
+  /// the full file, which is why a failed resize never fails an upload.
+  thumbKey    String?  @map("thumb_key")
+  /// Intrinsic pixel size of the ORIGINAL, so the thread can reserve the box
+  /// before the bytes arrive. Null for non-images and for rows that predate it.
+  width       Int?
+  height      Int?
   createdAt   DateTime @default(now()) @map("created_at")
 
+  // One display name per ticket, enforced by the database rather than hoped for.
+  // The sequence is derived from how many files the ticket already has, and two
+  // uploads racing can read the same count — so the write is what settles it:
+  // the loser gets a unique violation and retries with the next number. Nulls do
+  // not collide in Postgres, so this is satisfied by every row that predates the
+  // column too.
+  @@unique([ticketId, displayName])
   @@index([ticketId])
+  @@index([commentId])
   @@map("attachments")
 }
 

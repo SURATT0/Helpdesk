@@ -4,25 +4,19 @@ import { asyncHandler } from "../../middlewares";
 import { requirePermission } from "../../middlewares/auth";
 import { BadRequest } from "../../shared/errors";
 import { attachmentController } from "./attachment.controller";
+import { ALLOWED_TYPES } from "./attachment.service";
 
-// Help-desk-appropriate upload types (images, PDFs, text/CSV, common docs, zip).
-const ALLOWED_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "application/pdf",
-  "text/plain",
-  "text/csv",
-  "application/zip",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-]);
-
-// Files buffered in memory, then handed to IFileStorage. 25 MB cap per file;
-// content-type is restricted to the allowlist above (rejected → 400).
+/**
+ * Files buffered in memory, then handed to IFileStorage. 25 MB cap per file.
+ *
+ * The type check here is a cheap door, not the gate: `file.mimetype` is whatever
+ * the client wrote in the multipart part, so it can only reject the obviously
+ * unwanted before the bytes are read. What a file actually IS gets decided from
+ * its own magic bytes in `attachmentService.upload` — see attachment.sniff — and
+ * a file that passes this filter can still be refused there.
+ *
+ * The allowlist lives with the service so this and the verifier cannot disagree.
+ */
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -41,8 +35,12 @@ ticketAttachmentRoutes.post(
   asyncHandler(attachmentController.upload),
 );
 
-// Flat /attachments/:id for authed download + delete.
+// Flat /attachments/:id for authed download + delete. Both are behind
+// `requireAuth` at the mount point and re-check the parent ticket's row scope in
+// the service, so a URL alone never serves bytes.
 export const attachmentRoutes = Router();
+// Declared before `/:id` so the literal segment is never read as an id.
+attachmentRoutes.get("/:id/thumb", asyncHandler(attachmentController.thumbnail));
 attachmentRoutes.get("/:id", asyncHandler(attachmentController.download));
 attachmentRoutes.delete(
   "/:id",
