@@ -110,13 +110,18 @@ test("a requester's sidebar holds their own pages and no staff ones", async ({
 });
 
 /**
- * Deleting a ticket sits at the top tier — closing is the normal end of a ticket's
- * life. This covers who SEES the button; who the API lets through is covered by the
- * backend suite (an admin gets a 403 even if they call it directly), and that split
- * is deliberate: this spec must not delete rows out of the shared demo data.
+ * The ticket page offers no way to delete a ticket, to anyone.
+ *
+ * Closing is the end of a ticket's life — that is the rule the root CLAUDE.md
+ * states, and the UI now matches it. The API's `DELETE /tickets/:id` is still
+ * there and still super-admin-only (the backend suite covers who it lets
+ * through); what this asserts is that no reader is handed the button.
+ *
+ * Written against a SUPER ADMIN on purpose. An admin seeing no delete button
+ * proves nothing — they never had one — so a test using dana would keep passing
+ * if the gate came back. Morgan is the account that used to see it, which makes
+ * this the assertion that actually fails if the button returns.
  */
-// One login per test: signing in again mid-test races the login page's redirect
-// for an already-authenticated session, which is why these are two tests.
 async function openFirstTicket(page: import("@playwright/test").Page) {
   await page.goto("/tickets");
   await page.getByText(/^#\d+$/).first().click();
@@ -125,28 +130,21 @@ async function openFirstTicket(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/tickets\/\d+/);
 }
 
-test("delete ticket is hidden from an admin", async ({ page }) => {
-  await loginAs(page, "dana.reyes@acme.com"); // admin — works cases, cannot delete
-  await openFirstTicket(page);
-  await expect(page.getByRole("button", { name: "Delete ticket" })).toBeHidden();
-});
-
-test("delete ticket is offered to a super admin, behind a confirm", async ({
+test("no ticket offers a delete button, not even to a super admin", async ({
   page,
 }) => {
-  await loginAs(page, "morgan.lee@acme.com"); // super_admin
+  await loginAs(page, "morgan.lee@acme.com"); // super_admin — the one who used to
   await openFirstTicket(page);
 
-  const deleteButton = page.getByRole("button", { name: "Delete ticket" });
-  await expect(deleteButton).toBeVisible();
+  // Wait for the ticket to be ON the page before asserting something is missing
+  // from it. Without this the assertions below would also pass against a page
+  // still showing its loading state, which proves nothing.
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-  // The destructive step is never the first click: confirm, then cancel, and the
-  // ticket is still there. Deleting for real is covered by the backend suite, so
-  // this spec leaves the shared demo data intact.
-  await deleteButton.click();
-  await expect(page.getByText("Delete this ticket?")).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(deleteButton).toBeVisible();
+  // toHaveCount(0), not toBeHidden(): absent from the document, not merely
+  // invisible. toBeHidden() would also pass for a button rendered off-screen.
+  await expect(page.getByRole("button", { name: "Delete ticket" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "ลบ ticket" })).toHaveCount(0);
 });
 
 test("a manager reaches routing projects from the nav", async ({ page }) => {
@@ -272,6 +270,8 @@ test("the matrix lists deleting a ticket, at the top tier only", async ({
     "data-allowed",
     "true",
   );
-  // Which is exactly what "delete ticket is hidden from an admin" above proves
-  // on the ticket page.
+  // The row stays even though the ticket page no longer draws a delete button:
+  // this table describes what the API grants, and `DELETE /tickets/:id` is still
+  // there and still refuses an admin. Dropping the row to match the UI would make
+  // the matrix understate what a super admin can actually reach.
 });

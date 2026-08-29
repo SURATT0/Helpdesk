@@ -104,14 +104,6 @@ export async function fetchTicket(id: number): Promise<Ticket> {
   return ticketEnvelopeSchema.parse(body).data;
 }
 
-/**
- * Soft-delete a ticket (super admin only; the API returns 403 for anyone else).
- * 204, so there is no body to parse.
- */
-export async function deleteTicket(id: number): Promise<void> {
-  await apiRequest(`/tickets/${id}`, { method: "DELETE" });
-}
-
 export async function updateTicketStatus(
   id: number,
   status: TicketStatus,
