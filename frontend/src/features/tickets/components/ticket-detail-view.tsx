@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowDown, Trash2 } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
@@ -26,7 +25,6 @@ import {
   useCommentStream,
   useComments,
   useCreateComment,
-  useDeleteTicket,
   useRemoveFailedComment,
   useTicket,
   useConfirmClosure,
@@ -157,62 +155,6 @@ function MessageBubble({
         ) : null}
       </div>
     </div>
-  );
-}
-
-/**
- * Delete a ticket, with the two-step inline confirm the attachments panel uses —
- * no blocking dialog, and the destructive step is never the first click.
- *
- * Rendered for super admins only, but that is presentation: the API refuses
- * anyone else with a 403 regardless of what the UI draws.
- */
-function DeleteTicketButton({ id }: { id: number }) {
-  const { t } = useI18n();
-  const router = useRouter();
-  // Leave for the list on success — staying would show "couldn't load ticket" for
-  // a ticket the reader just deleted.
-  const mutation = useDeleteTicket(() => router.push("/tickets"));
-  const [confirming, setConfirming] = React.useState(false);
-
-  if (!confirming) {
-    return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-body font-semibold text-danger-ink hover:border-[#f0c4c4] hover:bg-danger-bg"
-      >
-        <Trash2 size={13} strokeWidth={2} />
-        {t("detail.delete")}
-      </button>
-    );
-  }
-
-  return (
-    <span className="flex flex-none items-center gap-2">
-      <span className="text-dense text-muted">{t("detail.deleteConfirm")}</span>
-      <button
-        type="button"
-        onClick={() => mutation.mutate(id)}
-        disabled={mutation.isPending}
-        className="flex-none rounded-md bg-danger-ink px-3 py-1.5 text-body font-semibold text-white hover:bg-[#991b1b] disabled:opacity-50"
-      >
-        {mutation.isPending ? t("detail.deleting") : t("detail.deleteYes")}
-      </button>
-      <button
-        type="button"
-        onClick={() => setConfirming(false)}
-        disabled={mutation.isPending}
-        className="rounded-md border border-line bg-white px-3 py-1.5 text-body font-semibold text-muted hover:bg-app disabled:opacity-50"
-      >
-        {t("common.cancel")}
-      </button>
-      {mutation.isError ? (
-        <span className="text-dense text-danger">
-          {t("detail.deleteError")}
-        </span>
-      ) : null}
-    </span>
   );
 }
 
@@ -369,9 +311,6 @@ export function TicketDetailView({ id }: { id: number }) {
     user != null &&
     ticket.requesterId === user.id &&
     ticket.status === "pending";
-  // Deleting a ticket is the escape hatch for a row that should never have
-  // existed, so it sits at the top tier — closing is the normal end of the line.
-  const canDelete = user?.role === "super_admin";
   const comments = commentsQuery.data ?? [];
   commentsRef.current = comments; // latest snapshot for the scroll/jump handlers
 
@@ -446,10 +385,10 @@ export function TicketDetailView({ id }: { id: number }) {
           </Link>
           <span>›</span>
           <span className="font-mono font-medium">#{ticket.id}</span>
-          {canResolve || canDelete || awaitingMyConfirmation ? (
-            // wrap + shrink-0 on the buttons: the confirm state adds a label and
-            // a second button to this strip, which must not widen the header
-            // past the viewport.
+          {canResolve || awaitingMyConfirmation ? (
+            // flex-wrap: a requester answering their own pending ticket gets two
+            // buttons here on top of whatever the desk is offered, and the strip
+            // must wrap rather than widen the header past the viewport.
             <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
               {canResolve ? (
                 <button
@@ -485,7 +424,6 @@ export function TicketDetailView({ id }: { id: number }) {
                   </button>
                 </>
               ) : null}
-              {canDelete ? <DeleteTicketButton id={ticket.id} /> : null}
             </span>
           ) : null}
         </div>
