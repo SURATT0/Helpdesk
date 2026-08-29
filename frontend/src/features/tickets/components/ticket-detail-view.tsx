@@ -13,6 +13,7 @@ import { STATUS_TRANSITIONS } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { MessageAttachments } from "@/features/attachments/components/message-attachments";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { RejectClosureDialog } from "./reject-closure-dialog";
@@ -389,6 +390,9 @@ export function TicketDetailView({ id }: { id: number }) {
       fromAgent: false,
       sendStatus: undefined as CommentSendStatus | undefined,
       clientId: undefined as string | undefined,
+      // The opening message is the ticket description, which carries no files of
+      // its own — ticket-level attachments live in the sidebar.
+      attachments: [] as Comment["attachments"],
     },
     ...comments.map((c) => ({
       key: c.clientId ?? `c${c.id}`,
@@ -399,6 +403,7 @@ export function TicketDetailView({ id }: { id: number }) {
       roleKey: c.author.role,
       time: formatTime(c.createdAt, lang),
       body: c.body,
+      attachments: c.attachments ?? [],
       internal: c.internal,
       fromAgent: c.author.role !== "user",
       sendStatus: c.sendStatus,
@@ -559,6 +564,14 @@ export function TicketDetailView({ id }: { id: number }) {
                     >
                       {m.body}
                     </p>
+                    {/* Files sent with this message, drawn in the bubble. An
+                        optimistic message has none yet — they appear when the
+                        upload that follows the post lands and the thread
+                        refetches. */}
+                    <MessageAttachments
+                      attachments={m.attachments ?? []}
+                      className="mt-2"
+                    />
                   </MessageBubble>
                 );
                 if (m.key === firstUnreadKey) {

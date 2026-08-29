@@ -1,11 +1,22 @@
 import { Prisma } from "@prisma/client";
 import type { Role } from "../../shared/domain";
 import { prisma } from "../../shared/db";
+import {
+  toAttachmentDto,
+  type AttachmentDto,
+} from "../attachments/attachment.repository";
 import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
 
 const commentInclude = {
   author: { select: { id: true, name: true, role: true } },
+  // Files sent WITH this message, so the thread can draw them in the bubble.
+  // Ordered by id: the sequence in a display name follows upload order, and the
+  // grid should read the same way.
+  attachments: {
+    include: { uploader: { select: { id: true, name: true } } },
+    orderBy: { id: "asc" as const },
+  },
 } satisfies Prisma.CommentInclude;
 
 type CommentRow = Prisma.CommentGetPayload<{ include: typeof commentInclude }>;
@@ -22,6 +33,11 @@ export type CommentDto = {
   channel: "web" | "email";
   createdAt: string;
   author: { id: number; name: string; role: Role };
+  /**
+   * Files sent with this message. Empty for a message with none, and for every
+   * file attached to the ticket without a message — those live in the sidebar.
+   */
+  attachments: AttachmentDto[];
 };
 
 /** A participant's read pointer for a ticket's chat. */
@@ -39,6 +55,7 @@ function toDto(row: CommentRow): CommentDto {
     channel: row.channel,
     createdAt: row.createdAt.toISOString(),
     author: row.author,
+    attachments: row.attachments.map(toAttachmentDto),
   };
 }
 

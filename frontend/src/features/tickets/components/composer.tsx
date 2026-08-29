@@ -124,10 +124,15 @@ export function Composer({
     createComment.mutate(
       { body: text, internal },
       {
-        onSuccess: async () => {
+        // Files are linked to the message that was just created, so the thread
+        // can draw them inside its bubble. That means posting first and
+        // uploading second: the id only exists once the server has the message.
+        // A beat of delay before the images appear, in exchange for never
+        // letting a failed upload block a message the user already sent.
+        onSuccess: async (created) => {
           for (const f of pendingFiles) {
             try {
-              await upload.mutateAsync(f);
+              await upload.mutateAsync({ file: f, commentId: created.id });
             } catch {
               /* best-effort — the message is already saved */
             }

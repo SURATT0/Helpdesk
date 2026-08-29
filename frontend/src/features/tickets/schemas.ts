@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { attachmentSchema } from "@/features/attachments/schemas";
 import { roleSchema } from "@/features/auth/schemas";
 import { PRIORITIES } from "@/lib/domain";
 import {
@@ -176,6 +177,14 @@ export const commentSchema = z.object({
     name: z.string(),
     role: z.string(),
   }),
+  /**
+   * Files sent with this message, so the thread can draw them in the bubble.
+   *
+   * Defaulted rather than required: an optimistic message posted locally has no
+   * attachments yet, and a message that arrives over SSE from an older server
+   * would otherwise fail to parse and take the whole thread with it.
+   */
+  attachments: z.array(attachmentSchema).default([]),
 });
 export const commentListSchema = z.object({ data: z.array(commentSchema) });
 export const commentEnvelopeSchema = z.object({ data: commentSchema });

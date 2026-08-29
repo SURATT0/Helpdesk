@@ -403,6 +403,12 @@ export function useCreateComment(ticketId: number) {
           internal: input.internal,
           createdAt: new Date().toISOString(),
           author: { id: user.id, name: user.name, role: user.role },
+          // Empty while the message is optimistic. Files are uploaded after the
+          // post succeeds — the server assigns the ids they are linked by — so
+          // they appear on the refetch, a moment behind the text. Uploading
+          // first instead would make a failed attachment block the message,
+          // which is a worse trade than a beat of delay.
+          attachments: [],
           clientId,
           sendStatus: "sending",
         };
