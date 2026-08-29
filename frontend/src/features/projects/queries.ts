@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createProject,
+  deleteProject,
+  fetchDeletionImpact,
   fetchProject,
   fetchProjects,
   updateProject,
@@ -11,6 +13,7 @@ export const projectKeys = {
   all: ["projects"] as const,
   list: () => ["projects", "list"] as const,
   detail: (id: number) => ["projects", "detail", id] as const,
+  deletionImpact: (id: number) => ["projects", "deletion-impact", id] as const,
 };
 
 /**
@@ -54,6 +57,43 @@ export function useUpdateProject() {
       updateProject(id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: projectKeys.all });
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+    },
+  });
+}
+
+/**
+ * How many people a deletion would strand, read when the dialog opens.
+ *
+ * Fetched fresh rather than taken from the list already on screen: the list's
+ * `members` count can be minutes old, and this number is the one the confirm
+ * button is enabled on. `staleTime: 0` for the same reason.
+ */
+export function useDeletionImpact(id: number | null) {
+  return useQuery({
+    queryKey: projectKeys.deletionImpact(id ?? -1),
+    queryFn: () => fetchDeletionImpact(id as number),
+    enabled: id != null,
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+/**
+ * Soft-delete a project.
+ *
+ * Invalidates tickets alongside projects: a project decides where a member's
+ * next ticket lands, so removing one changes future routing, and any
+ * assignee-scoped list on screen may now be stale — the same reasoning
+ * `useUpdateProject` uses for the owner change.
+ */
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteProject(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: projectKeys.all });
+      qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["tickets"] });
     },
   });

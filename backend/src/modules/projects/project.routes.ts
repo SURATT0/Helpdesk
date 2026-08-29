@@ -36,4 +36,24 @@ router.patch(
   asyncHandler(projectController.update),
 );
 
+/**
+ * Deleting a project, and the impact figure its confirmation dialog reads.
+ *
+ * Neither carries `requirePermission`, deliberately. The gate is
+ * `assertMayDelete` in the service, on `project:delete` — a permission held by
+ * no role explicitly, so only super_admin's `*` satisfies it, exactly as
+ * `ticket:delete` works. It lives in the service because a REFUSED attempt has
+ * to be written to the audit trail against the project it named, and middleware
+ * that sees only the role has nothing to name. The check still runs before any
+ * read, so a caller without it never touches a row.
+ *
+ * `/:id/deletion-impact` is declared ahead of the bare `/:id` DELETE only for
+ * readability — they are different methods and cannot collide.
+ */
+router.get(
+  "/:id/deletion-impact",
+  asyncHandler(projectController.deletionImpact),
+);
+router.delete("/:id", asyncHandler(projectController.remove));
+
 export const projectRoutes = router;

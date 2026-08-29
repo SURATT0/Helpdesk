@@ -136,9 +136,26 @@ model Project {
   members       User[]   @relation("ProjectMember")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
+  // Soft delete, super-admin only, and refused while anyone is still a member.
+  //
+  // The row stays on disk because the audit trail points at it by id and a
+  // deleted routing target is still part of how past work was routed. Filtered
+  // out by `projectScopeWhere`, which folds `deletedAt: null` in the same way
+  // `ticketScopeWhere` does — one clause every project read already goes
+  // through, rather than a condition repeated at each call site.
+  deletedAt     DateTime? @map("deleted_at")
+  // Who deleted it. Nullable because it is only set on deletion, and the
+  // relation is named so it cannot be confused with owner/backupOwner above.
+  deletedById   Int?      @map("deleted_by_id")
+  deletedBy     User?     @relation("ProjectDeletedBy", fields: [deletedById], references: [id])
 
   // Names are unique per customer, not globally: two customers may each run a
   // project called "Migration" without colliding.
+  //
+  // Note this constraint does NOT exclude deleted rows: a deleted "Migration"
+  // still occupies the name for its customer, so recreating one requires a new
+  // name. Deliberate — a partial unique index would let two projects share a
+  // name in the audit trail, where only the id distinguishes them.
   @@unique([customerId, name])
   @@index([customerId])
   @@map("projects")
@@ -188,6 +205,7 @@ model User {
   isActive               Boolean               @default(true) @map("is_active")
   ownedProjects          Project[]             @relation("ProjectOwner")
   backupForProjects      Project[]             @relation("ProjectBackupOwner")
+  deletedProjects        Project[]             @relation("ProjectDeletedBy")
   passwordHash           String?               @map("password_hash") // filled by the auth milestone
   requestedTickets       Ticket[]              @relation("TicketRequester")
   assignedTickets        Ticket[]              @relation("TicketAssignee")

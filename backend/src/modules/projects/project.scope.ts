@@ -11,6 +11,17 @@ import { isPlatformWide, type AuthUser } from "../../shared/auth";
  * ticket routed through one is still visible to every agent of its customer.
  */
 export function projectScopeWhere(actor: AuthUser): Prisma.ProjectWhereInput {
+  // Deleted projects are invisible to EVERYONE, platform-wide reach included —
+  // folded in here rather than added at each call site, exactly as
+  // `ticketScopeWhere` does it. That is the whole reason this function is the
+  // single door to the table: a soft delete that only hid the row from the list
+  // would still leave it selectable in the member picker, and a caller who
+  // forgot the clause would be handing out a project nobody can see.
+  return { deletedAt: null, ...reachWhere(actor) };
+}
+
+/** Which projects this actor's reach covers, before the deleted-row filter. */
+function reachWhere(actor: AuthUser): Prisma.ProjectWhereInput {
   if (isPlatformWide(actor)) return {};
   if (actor.customerId == null) return { id: -1 };
   return { customerId: actor.customerId };

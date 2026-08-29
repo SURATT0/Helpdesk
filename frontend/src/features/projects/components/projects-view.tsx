@@ -1,19 +1,32 @@
 "use client";
 
-import { Info, ShieldAlert } from "lucide-react";
+import * as React from "react";
+import { Info, ShieldAlert, Trash2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
+import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
+import { holds } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useProjects, useUpdateProject } from "../queries";
 import type { Project, ProjectOwner } from "../schemas";
+import { DeleteProjectDialog } from "./delete-project-dialog";
 import { NewProjectRow } from "./new-project-row";
 import { OwnerSelect } from "./owner-select";
 
+/**
+ * The row grid, with and without the actions column.
+ *
+ * Two templates rather than one plus an empty cell: a reader who cannot delete
+ * must not be left looking at a 44px gutter where someone else's button lives.
+ * The four content columns keep their proportions in both, so the table does not
+ * reflow into a different shape depending on who is reading it.
+ */
 const COLS = "grid-cols-[1.3fr_1fr_1fr_110px]";
+const COLS_WITH_ACTIONS = "grid-cols-[1.3fr_1fr_1fr_110px_44px]";
 
 /** Where a project's next ticket actually lands, mirroring resolveRoutedAssignee. */
 function routesTo(project: Project): {
@@ -84,6 +97,15 @@ export function ProjectsView() {
   // better than an error for it.
   const canRead = user != null && user.role !== "user";
   const canWrite = user?.role === "super_admin";
+  /**
+   * Deleting is its own grant, read through the shared permission table rather
+   * than compared against a role name here. `project:delete` is held by no role
+   * explicitly, so only a super admin's `*` satisfies it — the same arrangement
+   * `ticket:delete` uses. The API refuses regardless of what this returns; this
+   * only decides whether the button is in the document.
+   */
+  const canDelete = user != null && holds(user.role, "project:delete");
+  const [deleting, setDeleting] = React.useState<Project | null>(null);
   const { data, isLoading, isError, refetch } = useProjects({ enabled: canRead });
   // Only the pickers need the directory, so a read-only viewer doesn't fetch it.
   const { data: users } = useUsers({ enabled: canWrite });
@@ -124,17 +146,21 @@ export function ProjectsView() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <TableScroll minWidth={760}>
+          <TableScroll minWidth={canDelete ? 804 : 760}>
               <div
                 className={cn(
                   "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-columns text-faint",
-                  COLS,
+                  canDelete ? COLS_WITH_ACTIONS : COLS,
                 )}
               >
                 <span>{t("projects.col.name")}</span>
                 <span>{t("projects.col.owner")}</span>
                 <span>{t("projects.col.backup")}</span>
                 <span>{t("projects.col.members")}</span>
+                {/* No visible header for the actions column — a lone icon needs
+                    no label, and an empty <span> would still take the slot for a
+                    reader who has no buttons in it. */}
+                {canDelete ? <span /> : null}
               </div>
 
               {isLoading ? <LoadingRow label={t("projects.loading")} /> : null}
@@ -155,7 +181,7 @@ export function ProjectsView() {
                     key={p.id}
                     className={cn(
                       "grid items-center px-4 py-3 text-control",
-                      COLS,
+                      canDelete ? COLS_WITH_ACTIONS : COLS,
                       i < projects.length - 1 && "border-b border-rule",
                     )}
                   >
@@ -199,6 +225,26 @@ export function ProjectsView() {
                     <span className="text-body text-subtle">
                       {p.members}
                     </span>
+
+                    {/* Absent, not disabled, for anyone who may not delete —
+                        a greyed-out bin reads as "not right now" and invites the
+                        question this gate exists to stop being asked. */}
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => setDeleting(p)}
+                        aria-label={t("project.delete.forProject", {
+                          name: p.name,
+                        })}
+                        data-delete-project={p.id}
+                        className={cn(
+                          "grid h-7 w-7 place-items-center rounded-md text-faint hover:bg-danger-bg hover:text-danger",
+                          TOUCH_TARGET,
+                        )}
+                      >
+                        <Trash2 size={14} strokeWidth={2} />
+                      </button>
+                    ) : null}
                   </div>
                 );
               })}
@@ -211,6 +257,13 @@ export function ProjectsView() {
           </p>
         ) : null}
       </main>
+
+      {deleting ? (
+        <DeleteProjectDialog
+          project={deleting}
+          onClose={() => setDeleting(null)}
+        />
+      ) : null}
     </>
   );
 }

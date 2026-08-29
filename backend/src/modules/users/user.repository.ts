@@ -4,6 +4,7 @@ import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { BadRequest } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
+import { projectScopeWhere } from "../projects/project.scope";
 import { ACTIVE_STATUSES } from "../tickets/ticket.validators";
 
 /**
@@ -180,16 +181,16 @@ export const userRepository = {
       // the same tenant boundary as everything else: without this, a manager
       // could point their own user at another customer's project and have that
       // customer's caseworker start receiving the tickets.
+      //
+      // Goes through `projectScopeWhere` rather than restating its condition.
+      // It used to spell out the isPlatformWide/customerId test inline — a
+      // second copy that happened to agree, until soft delete gave the function
+      // a third clause this copy would not have had. A deleted project would
+      // have stayed selectable here, and the user attached to it would route
+      // through a project no screen can show.
       if (data.projectId != null) {
         const project = await tx.project.findFirst({
-          where: {
-            AND: [
-              { id: data.projectId },
-              isPlatformWide(actor)
-                ? {}
-                : { customerId: actor.customerId ?? -1 },
-            ],
-          },
+          where: { AND: [{ id: data.projectId }, projectScopeWhere(actor)] },
           select: { id: true },
         });
         if (!project) throw BadRequest(`Unknown project #${data.projectId}`);

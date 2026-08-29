@@ -83,6 +83,9 @@ describe("the permission matrix the Permissions page renders", () => {
       "user:write",
       "project:write",
       "ticket:delete",
+      // Deleting a routing project, gated the same way as deleting a ticket:
+      // named by no grant list, so only super_admin's `*` reaches it.
+      "project:delete",
     ]);
     const unknown = CAPABILITIES.flatMap((c) => c.perms).filter(
       (p) => !known.has(p) && !wildcardOnly.has(p),
