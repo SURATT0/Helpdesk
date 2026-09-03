@@ -89,6 +89,11 @@ export function deriveSla(
   dueAt: Date | null,
   now: Date,
   resolvedAt: Date | null = null,
+  /**
+   * How long before the target a ticket starts reading as at risk. Defaults to
+   * the deployment value; a customer with a policy of their own passes theirs.
+   */
+  warnMs: number = SLA_WARN_MS,
 ): { slaDue: string; slaState: SlaState } {
   // Finished: the work is done (pending, waiting on the requester) or the ticket
   // is over (closed). `resolved_at` is stamped on the move into pending, so both
@@ -109,7 +114,7 @@ export function deriveSla(
   const state: SlaState =
     remainingMs < SLA_DANGER_MS
       ? "danger"
-      : remainingMs < SLA_WARN_MS
+      : remainingMs < warnMs
         ? "warn"
         : "ok";
   return { slaDue: formatRemaining(remainingMs), slaState: state };
@@ -133,9 +138,10 @@ export type SlaAlertKind = "warning" | "breach";
 export function slaAlertKind(
   dueAt: Date | null,
   now: Date,
+  warnMs: number = SLA_WARN_MS,
 ): SlaAlertKind | null {
   if (!dueAt) return null;
   const remainingMs = dueAt.getTime() - now.getTime();
   if (remainingMs <= 0) return "breach";
-  return remainingMs <= SLA_WARN_MS ? "warning" : null;
+  return remainingMs <= warnMs ? "warning" : null;
 }

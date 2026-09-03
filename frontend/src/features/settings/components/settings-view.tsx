@@ -14,6 +14,7 @@ import { useI18n } from "@/features/i18n/context";
 import { useLanguagePreference } from "@/features/i18n/use-language-preference";
 import { useUpdateMyProfile } from "@/features/users/queries";
 import { IntegrationsPanel } from "@/features/integrations/components/integrations-panel";
+import { NotificationsPanel } from "./notifications-panel";
 import type { Lang } from "@/features/i18n/dictionary";
 
 // Roles that may connect/sync external sources (mirrors backend `ticket:import`).
@@ -197,6 +198,12 @@ export function SettingsView() {
           ))}
         </div>
       </Section>
+
+      {/* Notification policy. Configuration rather than case work, so it is shown
+          only to whoever may change it — the top tier, matching the server's
+          `settings:write`. WHICH tenant's policy they get is decided server-side
+          on their customerId, not here. */}
+      <NotificationsPanel canManage={user.role === "super_admin"} />
 
       {/* Integrations — external ticket sources (import-capable roles only) */}
       {CAN_INTEGRATE.has(user.role) ? <IntegrationsPanel /> : null}

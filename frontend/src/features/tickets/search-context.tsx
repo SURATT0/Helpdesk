@@ -22,6 +22,8 @@ type TicketLike = {
    */
   dueAt?: string | null;
   resolvedAt?: string | null;
+  /** The ticket's customer's "due soon" window; absent falls back to the default. */
+  slaWarnMs?: number;
 };
 
 /**
@@ -198,6 +200,7 @@ export function matchesFilters(
         dueAt: t.dueAt ?? null,
         status: t.status,
         resolvedAt: t.resolvedAt ?? null,
+        slaWarnMs: t.slaWarnMs,
       },
       now,
     );
