@@ -169,8 +169,14 @@ export function SettingsView() {
         ) : null}
       </Section>
 
-      {/* Preferences */}
-      <Section title={t("settings.preferences")}>
+      {/* Preferences. Unlike the topbar toggle, which only changes the current
+          browser, this one is saved to the account — so it also decides which
+          language the desk's email arrives in. The note says so, because the
+          two controls look identical and otherwise differ invisibly. */}
+      <Section
+        title={t("settings.preferences")}
+        note={t("settings.languageNote")}
+      >
         <Label>{t("settings.language")}</Label>
         <div className="mt-1 inline-flex overflow-hidden rounded-md border border-line text-control font-medium">
           {LANGS.map((l, i) => (

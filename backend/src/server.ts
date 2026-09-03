@@ -83,7 +83,19 @@ if (env.slaAlerts) {
 // together — they would each deliver the same event — so the old one is gone
 // rather than disabled, and the migration stamped its backlog as handled.
 if (env.notificationEmails) {
-  const sweep = () =>
+  // One pass at a time. A pass is bounded by a batch limit, not by the clock,
+  // so a slow or unreachable mail server makes it outlast its own interval —
+  // and without this guard every tick would start another one on top, each
+  // holding sockets and database connections until the pool is gone and the API
+  // starts timing out. Skipping a tick costs at most a minute of latency on a
+  // notification; overlapping them costs the whole process.
+  let running = false;
+  const sweep = () => {
+    if (running) {
+      logger.debug("ticket email sweep still running; skipping this tick");
+      return;
+    }
+    running = true;
     emailOutboxService
       .sweep()
       .then(({ sent, failed, suppressed, collapsed }) => {
@@ -94,7 +106,11 @@ if (env.notificationEmails) {
           );
         }
       })
-      .catch((err) => logger.error({ err }, "ticket email sweep failed"));
+      .catch((err) => logger.error({ err }, "ticket email sweep failed"))
+      .finally(() => {
+        running = false;
+      });
+  };
   sweep();
   setInterval(sweep, 60 * 1000).unref();
 }

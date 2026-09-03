@@ -81,6 +81,16 @@ class SmtpMailSender implements IMailSender {
         env.smtp.user && env.smtp.password
           ? { user: env.smtp.user, pass: env.smtp.password }
           : undefined,
+      // Fail fast when the server is not there. nodemailer's defaults are
+      // minutes long, and the sweep sends sequentially — so one unreachable host
+      // turns a batch of 100 into hours of hanging sockets, with a fresh sweep
+      // starting every 60s on top of it. That is not a mail problem by then, it
+      // is a connection-pool problem, and the API starts timing out with it.
+      //
+      // A send that fails in seconds is exactly what the retry/backoff is for.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
   async send(mail: OutboundMail): Promise<SendResult> {

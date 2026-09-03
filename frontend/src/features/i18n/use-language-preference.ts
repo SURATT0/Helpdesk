@@ -7,18 +7,17 @@ import { useI18n } from "./context";
 import type { Lang } from "./dictionary";
 
 /**
- * Changing the language, everywhere it can be changed.
+ * Stating a language preference — the Settings page's control, and only that.
  *
- * The choice lives in two places on purpose and they answer different
- * questions. `localStorage` remembers what THIS BROWSER was last set to, which
- * is all there is to go on before anyone has signed in — the login screen has a
- * toggle and nobody to attribute it to. `users.language` remembers what THIS
- * PERSON reads, which is the one the server needs, because the mail it sends
- * them is composed hours later by a background sweep with no browser anywhere
- * in sight.
+ * The choice lives in two places and they answer different questions.
+ * `localStorage` remembers what THIS BROWSER was last set to, which is all there
+ * is to go on before anyone has signed in; the topbar toggle writes that alone
+ * (see `LanguageToggle`). `users.language` remembers what THIS PERSON has said
+ * they read, which is the one the server needs, because the mail it sends them
+ * is composed hours later by a background sweep with no browser in sight.
  *
- * So a signed-in change writes both: the local copy keeps the next first paint
- * right, and the stored copy is what their email arrives in.
+ * So this writes both: the local copy keeps the next first paint right, and the
+ * stored copy is what their email arrives in.
  *
  * The server write is deliberately not awaited and its failure is deliberately
  * not surfaced. Switching language is an instant, obvious, trivially repeatable
@@ -67,12 +66,26 @@ export function useLanguagePreference(): {
  */
 export function LanguageSync(): null {
   const { user } = useAuth();
-  const { lang, setLang } = useI18n();
-  const stored = user?.language;
+  const { setLang } = useI18n();
+  const appliedFor = React.useRef<number | null>(null);
 
   React.useEffect(() => {
-    if (stored && stored !== lang) setLang(stored);
-  }, [stored, lang, setLang]);
+    if (!user) {
+      // Signed out: forget, so the next person to sign in on this browser gets
+      // their own language applied rather than inheriting the last one's.
+      appliedFor.current = null;
+      return;
+    }
+    // Once per signed-in person, NOT whenever `lang` differs from the stored
+    // value. Re-applying on every difference would make the topbar toggle
+    // unusable for anyone who has a stored preference: they switch to English,
+    // this effect sees a mismatch and switches them straight back, forever.
+    // Adopting the stored choice is a thing that happens when you arrive, not a
+    // rule that holds for the rest of the session.
+    if (appliedFor.current === user.id) return;
+    appliedFor.current = user.id;
+    if (user.language) setLang(user.language);
+  }, [user, setLang]);
 
   return null;
 }

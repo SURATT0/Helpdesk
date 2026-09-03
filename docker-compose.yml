@@ -60,12 +60,19 @@ services:
       # x-webhook-secret header). Change it for any real deployment.
       EMAIL_WEBHOOK_SECRET: local-compose-email-secret-1f7c9a2b4d6e8035
       EMAIL_DEFAULT_CATEGORY: Email
-      # Outbound ticket mail, pointed at the Mailpit service below. Mailpit is
-      # in the `mail` profile, so by default these resolve to a host that isn't
-      # running — which is exactly the "provider is down" case: the sweep retries
-      # with backoff and the queue keeps the messages. Start it to see them:
-      #   docker compose --profile mail up -d mailpit   -> http://localhost:8025
-      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      # Outbound ticket mail. UNSET by default, which selects the "log"
+      # transport: mail is composed and recorded but never handed to a server.
+      #
+      # Deliberately not defaulted to the mailpit service below. That service is
+      # in the `mail` profile, so a plain `docker compose up` does not start it —
+      # pointing at it anyway would make every send dial a host that is not
+      # there, and the queue would spend the run retrying nothing.
+      #
+      # To see real messages, start the catcher and point at it in the same
+      # command:
+      #   docker compose --profile mail up -d mailpit
+      #   SMTP_HOST=mailpit docker compose up -d api
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: "false"
       # The desk's own address: the From on every mail, and the Reply-To that
@@ -100,8 +107,9 @@ services:
 
   # Local mail catcher: an SMTP server that accepts everything and delivers
   # nothing, with a web inbox at http://localhost:8025. Off by default (a dev
-  # tool, like pgadmin):
+  # tool, like pgadmin), and the api does NOT point at it unless you say so:
   #   docker compose --profile mail up -d mailpit
+  #   SMTP_HOST=mailpit docker compose up -d api
   #
   # This is how outbound mail is verified without a real provider or a real
   # mailbox: the web UI shows the text and HTML parts side by side and the raw

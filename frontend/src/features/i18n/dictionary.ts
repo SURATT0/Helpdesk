@@ -151,6 +151,8 @@ const en: Dict = {
   "settings.saved": "Saved",
   "settings.saveError": "Couldn't save",
   "settings.preferences": "Preferences",
+  "settings.languageNote":
+    "Saved to your account, so it also sets the language we email you in. The EN/ไทย switch in the header only changes this browser.",
   "settings.language": "Language",
   "settings.session": "Session",
   "settings.signOut": "Sign out",
@@ -834,6 +836,8 @@ const th: Dict = {
   "settings.saved": "บันทึกแล้ว",
   "settings.saveError": "บันทึกไม่สำเร็จ",
   "settings.preferences": "การตั้งค่า",
+  "settings.languageNote":
+    "บันทึกลงบัญชีของคุณ และใช้เป็นภาษาของอีเมลที่ระบบส่งถึงคุณด้วย ส่วนปุ่ม EN/ไทย ด้านบนเปลี่ยนเฉพาะเบราว์เซอร์นี้",
   "settings.language": "ภาษา",
   "settings.session": "เซสชัน",
   "settings.signOut": "ออกจากระบบ",
