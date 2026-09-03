@@ -15,12 +15,15 @@ export const authUserSchema = z.object({
    */
   availableForAssignment: z.boolean(),
   /**
-   * The language this person reads. In the session payload so the app opens in
-   * it on the first paint after signing in, rather than in whatever this
-   * particular browser's localStorage happens to remember — which on a shared
-   * machine is the last person's choice, not this one's.
+   * The language this person has CHOSEN, or null if they never have.
+   *
+   * In the session payload so the app opens in their language on the first
+   * paint after signing in, rather than in whatever this particular browser's
+   * localStorage remembers — which on a shared machine is the last person's
+   * choice, not this one's. Null leaves the app on its own default; it does NOT
+   * mean Thai, even though that is what the server falls back to for mail.
    */
-  language: z.enum(["en", "th"]),
+  language: z.enum(["en", "th"]).nullable(),
 });
 
 export const sessionSchema = z.object({

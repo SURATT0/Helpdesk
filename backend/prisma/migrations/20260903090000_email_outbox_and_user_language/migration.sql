@@ -20,10 +20,12 @@ CREATE TYPE "Language" AS ENUM ('en', 'th');
 CREATE TYPE "EmailOutboxStatus" AS ENUM ('pending', 'sent', 'failed', 'suppressed');
 
 -- AlterTable
--- Defaults to 'th' for every existing row, which is the spec's default for mail.
--- The web app's own default stays 'en'; the two answer different questions (see
--- the field comment in schema.prisma).
-ALTER TABLE "users" ADD COLUMN     "language" "Language" NOT NULL DEFAULT 'th';
+-- Nullable and with NO default: null means "has never chosen", which is a
+-- different fact from "chose Thai". Each reader supplies its own fallback and
+-- they do not agree — mail falls back to Thai, the web app to English. A column
+-- defaulting to 'th' would have silently flipped every existing account's UI to
+-- Thai on their next sign-in, having asked none of them.
+ALTER TABLE "users" ADD COLUMN     "language" "Language";
 
 -- CreateTable
 CREATE TABLE "email_outbox" (

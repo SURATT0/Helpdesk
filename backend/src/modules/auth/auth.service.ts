@@ -25,12 +25,16 @@ export type PublicUser = {
    */
   availableForAssignment: boolean;
   /**
-   * The language this person reads. In the session payload so the web app can
-   * open in it on the first paint, rather than in whatever this browser's
-   * localStorage happens to remember — on a shared machine that is the previous
-   * person's choice, not this one's.
+   * The language this person has CHOSEN, or null if they never have.
+   *
+   * In the session payload so the web app can open in their language on the
+   * first paint rather than in whatever this browser's localStorage remembers —
+   * on a shared machine that is the previous person's choice, not this one's.
+   * Null is passed through rather than defaulted here: the client's fallback
+   * (English) is not the mailer's (Thai), so the decision belongs to each of
+   * them and not to this DTO.
    */
-  language: Lang;
+  language: Lang | null;
 };
 
 export type Session = {
@@ -51,7 +55,7 @@ type UserRow = {
   passwordHash: string | null;
   availableForAssignment: boolean;
   isActive: boolean;
-  language: Lang;
+  language: Lang | null;
   team: { department: string } | null;
 };
 

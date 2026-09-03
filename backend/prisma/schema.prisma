@@ -226,16 +226,17 @@ model User {
   // `Ticket.requesterId` is RESTRICT, so a person who ever raised a ticket can
   // never be removed without erasing their history with them.
   isActive               Boolean               @default(true) @map("is_active")
-  // Which language this person is written to in. Read by the outbound mailer to
-  // pick a template set, and by the web app to pick its dictionary.
+  // Which language this person has CHOSEN to be written to in.
   //
-  // Defaults to `th`, which is NOT the web app's own default (that is `en`). The
-  // two answer different questions: the UI default is what an anonymous browser
-  // sees before anyone has said who they are, while this is what we address a
-  // known person as, and the desk's correspondents are Thai-speaking unless they
-  // say otherwise. A person who switches the UI writes this column, so the two
-  // agree from their first visit onwards.
-  language               Language              @default(th)
+  // Nullable, and deliberately without a default: null means "has never said",
+  // which is a different fact from "chose Thai" and the two must not be
+  // conflated. Each reader supplies its own fallback for null, and they do not
+  // agree — mail falls back to Thai (`DEFAULT_LANG`, the desk's correspondents
+  // are Thai-speaking unless they say otherwise) while the web app falls back to
+  // its own English default. A column defaulting to `th` would have quietly
+  // reversed that second one, flipping the UI to Thai for every existing account
+  // on their next sign-in, having never asked any of them.
+  language               Language?
   ownedProjects          Project[]             @relation("ProjectOwner")
   backupForProjects      Project[]             @relation("ProjectBackupOwner")
   deletedProjects        Project[]             @relation("ProjectDeletedBy")

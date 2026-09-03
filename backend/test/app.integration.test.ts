@@ -57,7 +57,12 @@ describe("auth", () => {
     // The web app's session schema requires this field, so a payload without it
     // fails to parse in the browser and the login "succeeds" into an error
     // screen — a break nothing on this side would otherwise notice.
-    expect(["en", "th"]).toContain(res.body.data.user.language);
+    expect(["en", "th", null]).toContain(res.body.data.user.language);
+    // And it must be NULL for somebody who has never chosen, not Thai. The
+    // mailer's fallback is Thai; the app's is English. A seeded account arriving
+    // as "th" would flip every existing user's interface to Thai on their next
+    // sign-in without anyone having asked them.
+    expect(res.body.data.user.language).toBeNull();
     const cookies = res.headers["set-cookie"] as unknown as string[];
     expect(cookies.some((c) => c.startsWith("deskly_rt="))).toBe(true);
   });

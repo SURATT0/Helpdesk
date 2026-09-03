@@ -143,6 +143,30 @@ describe("a public reply does reach the requester", () => {
     });
   });
 
+  // Null on the account is "never chose", and mail's answer to that is Thai —
+  // a different answer from the web app's, which stays English. The two
+  // fallbacks living apart is the whole reason the column is nullable.
+  it("writes Thai to someone who has never chosen a language", async () => {
+    const ticket = await ticketOf("marcus.chen@acme.com");
+    await prisma.user.update({
+      where: { id: ticket.requesterId },
+      data: { language: null },
+    });
+    const dana = await login("dana.reyes@acme.com");
+
+    await request(app)
+      .post(`${API}/tickets/${ticket.id}/comments`)
+      .set(bearer(dana))
+      .send({ body: "Any update?", internal: false })
+      .expect(201);
+
+    const replies = (await queued(ticket.id)).filter(
+      (r) => r.eventType === "comment.public_reply",
+    );
+    expect(replies).toHaveLength(1);
+    expect(replies[0].lang).toBe("th");
+  });
+
   it("does not queue the reply back to the agent who wrote it", async () => {
     const ticket = await ticketOf("marcus.chen@acme.com");
     const dana = await login("dana.reyes@acme.com");

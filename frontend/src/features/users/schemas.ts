@@ -24,8 +24,8 @@ export const userSchema = z.object({
    * `availableForAssignment` above: that one is a rota, this one is the door.
    */
   isActive: z.boolean(),
-  /** The language this person reads — the UI's dictionary and the mailer's. */
-  language: z.enum(["en", "th"]),
+  /** The language this person has chosen, or null if they never have. */
+  language: z.enum(["en", "th"]).nullable(),
   createdAt: z.string(),
 });
 

@@ -39,8 +39,12 @@ export type UserDto = {
   availableForAssignment: boolean;
   /** False = the account is closed: no sign-in, no new work. See User.isActive. */
   isActive: boolean;
-  /** Which language this person reads — the UI's dictionary and the mailer's. */
-  language: Lang;
+  /**
+   * The language this person has chosen, or null if they never have. Each
+   * reader falls back differently (the app to English, mail to Thai), so the
+   * null is passed through rather than resolved here.
+   */
+  language: Lang | null;
   createdAt: string;
 };
 

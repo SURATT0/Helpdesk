@@ -49,13 +49,21 @@ export function useLanguagePreference(): {
 }
 
 /**
- * Adopt the signed-in person's stored language.
+ * Adopt the signed-in person's stored language, if they have one.
  *
  * Mounted inside the auth provider, because the language provider sits ABOVE it
  * — the toggle on the login screen has to work before there is a session, so the
- * provider order cannot be reversed. This is the seam that lets the stored
+ * provider order cannot be reversed. This is the seam that lets a stored
  * preference win once we know whose browser this is: sign in on a colleague's
  * machine and you get your language, not theirs.
+ *
+ * A null `language` means the person has never chosen one, and it is left alone
+ * rather than resolved to a default here. The server's fallback for an
+ * unanswered preference is Thai — that is the right answer for MAIL, addressed
+ * to a desk whose correspondents are Thai-speaking — but applying it here would
+ * flip the UI to Thai for every existing account on their next sign-in, having
+ * asked none of them. The app keeps its own English default until somebody
+ * touches the toggle.
  */
 export function LanguageSync(): null {
   const { user } = useAuth();
