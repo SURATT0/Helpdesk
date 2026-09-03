@@ -16,7 +16,10 @@ import {
 } from "../../shared/errors";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
-import { notificationRepository } from "../notifications/notification.repository";
+import {
+  notificationRepository,
+  notifyBell,
+} from "../notifications/notification.repository";
 import { loadTicketEmailContext } from "../emails/email.context";
 import { emailOutboxService } from "../emails/email-outbox.service";
 import { projectRepository } from "../projects/project.repository";
@@ -749,9 +752,11 @@ export const ticketRepository = {
     assigneeId: number | null,
     changedById?: number,
   ): Promise<Ticket | null> {
-    return prisma.$transaction(async (tx) => {
+    // Bells ring after the commit, never inside it — see `notifyBell`.
+    const { dto, notified } = await prisma.$transaction(async (tx) => {
+      let notified: number[] = [];
       const current = await tx.ticket.findUnique({ where: { id } });
-      if (!current) return null;
+      if (!current) return { dto: null, notified };
       if (assigneeId != null) {
         const assignee = await tx.user.findUnique({ where: { id: assigneeId } });
         if (!assignee) throw BadRequest("Unknown assignee");
@@ -774,7 +779,7 @@ export const ticketRepository = {
           },
           tx,
         );
-        await notificationRepository.createMany(
+        ({ notified } = await notificationRepository.createMany(
           recipientsFor(
             { requesterId: current.requesterId, assigneeId },
             changedById,
@@ -785,7 +790,7 @@ export const ticketRepository = {
             message: `Ticket #${id} was reassigned`,
           })),
           tx,
-        );
+        ));
 
         // Only the arrival is mailed, not the departure: the person who no
         // longer holds it has nothing to do, and telling them would make every
@@ -813,8 +818,10 @@ export const ticketRepository = {
         }
       }
 
-      return toTicketDto(updated);
+      return { dto: toTicketDto(updated), notified };
     });
+    notifyBell(notified);
+    return dto;
   },
 
   async updatePriority(
@@ -875,17 +882,20 @@ export const ticketRepository = {
     status: TicketStatus,
     changedById?: number,
   ): Promise<Ticket | null> {
-    return prisma.$transaction(async (tx) => {
+    // Bells ring after the commit, never inside it — see `notifyBell`.
+    const { dto, notified } = await prisma.$transaction(async (tx) => {
+      let notified: number[] = [];
       const current = await tx.ticket.findUnique({
         where: { id },
         include: ticketInclude,
       });
-      if (!current) return null;
+      if (!current) return { dto: null, notified };
 
       // Already there — a double-submitted request, or two people choosing the
       // same move. Nothing to validate and nothing to record, but not an error:
       // the ticket is where the caller asked it to be.
-      if (current.status === status) return toTicketDto(current);
+      if (current.status === status)
+        return { dto: toTicketDto(current), notified };
 
       // The whitelist is enforced here as well as in the service: this is the
       // only place that can check it against the row it is about to write.
@@ -941,7 +951,7 @@ export const ticketRepository = {
         },
         tx,
       );
-      await notificationRepository.createMany(
+      ({ notified } = await notificationRepository.createMany(
         recipientsFor(current, changedById).map((userId) => ({
           userId,
           type: "ticket.status_change",
@@ -949,7 +959,7 @@ export const ticketRepository = {
           message: `Ticket #${id} moved to ${status.replace("_", " ")}`,
         })),
         tx,
-      );
+      ));
 
       // Two of the three destinations are worth writing to the requester about,
       // and the third is not:
@@ -1003,8 +1013,10 @@ export const ticketRepository = {
         where: { id },
         include: ticketInclude,
       });
-      return updated ? toTicketDto(updated) : null;
+      return { dto: updated ? toTicketDto(updated) : null, notified };
     });
+    notifyBell(notified);
+    return dto;
   },
 
   /**

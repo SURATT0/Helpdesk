@@ -40,16 +40,38 @@ function toDto(row: NotificationRow): NotificationDto {
   };
 }
 
+/**
+ * Tell these people's bells to refetch.
+ *
+ * Call it AFTER the transaction that wrote the notifications has committed —
+ * see `createMany`. Separated from the write for exactly that reason: the two
+ * have to happen at different moments, and a function that did both could only
+ * ever do them at the same one.
+ */
+export function notifyBell(userIds: readonly number[]): void {
+  for (const userId of userIds) bus.emit("notification.created", { userId });
+}
+
 export const notificationRepository = {
   /**
-   * Bulk-create notifications; call with a tx client to commit atomically. After
-   * the write, fans out a `notification.created` signal per distinct recipient so
-   * their bell can refetch live (SSE) instead of polling. The signal only tells
-   * the client to refetch — it carries no data — so an over-eager fire (e.g. a
-   * later rollback in the same tx) just triggers a harmless no-op refetch.
+   * Bulk-create notifications; call with a tx client to commit atomically.
+   *
+   * Returns the recipients so a transactional caller can ring their bells AFTER
+   * committing, via `notifyBell`. The signal carries no data — it only tells a
+   * client to refetch — which is exactly why it must not be sent early: a
+   * refetch that arrives before the commit reads the old count, and since no
+   * second signal follows, the bell then sits on a stale number until the slow
+   * poll catches up. That is not theoretical. It happened the moment this
+   * repository stopped being the last write in the comment transaction.
+   *
+   * Emitting here when we own the write (no tx passed) is still correct: the
+   * `createMany` above has committed by the time we reach this line.
    */
-  async createMany(entries: NotificationEntry[], db: Db = prisma) {
-    if (entries.length === 0) return { count: 0 };
+  async createMany(
+    entries: NotificationEntry[],
+    db: Db = prisma,
+  ): Promise<{ count: number; notified: number[] }> {
+    if (entries.length === 0) return { count: 0, notified: [] };
     const result = await db.notification.createMany({
       data: entries.map((e) => ({
         userId: e.userId,
@@ -58,10 +80,9 @@ export const notificationRepository = {
         message: e.message,
       })),
     });
-    for (const userId of new Set(entries.map((e) => e.userId))) {
-      bus.emit("notification.created", { userId });
-    }
-    return result;
+    const notified = [...new Set(entries.map((e) => e.userId))];
+    if (db === prisma) notifyBell(notified);
+    return { count: result.count, notified };
   },
 
   /**

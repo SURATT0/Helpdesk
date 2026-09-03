@@ -186,6 +186,32 @@ describe("a public reply does reach the requester", () => {
   });
 });
 
+// Queueing mail happens inside the comment's own transaction, so anything that
+// throws there does not just lose the mail — it loses the comment, the bell
+// entry and the SSE event with it, and the caller sees a 500. Ticket 1044 is
+// UNASSIGNED, which sends the recipient rules down their fallback branch; that
+// branch had never been exercised by a public reply here.
+describe("queueing mail cannot cost the comment", () => {
+  it("posts a public reply on an unassigned ticket and still notifies", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    const before = await prisma.notification.count({ where: { ticketId: 1044 } });
+
+    const res = await request(app)
+      .post(`${API}/tickets/1044/comments`)
+      .set(bearer(dana))
+      .send({ body: "bell probe" });
+
+    expect(res.status).toBe(201);
+    expect(await prisma.notification.count({ where: { ticketId: 1044 } })).toBe(
+      before + 1,
+    );
+    const rows = (await queued(1044)).filter(
+      (r) => r.eventType === "comment.public_reply",
+    );
+    expect(rows).toHaveLength(1);
+  });
+});
+
 describe("idempotency", () => {
   // The unique key is (ticket, event, cause, recipient). Re-running the SLA
   // sweep re-examines the same tickets every time and must not re-queue them.

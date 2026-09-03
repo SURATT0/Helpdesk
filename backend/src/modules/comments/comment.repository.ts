@@ -6,7 +6,10 @@ import {
   type AttachmentDto,
 } from "../attachments/attachment.repository";
 import { auditRepository } from "../audit/audit.repository";
-import { notificationRepository } from "../notifications/notification.repository";
+import {
+  notificationRepository,
+  notifyBell,
+} from "../notifications/notification.repository";
 import { loadTicketEmailContext } from "../emails/email.context";
 import { emailOutboxService } from "../emails/email-outbox.service";
 import type { EmailEvent } from "../emails/email.events";
@@ -130,7 +133,10 @@ export const commentRepository = {
      */
     emailDeliverTo?: string;
   }): Promise<CommentDto> {
-    return prisma.$transaction(async (tx) => {
+    // The bells are rung after the commit, not inside it — a refetch triggered
+    // while the transaction is still open reads the count from before it, and
+    // nothing sends a second signal to correct that. See `notifyBell`.
+    const { dto, notified } = await prisma.$transaction(async (tx) => {
       const created = await tx.comment.create({
         data: {
           ticketId: data.ticketId,
@@ -163,6 +169,7 @@ export const commentRepository = {
         where: { id: data.ticketId },
         select: { requesterId: true, assigneeId: true },
       });
+      let notified: number[] = [];
       if (ticket) {
         const recipients = [ticket.requesterId, ticket.assigneeId].filter(
           (x): x is number =>
@@ -170,7 +177,7 @@ export const commentRepository = {
             x !== data.authorId &&
             !(data.internal && x === ticket.requesterId),
         );
-        await notificationRepository.createMany(
+        ({ notified } = await notificationRepository.createMany(
           [...new Set(recipients)].map((userId) => ({
             userId,
             type: "ticket.comment",
@@ -178,7 +185,7 @@ export const commentRepository = {
             message: `New ${data.internal ? "internal note" : "reply"} on ticket #${data.ticketId}`,
           })),
           tx,
-        );
+        ));
 
         // Queue the email for the same event, in this same transaction — the
         // bell entry and the mail are written together or not at all.
@@ -227,8 +234,10 @@ export const commentRepository = {
         }
       }
 
-      return toDto(created);
+      return { dto: toDto(created), notified };
     });
+    notifyBell(notified);
+    return dto;
   },
 
   /** Advance a user's read pointer for a ticket (never moves backwards). */
