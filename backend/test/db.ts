@@ -11,6 +11,10 @@ const TABLES = [
   // (ticket, event, cause, recipient) starts clean each test — otherwise a row
   // left by the previous case makes the next one's enqueue a silent no-op.
   "email_outbox",
+  // A customer's policy. Wiped with everything else so each test starts
+  // unconfigured — a row left behind would silently change the next test's
+  // rate limit and SLA window.
+  "notification_settings",
   "audit_logs",
   "ticket_status_history",
   "refresh_tokens",

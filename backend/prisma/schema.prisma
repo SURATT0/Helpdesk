@@ -131,10 +131,56 @@ model Customer {
   assets    Asset[]
   problems  Problem[]
   projects  Project[]
+  settings  NotificationSettings?
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@map("customers")
+}
+
+/// One customer's notification policy: which events are mailed, how often, and
+/// when the SLA starts warning.
+///
+/// Per tenant rather than per platform, because these are decisions about how a
+/// desk talks to its own people — switching off SLA alerts for customer A must
+/// not switch them off for customer B.
+///
+/// A customer with no row here is not misconfigured, it is UNCONFIGURED: every
+/// reader falls back to the deployment's own defaults (`env.ticketEmail`,
+/// `SLA_WARN_MS`). That is why the row is created on first write rather than
+/// seeded for everyone — an absent row and a row holding the defaults mean the
+/// same thing, and only one of them has to be kept in step with a changing
+/// default.
+model NotificationSettings {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @unique @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  /// Event types NOT to send, e.g. `["ticket.sla_warning"]`. A DENY list, so an
+  /// event added to the catalogue later works for every existing customer
+  /// without anyone editing their settings — only turning one OFF is a decision
+  /// somebody has to make.
+  disabledEvents String[] @map("disabled_events")
+
+  /// Anti-spam: at most this many mails to one person about one ticket inside
+  /// the window; anything beyond collapses into a single summary.
+  ratePerTicket Int @map("rate_per_ticket")
+  rateWindowMs  Int @map("rate_window_ms")
+
+  /// How long before `due_at` a ticket starts reading as "due soon".
+  ///
+  /// ONE value, deliberately: it drives both the badge a person sees on the list
+  /// and the alert the sweep pushes, which is the property the SLA module was
+  /// built around — what the UI calls at-risk is exactly what raises an alert,
+  /// and they cannot drift apart. Changing this therefore moves the colours on
+  /// screen as well as the emails, which is the intended and agreed behaviour.
+  slaWarnMs Int @map("sla_warn_ms")
+
+  updatedById Int?     @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_settings")
 }
 
 // A grouping BELOW the customer — the unit a caseworker is responsible for.

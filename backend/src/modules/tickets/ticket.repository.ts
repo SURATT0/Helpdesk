@@ -24,11 +24,13 @@ import { loadTicketEmailContext } from "../emails/email.context";
 import { emailOutboxService } from "../emails/email-outbox.service";
 import { projectRepository } from "../projects/project.repository";
 import { resolveRoutedAssignee } from "../projects/project.routing";
+import { settingsRepository } from "../settings/settings.repository";
 import {
   AUTO_CLOSE_MS,
   computeDueAt,
   deriveSla,
   SLA_ACTIVE_STATUSES,
+  SLA_WARN_MS,
   type SlaState,
 } from "./sla";
 import {
@@ -114,6 +116,19 @@ export type Ticket = {
    */
   dueAt: string | null;
   resolvedAt: string | null;
+  /**
+   * This ticket's customer's SLA warning window, in milliseconds.
+   *
+   * Sent PER TICKET rather than once per response because a list can span
+   * tenants — a platform-wide super admin sees every customer's work in one
+   * table, and each row has to be judged against its own desk's policy. One
+   * value for the whole response would be right only for a single-tenant view
+   * and quietly wrong for the one that matters most.
+   *
+   * The badge is computed on the client (see `frontend/features/tickets/sla.ts`)
+   * so the client needs the number, not just the server's conclusion.
+   */
+  slaWarnMs: number;
   attachments: number;
   /**
    * Who and what this ticket is about, as opposed to who reported it. Both are
@@ -201,12 +216,45 @@ const ticketInclude = {
 
 type TicketRow = Prisma.TicketGetPayload<{ include: typeof ticketInclude }>;
 
-function toTicketDto(row: TicketRow): Ticket {
+/**
+ * Map rows to DTOs with each ticket judged against ITS OWN customer's SLA
+ * policy, in one lookup for the whole page.
+ *
+ * A list can span tenants — that is the platform-wide super admin's whole view —
+ * so the policy is resolved per customer rather than per request. Note this is
+ * deliberately not `rows.map(toTicketDto)`: `map` passes the index as the second
+ * argument, which would silently become the warning window.
+ */
+async function withSlaPolicy(rows: TicketRow[]): Promise<Ticket[]> {
+  if (rows.length === 0) return [];
+  const policies = await settingsRepository.effectiveForMany(
+    rows.map((r) => r.customerId),
+  );
+  const warnMsOf = (customerId: number) =>
+    policies.get(customerId)?.slaWarnMs ?? SLA_WARN_MS;
+  return rows.map((row) => toTicketDto(row, warnMsOf));
+}
+
+/**
+ * Map a row to the API shape.
+ *
+ * `warnMsOf` looks up the ticket's customer's SLA warning window. It is a
+ * function rather than a number because one response can carry several tenants'
+ * tickets, and each has to be judged against its own policy. Callers that have
+ * not loaded any policy pass nothing and get the deployment default, which is
+ * what every read did before customers could configure this.
+ */
+function toTicketDto(
+  row: TicketRow,
+  warnMsOf: (customerId: number) => number = () => SLA_WARN_MS,
+): Ticket {
+  const slaWarnMs = warnMsOf(row.customerId);
   const { slaDue, slaState } = deriveSla(
     row.status,
     row.dueAt,
     new Date(),
     row.resolvedAt,
+    slaWarnMs,
   );
   return {
     id: row.id,
@@ -226,6 +274,7 @@ function toTicketDto(row: TicketRow): Ticket {
     slaState,
     dueAt: row.dueAt?.toISOString() ?? null,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
+    slaWarnMs,
     attachments: row._count.attachments,
     affectedUsers: row.affectedUsers.map((a) => a.user),
     affectedAssets: row.affectedAssets.map((a) => a.asset),
@@ -292,7 +341,7 @@ export const ticketRepository = {
       // a burst of self-service tickets — share one to the millisecond.
       orderBy: [{ dueAt: "asc" }, { id: "asc" }],
     });
-    return rows.map(toTicketDto);
+    return withSlaPolicy(rows);
   },
 
   /**
@@ -357,7 +406,7 @@ export const ticketRepository = {
       }),
       prisma.ticket.count({ where }),
     ]);
-    return { items: rows.map(toTicketDto), total };
+    return { items: await withSlaPolicy(rows), total };
   },
 
   /**

@@ -98,6 +98,15 @@ export type SlaInput = {
    * does too — otherwise the list and the reports would disagree.
    */
   resolvedAt: string | null;
+  /**
+   * This ticket's customer's "due soon" window, sent per ticket by the API.
+   *
+   * Per ticket rather than per session because a list can span tenants — the
+   * platform-wide view shows several customers' work in one table, and each row
+   * has to be judged against its own desk's policy. Absent (an older payload, or
+   * a caller assembling an input by hand) falls back to the shipped default.
+   */
+  slaWarnMs?: number;
 };
 
 /**
@@ -130,7 +139,7 @@ export function assessSla(
  * label away would be backwards.
  */
 export function judgeSla(
-  { dueAt, status, resolvedAt }: SlaInput,
+  { dueAt, status, resolvedAt, slaWarnMs }: SlaInput,
   now: number = Date.now(),
 ): Omit<SlaAssessment, "label"> {
   const due = dueAt ? Date.parse(dueAt) : NaN;
@@ -154,10 +163,14 @@ export function judgeSla(
   const minutesDelta = minutesBetween(due, now);
   const remainingMs = due - now;
   if (remainingMs < 0) return { state: "breached_open", minutesDelta };
+  // `at_risk` is "about to breach" and stays fixed at an hour — it is a fact
+  // about how close the deadline is, not a policy dial. The "due soon" tier is
+  // the configurable one, because it answers a question each desk decides for
+  // itself: how far ahead do we want to be told?
   const state: SlaState =
     remainingMs < AT_RISK_MS
       ? "at_risk"
-      : remainingMs < DUE_SOON_MS
+      : remainingMs < (slaWarnMs ?? DUE_SOON_MS)
         ? "due_soon"
         : "on_track";
   return { state, minutesDelta };

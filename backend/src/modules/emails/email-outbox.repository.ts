@@ -23,6 +23,14 @@ export type OutboxEntry = {
 export type ClaimedEmail = {
   id: number;
   ticketId: number;
+  /**
+   * The ticket's tenant, joined in at claim time.
+   *
+   * Carried on the row rather than looked up per mail because the policy that
+   * governs this send — which events are on, how many may go out in a window —
+   * belongs to the customer, and the sweep resolves them a batch at a time.
+   */
+  customerId: number;
   eventType: EmailEvent;
   recipientUserId: number;
   recipientEmail: string;
@@ -34,6 +42,7 @@ export type ClaimedEmail = {
 type ClaimedRow = {
   id: number;
   ticket_id: number;
+  customer_id: number;
   event_type: string;
   recipient_user_id: number;
   recipient_email: string;
@@ -112,9 +121,21 @@ export const emailOutboxRepository = {
       RETURNING "id", "ticket_id", "event_type", "recipient_user_id",
                 "recipient_email", "lang", "payload", "attempts"
     `);
+    if (rows.length === 0) return [];
+    // The tenant per claimed row, for the policy lookup. Read after the claim
+    // rather than joined into the UPDATE: `RETURNING` can only name columns of
+    // the table being written, and widening the claim into a CTE to reach one
+    // more column would make the part that has to be exactly right — the
+    // SKIP LOCKED claim — harder to read for no gain.
+    const tickets = await prisma.ticket.findMany({
+      where: { id: { in: [...new Set(rows.map((r) => r.ticket_id))] } },
+      select: { id: true, customerId: true },
+    });
+    const customerOf = new Map(tickets.map((t) => [t.id, t.customerId]));
     return rows.map((r) => ({
       id: r.id,
       ticketId: r.ticket_id,
+      customerId: customerOf.get(r.ticket_id) ?? 0,
       eventType: r.event_type as EmailEvent,
       recipientUserId: r.recipient_user_id,
       recipientEmail: r.recipient_email,

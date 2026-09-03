@@ -57,6 +57,7 @@ const en: Dict = {
   "cap.handover": "Hand over a whole queue",
   "cap.deleteTicket": "Delete a ticket",
   "cap.deleteProject": "Delete a routing project",
+  "cap.notificationSettings": "Configure notification settings",
   "perm.userScopeNote":
     "A super admin who belongs to a customer manages only that customer's users. A super admin with no customer of their own is platform-wide and manages everyone.",
   "scope.user": "Only tickets you opened",
@@ -150,6 +151,42 @@ const en: Dict = {
   "settings.saving": "Saving…",
   "settings.saved": "Saved",
   "settings.saveError": "Couldn't save",
+  // --- notification policy (super admin only) -------------------------------
+  "notifySettings.title": "Notifications",
+  "notifySettings.noteDefaults":
+    "Following the system defaults. Saving anything here starts this customer's own policy.",
+  "notifySettings.noteConfigured":
+    "This customer's own policy. Reset returns them to the system defaults.",
+  "notifySettings.loading": "Loading notification settings…",
+  "notifySettings.error": "Could not load notification settings.",
+  "notifySettings.events": "Send an email when…",
+  "notifySettings.rate": "Emails per ticket",
+  "notifySettings.rateHint":
+    "Beyond this, a window collapses into one summary ({min}–{max}).",
+  "notifySettings.window": "Window (minutes)",
+  "notifySettings.windowHint": "How long that limit is measured over ({min}–{max}).",
+  "notifySettings.sla": "Warn before SLA (minutes)",
+  "notifySettings.slaHint":
+    "Also sets when a ticket turns amber on the list ({min}–{max}).",
+  "notifySettings.reset": "Reset to defaults",
+
+  // Event names, in the order the catalogue lists them.
+  "notifyEvent.ticket.created": "A ticket is raised (receipt to the requester)",
+  "notifyEvent.comment.public_reply": "The desk replies publicly",
+  "notifyEvent.ticket.pending": "Work is done, awaiting the requester's confirmation",
+  "notifyEvent.ticket.auto_close_reminder": "A ticket is about to auto-close",
+  "notifyEvent.ticket.closed": "A ticket is closed",
+  "notifyEvent.ticket.assigned": "A ticket is assigned to someone",
+  "notifyEvent.comment.requester_replied": "The requester replies",
+  "notifyEvent.ticket.closure_rejected": "The requester asks to reopen",
+  "notifyEvent.comment.internal_note": "An internal note is added",
+  "notifyEvent.ticket.sla_warning": "A ticket approaches its SLA",
+  "notifyEvent.ticket.sla_breach": "A ticket breaches its SLA",
+  "notifyEvent.queue.ticket_unassigned": "An unassigned ticket arrives in a queue",
+  "notifyEvent.queue.requester_replied": "The requester replies on an unassigned ticket",
+  "notifyEvent.digest.multiple_updates": "Summary of several updates",
+  "notifyEvent.digest.bulk_assigned": "Summary of a bulk assignment",
+
   "settings.preferences": "Preferences",
   "settings.languageNote":
     "Saved to your account, so it also sets the language we email you in. The EN/ไทย switch in the header only changes this browser.",
@@ -744,6 +781,7 @@ const th: Dict = {
   "cap.handover": "โยนคิวทั้งชุดให้คนอื่น",
   "cap.deleteTicket": "ลบ Ticket",
   "cap.deleteProject": "ลบโปรเจกต์จ่ายงาน",
+  "cap.notificationSettings": "ตั้งค่าการแจ้งเตือน",
   "perm.userScopeNote":
     "ผู้ดูแลระบบสูงสุดที่สังกัดลูกค้าใด จะจัดการผู้ใช้เฉพาะของลูกค้านั้น · ถ้าไม่สังกัดลูกค้าใดเลยจะเป็นระดับแพลตฟอร์ม จัดการได้ทุกคน",
   "scope.user": "เฉพาะ Ticket ที่คุณเปิด",
@@ -835,6 +873,40 @@ const th: Dict = {
   "settings.saving": "กำลังบันทึก…",
   "settings.saved": "บันทึกแล้ว",
   "settings.saveError": "บันทึกไม่สำเร็จ",
+  // --- notification policy (super admin only) -------------------------------
+  "notifySettings.title": "การแจ้งเตือน",
+  "notifySettings.noteDefaults":
+    "ใช้ค่าเริ่มต้นของระบบอยู่ เมื่อบันทึกจะเริ่มใช้ค่าเฉพาะของลูกค้ารายนี้",
+  "notifySettings.noteConfigured":
+    "ใช้ค่าเฉพาะของลูกค้ารายนี้ กดคืนค่าเพื่อกลับไปใช้ค่าเริ่มต้นของระบบ",
+  "notifySettings.loading": "กำลังโหลดการตั้งค่าแจ้งเตือน…",
+  "notifySettings.error": "โหลดการตั้งค่าแจ้งเตือนไม่สำเร็จ",
+  "notifySettings.events": "ส่งอีเมลเมื่อ…",
+  "notifySettings.rate": "อีเมลต่อ ticket",
+  "notifySettings.rateHint": "เกินกว่านี้จะยุบเป็นฉบับสรุปฉบับเดียว ({min}–{max})",
+  "notifySettings.window": "ช่วงเวลา (นาที)",
+  "notifySettings.windowHint": "ใช้นับจำนวนอีเมลข้างต้นในช่วงนี้ ({min}–{max})",
+  "notifySettings.sla": "เตือนก่อนครบ SLA (นาที)",
+  "notifySettings.slaHint":
+    "มีผลกับสีเหลืองบนหน้ารายการ ticket ด้วย ({min}–{max})",
+  "notifySettings.reset": "คืนค่าเริ่มต้น",
+
+  "notifyEvent.ticket.created": "มีการแจ้งเรื่องใหม่ (ใบรับเรื่องถึงผู้แจ้ง)",
+  "notifyEvent.comment.public_reply": "ทีมผู้ดูแลตอบกลับแบบสาธารณะ",
+  "notifyEvent.ticket.pending": "งานเสร็จแล้ว รอผู้แจ้งยืนยัน",
+  "notifyEvent.ticket.auto_close_reminder": "เรื่องกำลังจะปิดอัตโนมัติ",
+  "notifyEvent.ticket.closed": "เรื่องถูกปิด",
+  "notifyEvent.ticket.assigned": "มีการมอบหมายเรื่องให้ผู้ดูแล",
+  "notifyEvent.comment.requester_replied": "ผู้แจ้งตอบกลับ",
+  "notifyEvent.ticket.closure_rejected": "ผู้แจ้งขอเปิดเรื่องใหม่",
+  "notifyEvent.comment.internal_note": "มีการเพิ่มบันทึกภายใน",
+  "notifyEvent.ticket.sla_warning": "เรื่องใกล้ครบกำหนด SLA",
+  "notifyEvent.ticket.sla_breach": "เรื่องเกินกำหนด SLA",
+  "notifyEvent.queue.ticket_unassigned": "มีเรื่องเข้าคิวโดยยังไม่มีผู้ดูแล",
+  "notifyEvent.queue.requester_replied": "ผู้แจ้งตอบในเรื่องที่ยังไม่มีผู้ดูแล",
+  "notifyEvent.digest.multiple_updates": "สรุปความเคลื่อนไหวหลายรายการ",
+  "notifyEvent.digest.bulk_assigned": "สรุปการมอบหมายหลายเรื่อง",
+
   "settings.preferences": "การตั้งค่า",
   "settings.languageNote":
     "บันทึกลงบัญชีของคุณ และใช้เป็นภาษาของอีเมลที่ระบบส่งถึงคุณด้วย ส่วนปุ่ม EN/ไทย ด้านบนเปลี่ยนเฉพาะเบราว์เซอร์นี้",

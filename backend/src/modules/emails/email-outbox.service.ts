@@ -22,6 +22,11 @@ import {
   type ClaimedEmail,
   type OutboxEntry,
 } from "./email-outbox.repository";
+import { settingsRepository } from "../settings/settings.repository";
+import {
+  deploymentDefaults,
+  type EffectiveSettings,
+} from "../settings/settings.types";
 import { renderEmail } from "./email.templates";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -160,6 +165,14 @@ export const emailOutboxService = {
       return { sent: 0, failed: 0, suppressed: 0, collapsed: 0 };
     }
 
+    // One lookup for the whole batch. Policy is per customer, and a batch is
+    // usually a handful of them — resolving per mail would be a query each.
+    const policies = await settingsRepository.effectiveForMany(
+      claimed.map((c) => c.customerId),
+    );
+    const policyFor = (row: ClaimedEmail): EffectiveSettings =>
+      policies.get(row.customerId) ?? deploymentDefaults();
+
     const totals = { sent: 0, failed: 0, suppressed: 0, collapsed: 0 };
     const bulkGroups = groupBulkAssignments(claimed);
     const handledByBulk = new Set(
@@ -168,7 +181,7 @@ export const emailOutboxService = {
 
     for (const [, group] of bulkGroups) {
       try {
-        await this.deliverBulkDigest(group, now, totals);
+        await this.deliverBulkDigest(group, policyFor(group[0]), now, totals);
       } catch (err) {
         for (const row of group) await this.recordFailure(row, err, now, totals);
       }
@@ -177,7 +190,7 @@ export const emailOutboxService = {
     for (const row of claimed) {
       if (handledByBulk.has(row.id)) continue;
       try {
-        await this.deliverOne(row, now, totals);
+        await this.deliverOne(row, policyFor(row), now, totals);
       } catch (err) {
         await this.recordFailure(row, err, now, totals);
       }
@@ -189,24 +202,26 @@ export const emailOutboxService = {
   /** One queued mail: switches, rate limit, threading, send, audit. */
   async deliverOne(
     row: ClaimedEmail,
+    policy: EffectiveSettings,
     now: Date,
     totals: { sent: number; suppressed: number; collapsed: number },
   ): Promise<void> {
-    const cfg = env.ticketEmail;
-
-    if (!cfg.enabled || cfg.disabledEvents.has(row.eventType)) {
+    // `env.ticketEmail.enabled` is the deployment's master switch and stays
+    // global — it is how an operator stops ALL mail leaving a box. The per-event
+    // list is the customer's, and answers a different question.
+    if (!env.ticketEmail.enabled || policy.disabledEvents.has(row.eventType)) {
       await this.suppress(row, "event_disabled", totals);
       return;
     }
 
     // --- anti-spam: at most N per ticket per window, per recipient -----------
-    const windowStart = new Date(now.getTime() - cfg.rateWindowMs);
+    const windowStart = new Date(now.getTime() - policy.rateWindowMs);
     const sentInWindow = await emailOutboxRepository.countSentSince(
       row.ticketId,
       row.recipientUserId,
       windowStart,
     );
-    if (sentInWindow >= cfg.ratePerTicket) {
+    if (sentInWindow >= policy.ratePerTicket) {
       // Already over. One summary stands for everything in the window; a second
       // summary would be the flood the limit exists to stop, so it is sent only
       // if there isn't one yet.
@@ -256,12 +271,12 @@ export const emailOutboxService = {
    */
   async deliverBulkDigest(
     group: ClaimedEmail[],
+    policy: EffectiveSettings,
     now: Date,
     totals: { sent: number; suppressed: number; collapsed: number },
   ): Promise<void> {
-    const cfg = env.ticketEmail;
     const [head, ...rest] = group;
-    if (!cfg.enabled || cfg.disabledEvents.has("ticket.assigned")) {
+    if (!env.ticketEmail.enabled || policy.disabledEvents.has("ticket.assigned")) {
       for (const row of group) await this.suppress(row, "event_disabled", totals);
       return;
     }

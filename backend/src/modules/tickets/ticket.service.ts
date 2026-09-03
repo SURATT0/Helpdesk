@@ -18,6 +18,7 @@ import { commentService } from "../comments/comment.service";
 import { notificationRepository } from "../notifications/notification.repository";
 import { loadTicketEmailContext } from "../emails/email.context";
 import { emailOutboxService } from "../emails/email-outbox.service";
+import { settingsRepository } from "../settings/settings.repository";
 import { mayImportForRequester, mayReceiveAssignment } from "./ticket.scope";
 import { resolvePeriod, type Granularity, type Period } from "./history.period";
 import { AUTO_CLOSE_MS, formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
@@ -649,7 +650,11 @@ export const ticketService = {
   async sweepSlaAlerts(
     now: Date = new Date(),
   ): Promise<{ warned: number; breached: number }> {
-    const horizon = new Date(now.getTime() + SLA_WARN_MS);
+    // The widest window any customer could be watching, so the candidate query
+    // cannot miss a ticket that one tenant considers at risk and another does
+    // not. Each ticket is then judged against its OWN customer's window below.
+    const widestWarnMs = await settingsRepository.widestSlaWarnMs();
+    const horizon = new Date(now.getTime() + widestWarnMs);
     const atRisk = await ticketRepository.findSlaRisk(horizon);
     if (atRisk.length === 0) return { warned: 0, breached: 0 };
 
@@ -678,8 +683,18 @@ export const ticketService = {
     let warned = 0;
     let breached = 0;
 
+    // Each ticket is judged against its own tenant's window — the candidate set
+    // above was deliberately widened to the largest in force anywhere, so a
+    // ticket in here may be at risk for its customer or not yet for another's.
+    const policies = await settingsRepository.effectiveForMany(
+      atRisk.map((t) => t.customerId).filter((c): c is number => c != null),
+    );
+    const warnMsOf = (customerId: number | null) =>
+      (customerId != null ? policies.get(customerId)?.slaWarnMs : undefined) ??
+      SLA_WARN_MS;
+
     for (const ticket of atRisk) {
-      const kind = slaAlertKind(ticket.dueAt, now);
+      const kind = slaAlertKind(ticket.dueAt, now, warnMsOf(ticket.customerId));
       if (!kind) continue;
       const type = SLA_ALERT_TYPE[kind];
 
@@ -721,7 +736,7 @@ export const ticketService = {
     // deduping the `existing` set above does for the bell — so a sweep that
     // re-sees the same at-risk ticket every 15 minutes queues nothing new.
     for (const ticket of atRisk) {
-      const kind = slaAlertKind(ticket.dueAt, now);
+      const kind = slaAlertKind(ticket.dueAt, now, warnMsOf(ticket.customerId));
       if (!kind) continue;
       const emailCtx = await loadTicketEmailContext(ticket.id);
       if (!emailCtx) continue;

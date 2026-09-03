@@ -72,6 +72,15 @@ export const ticketSchema = z.object({
    */
   dueAt: z.string().nullable(),
   resolvedAt: z.string().nullable(),
+  /**
+   * This ticket's customer's "due soon" window, in milliseconds.
+   *
+   * Per ticket rather than per response: a list can span tenants, and each row
+   * is judged against its own desk's policy. Optional so an older API — or a
+   * fixture written before this existed — still parses; `judgeSla` falls back to
+   * the shipped default.
+   */
+  slaWarnMs: z.number().optional(),
   attachments: z.number(),
   /**
    * The problem this incident is linked to, if any (many tickets → one problem).

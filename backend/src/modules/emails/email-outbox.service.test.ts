@@ -40,6 +40,16 @@ const { repo, sent, mailSender } = vi.hoisted(() => {
 });
 
 vi.mock("./email-outbox.repository", () => ({ emailOutboxRepository: repo }));
+// The policy lookup is a database read, and these are unit tests that must run
+// without one. Resolving to the deployment defaults keeps every assertion below
+// about the sweep's decisions rather than about a customer's configuration —
+// the per-customer behaviour is covered against a real database in
+// `test/notification-settings.integration.test.ts`.
+vi.mock("../settings/settings.repository", () => ({
+  settingsRepository: {
+    effectiveForMany: vi.fn(async () => new Map()),
+  },
+}));
 vi.mock("../integrations/email/mail-sender", () => ({ mailSender }));
 vi.mock("../audit/audit.repository", () => ({
   auditRepository: { record: vi.fn(async () => undefined) },
@@ -69,6 +79,7 @@ const payload = (subject = "Printer jam"): StaffPayload => ({
 const row = (over: Partial<ClaimedEmail> = {}): ClaimedEmail => ({
   id: 1,
   ticketId: 1046,
+  customerId: 10,
   eventType: "ticket.assigned",
   recipientUserId: 2,
   recipientEmail: "jo@acme.com",
