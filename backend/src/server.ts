@@ -3,7 +3,7 @@ import { env, API_PREFIX, validateEnv } from "./config/env";
 import { logger } from "./shared/logger";
 import { bus } from "./shared/events";
 import { ticketService } from "./modules/tickets/ticket.service";
-import { notificationService } from "./modules/notifications/notification.service";
+import { emailOutboxService } from "./modules/emails/email-outbox.service";
 import { authService } from "./modules/auth/auth.service";
 
 // Fail fast on a misconfigured environment (missing DB URL, weak/default auth
@@ -75,23 +75,61 @@ if (env.slaAlerts) {
   setInterval(sweep, 15 * 60 * 1000).unref();
 }
 
-// Background sweep: email the notifications not yet delivered. Every 60s, which
-// is near-real-time for a help desk without turning into a hot loop; the sweep is
-// a single indexed query when there is nothing to do.
+// Background sweep: deliver the queued ticket emails. Every 60s, which is
+// near-real-time for a help desk without turning into a hot loop; the sweep is a
+// single indexed query when there is nothing to do.
+//
+// This replaced a sweep over `notifications.emailed_at`. The two must never run
+// together — they would each deliver the same event — so the old one is gone
+// rather than disabled, and the migration stamped its backlog as handled.
 if (env.notificationEmails) {
-  const sweep = () =>
-    notificationService
-      .sweepEmail()
-      .then(({ sent, skipped, failed }) => {
-        if (sent + failed > 0) {
-          logger.info({ sent, skipped, failed }, "notification email sweep");
+  // One pass at a time. A pass is bounded by a batch limit, not by the clock,
+  // so a slow or unreachable mail server makes it outlast its own interval —
+  // and without this guard every tick would start another one on top, each
+  // holding sockets and database connections until the pool is gone and the API
+  // starts timing out. Skipping a tick costs at most a minute of latency on a
+  // notification; overlapping them costs the whole process.
+  let running = false;
+  const sweep = () => {
+    if (running) {
+      logger.debug("ticket email sweep still running; skipping this tick");
+      return;
+    }
+    running = true;
+    emailOutboxService
+      .sweep()
+      .then(({ sent, failed, suppressed, collapsed }) => {
+        if (sent + failed + collapsed > 0) {
+          logger.info(
+            { sent, failed, suppressed, collapsed },
+            "ticket email sweep",
+          );
         }
       })
-      .catch((err) =>
-        logger.error({ err }, "notification email sweep failed"),
-      );
+      .catch((err) => logger.error({ err }, "ticket email sweep failed"))
+      .finally(() => {
+        running = false;
+      });
+  };
   sweep();
   setInterval(sweep, 60 * 1000).unref();
+}
+
+// Background sweep: warn requesters before the auto-close takes their ticket.
+// Hourly, matching the auto-close sweep it runs ahead of — the reminder lead is
+// measured in hours, so a finer cadence would only re-run an idempotent query.
+// Tied to the same switch as the auto-close itself: with nothing closing tickets
+// there is nothing to warn about.
+if (env.autoClose && env.ticketEmail.enabled) {
+  const sweep = () =>
+    ticketService
+      .sweepAutoCloseReminders()
+      .then((n) => {
+        if (n > 0) logger.info({ queued: n }, "queued auto-close reminders");
+      })
+      .catch((err) => logger.error({ err }, "auto-close reminder sweep failed"));
+  sweep();
+  setInterval(sweep, 60 * 60 * 1000).unref();
 }
 
 // Background sweep: delete expired refresh tokens (run on boot + hourly). Hourly

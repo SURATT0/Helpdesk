@@ -5,12 +5,8 @@ import { env } from "../../config/env";
 import { logger } from "../../shared/logger";
 import { auditRepository } from "../audit/audit.repository";
 import { commentService } from "../comments/comment.service";
-import {
-  commentRepository,
-  type CommentDto,
-} from "../comments/comment.repository";
+import type { CommentDto } from "../comments/comment.repository";
 import { ensureTicketRef } from "../integrations/email/email.parsers";
-import { mailSender } from "../integrations/email/mail-sender";
 import { ticketService } from "./ticket.service";
 
 export type ReplyInput = {
@@ -22,15 +18,27 @@ export type ReplyInput = {
 
 export type ReplyResult = {
   comment: CommentDto;
-  mail: { transport: string; to: string; subject: string; messageId?: string };
+  /**
+   * What was QUEUED, not what was delivered. The send happens on the outbox
+   * sweep moments later, so this endpoint cannot report a transport or a
+   * Message-ID any more — and reporting one would have been a guess.
+   */
+  mail: { queued: boolean; to: string; subject: string };
 };
 
 /**
- * Agent email reply. Records the message as a public comment (so it appears in
- * the ticket thread and follows the same row-scope authorization) AND dispatches
- * an email to the requester via the outbound mail adapter (real SMTP when
- * configured, a logging transport otherwise). Attachments live on the ticket;
- * their names are appended to the email body.
+ * Agent email reply. Records the message as a public comment — which is what
+ * queues the mail: a public comment from staff IS the `comment.public_reply`
+ * event, so this path adds an editable To: address and nothing else.
+ *
+ * It used to call the mail adapter directly, inside the request. That is now a
+ * double send (the comment queues its own mail) and it broke the rule the outbox
+ * exists to keep: a failing mail server must not fail an agent's reply, and
+ * network I/O has no business on the request path. Going through the queue also
+ * gets this path the things the direct send never had — HTML alongside the text
+ * part, the recipient's own language, `In-Reply-To` threading, and retries.
+ *
+ * Attachments live on the ticket; their names are appended to the message body.
  */
 export const replyService = {
   async send(
@@ -53,66 +61,53 @@ export const replyService = {
       );
     }
 
-    const comment = await commentService.create(
-      ticketId,
-      { body: input.body, internal: false },
-      user,
-    );
+    // Reply-To on the queued mail is the help desk address, never the agent's own
+    // mailbox — the requester hitting "Reply" has to come back through the
+    // inbound webhook so the message lands on this ticket. Pointing it at the
+    // agent would deliver the reply into their personal inbox instead, taking the
+    // rest of the conversation, and the SLA clock with it, outside the ticket.
+    if (env.smtp.host && !env.smtp.from) {
+      logger.warn(
+        { ticketId },
+        "SMTP_FROM is unset: outbound mail falls back to the recipient's own address, so requester replies will bypass the ticket",
+      );
+    }
 
-    // The `[#id]` tag is what routes the reply back onto this ticket, so it is
-    // stamped unconditionally — including onto a caller-supplied subject, which
-    // would otherwise go out without one and make its reply unthreadable.
-    const subject = ensureTicketRef(
-      input.subject?.trim() || `Re: ${ticket.subject}`,
-      ticketId,
-    );
     const footer =
       input.attachments && input.attachments.length > 0
         ? `\n\n---\nAttachments: ${input.attachments.join(", ")}`
         : "";
-    // Reply-To is the help desk address, never the agent's own mailbox. The
-    // requester hitting "Reply" must come back through the inbound webhook so the
-    // message lands on this ticket (the `[#id]` tag in the subject is what routes
-    // it); pointing Reply-To at the agent would deliver the reply into their
-    // personal inbox instead, taking the rest of the conversation — and the SLA
-    // clock with it — outside the ticket entirely.
-    if (env.smtp.host && !env.smtp.from) {
-      logger.warn(
-        { ticketId },
-        "SMTP_FROM is unset: outbound replies fall back to the agent's own address, so requester replies will bypass the ticket",
-      );
-    }
-    const sent = await mailSender.send({
-      from: env.smtp.from || user.email,
-      to: input.to,
-      subject,
-      text: input.body + footer,
-      replyTo: env.smtp.from,
-    });
 
-    // Remember which mail this comment was sent as. Recorded after dispatch
-    // because the transport mints the id; it lets a header-based (In-Reply-To)
-    // threading upgrade match a reply back to this exact message later.
-    if (sent.messageId) {
-      await commentRepository.setMessageId(comment.id, sent.messageId);
-    }
+    // Creating the comment is what queues the mail. The To: override rides along
+    // so an agent who edited the address is honoured; everything else about the
+    // message — subject, language, threading — is the mail layer's to decide, so
+    // that a reply looks like every other mail this desk sends.
+    const comment = await commentService.create(
+      ticketId,
+      {
+        body: input.body + footer,
+        internal: false,
+        emailDeliverTo: input.to,
+      },
+      user,
+    );
+
+    // The subject the recipient will see, rebuilt here only to report it back.
+    // `ensureTicketRef` is the same function the mail layer stamps with, so the
+    // two cannot disagree about the tag that routes a reply home.
+    const subject = ensureTicketRef(
+      input.subject?.trim() || `Re: ${ticket.subject}`,
+      ticketId,
+    );
 
     await auditRepository.record({
       userId: user.id,
       action: "ticket.reply_email",
       entity: "ticket",
       entityId: ticketId,
-      meta: { to: input.to, transport: sent.transport },
+      meta: { to: input.to, queued: true },
     });
 
-    return {
-      comment,
-      mail: {
-        transport: sent.transport,
-        to: input.to,
-        subject,
-        messageId: sent.messageId,
-      },
-    };
+    return { comment, mail: { queued: true, to: input.to, subject } };
   },
 };

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { env } from "../../config/env";
 import { Unauthorized } from "../../shared/errors";
 import type { Role } from "../../shared/domain";
+import type { Lang } from "../../shared/i18n";
 import { authRepository } from "./auth.repository";
 import {
   generateRefreshToken,
@@ -23,6 +24,17 @@ export type PublicUser = {
    * in the user directory.
    */
   availableForAssignment: boolean;
+  /**
+   * The language this person has CHOSEN, or null if they never have.
+   *
+   * In the session payload so the web app can open in their language on the
+   * first paint rather than in whatever this browser's localStorage remembers —
+   * on a shared machine that is the previous person's choice, not this one's.
+   * Null is passed through rather than defaulted here: the client's fallback
+   * (English) is not the mailer's (Thai), so the decision belongs to each of
+   * them and not to this DTO.
+   */
+  language: Lang | null;
 };
 
 export type Session = {
@@ -43,6 +55,7 @@ type UserRow = {
   passwordHash: string | null;
   availableForAssignment: boolean;
   isActive: boolean;
+  language: Lang | null;
   team: { department: string } | null;
 };
 
@@ -66,6 +79,7 @@ function toPublicUser(u: UserRow): PublicUser {
     role: u.role,
     teamId: u.teamId,
     availableForAssignment: u.availableForAssignment,
+    language: u.language,
   };
 }
 

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { Role } from "../../shared/domain";
+import type { Lang } from "../../shared/i18n";
 import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { BadRequest } from "../../shared/errors";
@@ -38,6 +39,12 @@ export type UserDto = {
   availableForAssignment: boolean;
   /** False = the account is closed: no sign-in, no new work. See User.isActive. */
   isActive: boolean;
+  /**
+   * The language this person has chosen, or null if they never have. Each
+   * reader falls back differently (the app to English, mail to Thai), so the
+   * null is passed through rather than resolved here.
+   */
+  language: Lang | null;
   createdAt: string;
 };
 
@@ -51,6 +58,7 @@ function toDto(row: UserRow): UserDto {
     project: row.project,
     availableForAssignment: row.availableForAssignment,
     isActive: row.isActive,
+    language: row.language,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -76,7 +84,7 @@ export const userRepository = {
 
   async updateProfile(
     id: number,
-    data: { name?: string; availableForAssignment?: boolean },
+    data: { name?: string; availableForAssignment?: boolean; language?: Lang },
     actorId: number,
   ): Promise<UserDto | null> {
     return prisma.$transaction(async (tx) => {
@@ -96,6 +104,7 @@ export const userRepository = {
           meta: {
             name: data.name,
             availableForAssignment: data.availableForAssignment,
+            language: data.language,
           },
         },
         tx,

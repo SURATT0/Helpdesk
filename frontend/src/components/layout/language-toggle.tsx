@@ -6,6 +6,18 @@ import { cn } from "@/lib/utils";
 
 const LABELS: Record<Lang, string> = { en: "EN", th: "ไทย" };
 
+/**
+ * Read this page in the other language — for this browser, for now.
+ *
+ * Session-scoped on purpose. It sits in the topbar AND on the login screen,
+ * where there is nobody to attribute a choice to, so it cannot be the thing that
+ * states a preference. Saying "my language is Thai" — the statement the mailer
+ * reads, because it composes hours later with no browser to ask — is done on the
+ * Settings page, which is where a person goes to change facts about themselves.
+ *
+ * Keeping it session-scoped also stops a glance in another language from
+ * silently changing which language somebody's email arrives in.
+ */
 export function LanguageToggle() {
   const { lang, setLang } = useI18n();
   return (

@@ -6,7 +6,13 @@ import {
   type AttachmentDto,
 } from "../attachments/attachment.repository";
 import { auditRepository } from "../audit/audit.repository";
-import { notificationRepository } from "../notifications/notification.repository";
+import {
+  notificationRepository,
+  notifyBell,
+} from "../notifications/notification.repository";
+import { loadTicketEmailContext } from "../emails/email.context";
+import { emailOutboxService } from "../emails/email-outbox.service";
+import type { EmailEvent } from "../emails/email.events";
 
 const commentInclude = {
   author: { select: { id: true, name: true, role: true } },
@@ -114,8 +120,23 @@ export const commentRepository = {
     channel?: "web" | "email";
     /** RFC 5322 Message-ID, when this comment corresponds to a real mail. */
     messageId?: string | null;
+    /**
+     * Deliver the requester's mail for this comment to THIS address instead of
+     * the one on their account.
+     *
+     * The agent reply composer has an editable To: field, and honouring it is
+     * the whole point of that field — a requester who says "copy my manager" is
+     * answered at the address they asked for. It overrides the ADDRESS only:
+     * who the recipient is, what audience they are, and which language they read
+     * are all still decided by the recipient rules, so this cannot turn a
+     * staff-only event into one that goes outward.
+     */
+    emailDeliverTo?: string;
   }): Promise<CommentDto> {
-    return prisma.$transaction(async (tx) => {
+    // The bells are rung after the commit, not inside it — a refetch triggered
+    // while the transaction is still open reads the count from before it, and
+    // nothing sends a second signal to correct that. See `notifyBell`.
+    const { dto, notified } = await prisma.$transaction(async (tx) => {
       const created = await tx.comment.create({
         data: {
           ticketId: data.ticketId,
@@ -148,6 +169,7 @@ export const commentRepository = {
         where: { id: data.ticketId },
         select: { requesterId: true, assigneeId: true },
       });
+      let notified: number[] = [];
       if (ticket) {
         const recipients = [ticket.requesterId, ticket.assigneeId].filter(
           (x): x is number =>
@@ -155,7 +177,7 @@ export const commentRepository = {
             x !== data.authorId &&
             !(data.internal && x === ticket.requesterId),
         );
-        await notificationRepository.createMany(
+        ({ notified } = await notificationRepository.createMany(
           [...new Set(recipients)].map((userId) => ({
             userId,
             type: "ticket.comment",
@@ -163,11 +185,59 @@ export const commentRepository = {
             message: `New ${data.internal ? "internal note" : "reply"} on ticket #${data.ticketId}`,
           })),
           tx,
-        );
+        ));
+
+        // Queue the email for the same event, in this same transaction — the
+        // bell entry and the mail are written together or not at all.
+        //
+        // Which event it is depends on WHO wrote and whether it was a note, and
+        // the three answers have three different audiences. Deciding it here,
+        // where the author and the ticket are both in hand, is what lets the
+        // mail layer resolve recipients without re-deriving any of it:
+        //
+        //   internal note        → the desk (assignee, or the queue behind them)
+        //   staff wrote publicly → the requester
+        //   requester wrote      → the desk, and specifically the QUEUE when
+        //                          nobody owns the ticket, which is the case
+        //                          that used to go unnoticed for weeks
+        const authorIsRequester = data.authorId === ticket.requesterId;
+        const event: EmailEvent = data.internal
+          ? "comment.internal_note"
+          : authorIsRequester
+            ? ticket.assigneeId == null
+              ? "queue.requester_replied"
+              : "comment.requester_replied"
+            : "comment.public_reply";
+
+        const emailCtx = await loadTicketEmailContext(data.ticketId, tx);
+        if (emailCtx) {
+          await emailOutboxService.queue(
+            {
+              event,
+              ctx: { ...emailCtx.ctx, actorId: data.authorId },
+              // The comment, not the ticket: one mail per message. Keying this
+              // on the ticket would mail the first comment and silently drop
+              // every reply after it as a duplicate.
+              sourceRecordId: created.id,
+              ticket: emailCtx.summary,
+              occurredAt: created.createdAt,
+              message: {
+                authorName: created.author.name,
+                body: created.body,
+              },
+              vars: { author: created.author.name },
+              problem: emailCtx.problem,
+              deliverTo: data.emailDeliverTo,
+            },
+            tx,
+          );
+        }
       }
 
-      return toDto(created);
+      return { dto: toDto(created), notified };
     });
+    notifyBell(notified);
+    return dto;
   },
 
   /** Advance a user's read pointer for a ticket (never moves backwards). */

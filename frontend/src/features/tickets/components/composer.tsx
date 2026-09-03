@@ -160,11 +160,9 @@ export function Composer({
       await uploadFiles();
       setBody("");
       setFiles([]);
-      setSentInfo(
-        res.mail.transport === "smtp"
-          ? t("composer.mailSent", { to: recipient })
-          : t("composer.mailLogged", { to: recipient }),
-      );
+      // Queued, not delivered — the server hands it to its outbox and sweeps a
+      // moment later, so "on its way" is the strongest true thing to say here.
+      setSentInfo(t("composer.mailQueued", { to: recipient }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("composer.postError"));
     } finally {

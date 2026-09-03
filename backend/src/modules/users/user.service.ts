@@ -7,6 +7,7 @@ import {
 } from "../../shared/errors";
 import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import type { Role } from "../../shared/domain";
+import type { Lang } from "../../shared/i18n";
 import { userRepository, type UserDto } from "./user.repository";
 
 export const userService = {
@@ -92,7 +93,7 @@ export const userService = {
    * cannot touch role, team, or project: those are management decisions.
    */
   async updateProfile(
-    data: { name?: string; availableForAssignment?: boolean },
+    data: { name?: string; availableForAssignment?: boolean; language?: Lang },
     actor: AuthUser,
   ): Promise<UserDto> {
     const user = await userRepository.updateProfile(actor.id, data, actor.id);

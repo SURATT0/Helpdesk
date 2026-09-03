@@ -11,6 +11,17 @@ export type InboundEmail = {
   messageId?: string;
   /** In-Reply-To header — kept for a future header-based threading upgrade. */
   inReplyTo?: string;
+  /**
+   * `X-Deskly-Ticket-Id`, echoed back by a client that quoted our headers.
+   *
+   * The subject tag is the only routing signal that survives every client, but
+   * it is also the one a person can edit, delete, or have rewritten for them by
+   * a mail app that "cleans up" prefixes. This header is the belt to that
+   * brace: when it comes back it is unambiguous. It is no more trusted than the
+   * tag — both are attacker-supplied — so it locates a candidate ticket and the
+   * same `senderMayReply` check decides whether the sender may write to it.
+   */
+  ticketIdHeader?: number;
 };
 
 /**

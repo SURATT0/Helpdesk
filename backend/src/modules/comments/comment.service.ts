@@ -25,7 +25,16 @@ export const commentService = {
 
   async create(
     ticketId: number,
-    input: { body: string; internal: boolean },
+    input: {
+      body: string;
+      internal: boolean;
+      /**
+       * Where the requester's mail for this message should go, when the caller
+       * has a reason to override it. Only the agent reply composer does, via its
+       * editable To: field — see `commentRepository.create`.
+       */
+      emailDeliverTo?: string;
+    },
     user: AuthUser,
   ): Promise<CommentDto> {
     const ticket = await ticketService.get(ticketId, user); // must see the ticket
@@ -46,6 +55,9 @@ export const commentService = {
       authorId: user.id,
       body: input.body,
       internal,
+      // A note has no requester copy to redirect, so the override is dropped
+      // rather than carried into a path that would ignore it anyway.
+      ...(internal ? {} : { emailDeliverTo: input.emailDeliverTo }),
     });
     // Real-time fan-out to SSE subscribers on this ticket.
     bus.emit("comment.created", { ticketId, comment });

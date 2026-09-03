@@ -9,7 +9,7 @@ import {
   type TicketStatus,
 } from "../src/shared/ticket-status";
 import { ticketService } from "../src/modules/tickets/ticket.service";
-import { notificationService } from "../src/modules/notifications/notification.service";
+import { emailOutboxService } from "../src/modules/emails/email-outbox.service";
 import { authService } from "../src/modules/auth/auth.service";
 import { prisma, resetDb } from "./db";
 
@@ -54,6 +54,15 @@ describe("auth", () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.data.accessToken).toBe("string");
     expect(res.body.data.user.email).toBe("dana.reyes@acme.com");
+    // The web app's session schema requires this field, so a payload without it
+    // fails to parse in the browser and the login "succeeds" into an error
+    // screen — a break nothing on this side would otherwise notice.
+    expect(["en", "th", null]).toContain(res.body.data.user.language);
+    // And it must be NULL for somebody who has never chosen, not Thai. The
+    // mailer's fallback is Thai; the app's is English. A seeded account arriving
+    // as "th" would flip every existing user's interface to Thai on their next
+    // sign-in without anyone having asked them.
+    expect(res.body.data.user.language).toBeNull();
     const cookies = res.headers["set-cookie"] as unknown as string[];
     expect(cookies.some((c) => c.startsWith("deskly_rt="))).toBe(true);
   });
@@ -3358,7 +3367,9 @@ describe("email-to-ticket threading", () => {
         body: "Can you retry?",
       });
     expect(sent.status).toBe(201);
-    expect(sent.body.data.mail.subject).toBe("[#1042] About your VPN problem");
+    expect(sent.body.data.mail.subject).toBe(
+      "[Deskly #1042] About your VPN problem",
+    );
 
     // The requester replies to exactly what they received.
     const back = await post({
@@ -3372,15 +3383,31 @@ describe("email-to-ticket threading", () => {
 });
 
 describe("tickets — agent email reply", () => {
-  it("records a public comment and reports the mail transport (201)", async () => {
+  // The reply no longer hands the message to SMTP inside the request — it queues
+  // it, like every other outbound mail, so a dead mail server cannot fail an
+  // agent's reply. The response says what was QUEUED; there is no transport to
+  // report yet, because nothing has been attempted at this point.
+  it("records a public comment and queues the mail (201)", async () => {
     const dana = await login("dana.reyes@acme.com"); // assignee of 1042
     const res = await request(app)
       .post(`${API}/tickets/1042/reply`)
       .set(bearer(dana))
       .send({ to: "marcus.chen@acme.com", body: "We're on it — thanks." });
     expect(res.status).toBe(201);
-    expect(res.body.data.mail.transport).toBe("log"); // no SMTP configured in tests
+    expect(res.body.data.mail.queued).toBe(true);
+    expect(res.body.data.mail.to).toBe("marcus.chen@acme.com");
     expect(res.body.data.comment.internal).toBe(false);
+
+    // Queued to the requester, at the address the agent typed.
+    const outbox = await prisma.emailOutbox.findMany({
+      where: { ticketId: 1042, eventType: "comment.public_reply" },
+      select: { recipientEmail: true, status: true },
+    });
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]).toMatchObject({
+      recipientEmail: "marcus.chen@acme.com",
+      status: "pending",
+    });
 
     // The reply is visible to the requester as a public thread comment.
     const marcus = await login("marcus.chen@acme.com");
@@ -3389,6 +3416,32 @@ describe("tickets — agent email reply", () => {
       .set(bearer(marcus));
     const bodies = thread.body.data.map((c: { body: string }) => c.body);
     expect(bodies).toContain("We're on it — thanks.");
+  });
+
+  // The composer's To: field is editable, and honouring it is the point of it.
+  // It moves the ADDRESS only — the recipient is still the requester, decided by
+  // the recipient rules, so this cannot redirect anything staff-only outward.
+  it("honours an edited To: address without changing who the recipient is", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await request(app)
+      .post(`${API}/tickets/1042/reply`)
+      .set(bearer(dana))
+      .send({ to: "someone.else@acme.com", body: "Copying you in." })
+      .expect(201);
+
+    const marcus = await prisma.user.findUniqueOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+      select: { id: true },
+    });
+    const rows = await prisma.emailOutbox.findMany({
+      where: { ticketId: 1042, eventType: "comment.public_reply" },
+      select: { recipientEmail: true, recipientUserId: true },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      recipientEmail: "someone.else@acme.com",
+      recipientUserId: marcus.id,
+    });
   });
 
   it("derives the subject from the ticket when none is given", async () => {
@@ -4532,16 +4585,13 @@ describe("problems — linking and converting", () => {
   });
 });
 
-// The notifications table doubles as an email outbox: rows are written inside the
-// mutation's transaction, and this sweep mails the ones still unstamped. SMTP is
-// unset in tests, so the mail adapter is the "log" transport — these assert the
-// outbox bookkeeping, which is where the real risk lives.
-describe("notifications — email delivery sweep", () => {
-  const HOUR = 60 * 60 * 1000;
-
-  const pendingCount = () =>
-    prisma.notification.count({ where: { emailedAt: null } });
-
+// Email delivery moved off the notifications table and into `email_outbox`
+// (src/modules/emails). What used to be asserted here — that the sweep stamps a
+// row so it is not mailed twice — is now the outbox's unique key and its own
+// suite. What is left is the seam: a mutation that writes a bell entry must also
+// queue the mail, in the same transaction, and the two must stay independent of
+// each other afterwards.
+describe("notifications — the bell and the mail queue", () => {
   /** Produce one real notification: a public reply notifies the requester. */
   async function makeNotification() {
     const dana = await login("dana.reyes@acme.com");
@@ -4552,103 +4602,36 @@ describe("notifications — email delivery sweep", () => {
       .expect(201);
   }
 
-  it("mails a pending notification and stamps it", async () => {
+  it("writes the bell entry and the queued mail together", async () => {
     await makeNotification();
-    expect(await pendingCount()).toBeGreaterThan(0);
 
-    const res = await notificationService.sweepEmail();
-    expect(res.sent).toBeGreaterThan(0);
-    expect(res.failed).toBe(0);
-    expect(await pendingCount()).toBe(0);
-  });
-
-  // The property that matters for a recurring sweep.
-  it("does not re-send on the next pass", async () => {
-    await makeNotification();
-    const first = await notificationService.sweepEmail();
-    expect(first.sent).toBeGreaterThan(0);
-
-    const second = await notificationService.sweepEmail();
-    expect(second.sent).toBe(0);
-    expect(second.skipped).toBe(0);
-    expect(second.failed).toBe(0);
-  });
-
-  it("does nothing when there is nothing pending", async () => {
-    await notificationService.sweepEmail(); // drain the seed-driven rows, if any
-    expect(await notificationService.sweepEmail()).toEqual({
-      sent: 0,
-      skipped: 0,
-      failed: 0,
+    const bell = await prisma.notification.count({
+      where: { ticketId: 1042, type: "ticket.comment" },
     });
+    const mail = await prisma.emailOutbox.count({
+      where: { ticketId: 1042, eventType: "comment.public_reply" },
+    });
+    expect(bell).toBeGreaterThan(0);
+    expect(mail).toBeGreaterThan(0);
   });
 
-  // A long disable-then-enable gap must not mail a whole backlog.
-  it("retires notifications older than the max age without sending", async () => {
+  it("queues the mail as pending, for the sweep to pick up out of band", async () => {
     await makeNotification();
-    const rows = await prisma.notification.findMany({
-      where: { emailedAt: null },
-      select: { id: true },
+    const rows = await prisma.emailOutbox.findMany({
+      where: { ticketId: 1042 },
+      select: { status: true, attempts: true, sentAt: true },
     });
     expect(rows.length).toBeGreaterThan(0);
-    await prisma.notification.updateMany({
-      where: { id: { in: rows.map((r) => r.id) } },
-      data: { createdAt: new Date(Date.now() - 48 * HOUR) },
-    });
-
-    const res = await notificationService.sweepEmail();
-    expect(res.sent).toBe(0);
-    // Stamped anyway, so they stop being scanned forever.
-    expect(await pendingCount()).toBe(0);
-  });
-
-  it("skips internal notes but still stamps them", async () => {
-    const dana = await login("dana.reyes@acme.com");
-    // Drain anything already pending so the counts below are unambiguous.
-    await notificationService.sweepEmail();
-
-    await request(app)
-      .post(`${API}/tickets/1042/comments`)
-      .set(bearer(dana))
-      .send({ body: "Internal: escalating to network ops.", internal: true })
-      .expect(201);
-
-    // An internal note notifies the assignee side only, never the requester.
-    const marcus = await prisma.user.findUniqueOrThrow({
-      where: { email: "marcus.chen@acme.com" },
-    });
-    const toRequester = await prisma.notification.count({
-      where: { userId: marcus.id, emailedAt: null },
-    });
-    expect(toRequester).toBe(0);
-
-    await notificationService.sweepEmail();
-    expect(await pendingCount()).toBe(0);
-  });
-
-  it("stamps every row it handles, so the outbox drains", async () => {
-    // Several notifications across different tickets in one pass.
-    const dana = await login("dana.reyes@acme.com");
-    for (const ticketId of [1042, 1035, 1025]) {
-      await request(app)
-        .post(`${API}/tickets/${ticketId}/comments`)
-        .set(bearer(dana))
-        .send({ body: `update on ${ticketId}` })
-        .expect(201);
+    for (const row of rows) {
+      expect(row).toMatchObject({ status: "pending", attempts: 0, sentAt: null });
     }
-    const before = await pendingCount();
-    expect(before).toBeGreaterThanOrEqual(3);
-
-    const res = await notificationService.sweepEmail();
-    expect(res.sent + res.skipped).toBe(before);
-    expect(await pendingCount()).toBe(0);
   });
 
-  it("leaves the in-app feed unaffected by email delivery", async () => {
+  it("leaves the in-app feed unaffected by mail delivery", async () => {
     await makeNotification();
-    await notificationService.sweepEmail();
+    await emailOutboxService.sweep();
 
-    // Emailing must not mark anything read — those are independent states.
+    // Delivering mail must not mark anything read — those are independent states.
     const marcus = await login("marcus.chen@acme.com");
     const feed = await request(app)
       .get(`${API}/notifications`)
@@ -4656,6 +4639,30 @@ describe("notifications — email delivery sweep", () => {
     expect(feed.status).toBe(200);
     expect(feed.body.data.length).toBeGreaterThan(0);
     expect(feed.body.meta.unread).toBeGreaterThan(0);
+  });
+
+  it("delivers each queued mail exactly once across repeated sweeps", async () => {
+    await makeNotification();
+    const first = await emailOutboxService.sweep();
+    expect(first.sent).toBeGreaterThan(0);
+
+    // Nothing is pending any more, so a second pass is a no-op — the property
+    // the old `emailed_at` stamp existed to provide.
+    const second = await emailOutboxService.sweep();
+    expect(second.sent).toBe(0);
+    expect(
+      await prisma.emailOutbox.count({ where: { status: "pending" } }),
+    ).toBe(0);
+  });
+
+  it("records a delivery in the audit log the Activity view reads", async () => {
+    await makeNotification();
+    await emailOutboxService.sweep();
+    const rows = await prisma.auditLog.findMany({
+      where: { action: "email.sent", entityId: 1042 },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].meta).toMatchObject({ eventType: "comment.public_reply" });
   });
 });
 

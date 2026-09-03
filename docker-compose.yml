@@ -60,6 +60,25 @@ services:
       # x-webhook-secret header). Change it for any real deployment.
       EMAIL_WEBHOOK_SECRET: local-compose-email-secret-1f7c9a2b4d6e8035
       EMAIL_DEFAULT_CATEGORY: Email
+      # Outbound ticket mail. UNSET by default, which selects the "log"
+      # transport: mail is composed and recorded but never handed to a server.
+      #
+      # Deliberately not defaulted to the mailpit service below. That service is
+      # in the `mail` profile, so a plain `docker compose up` does not start it —
+      # pointing at it anyway would make every send dial a host that is not
+      # there, and the queue would spend the run retrying nothing.
+      #
+      # To see real messages, start the catcher and point at it in the same
+      # command:
+      #   docker compose --profile mail up -d mailpit
+      #   SMTP_HOST=mailpit docker compose up -d api
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: "false"
+      # The desk's own address: the From on every mail, and the Reply-To that
+      # brings a reply back through the inbound webhook instead of into an
+      # agent's personal inbox.
+      SMTP_FROM: ${SMTP_FROM:-Deskly Support <support@deskly.local>}
       # Real-time SSE event bus. Left unset → in-process (single node). To run
       # multiple API replicas, start the `redis` service (`--profile scale`) and
       # uncomment this so events fan out across instances via Redis pub/sub.
@@ -85,6 +104,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 25s
+
+  # Local mail catcher: an SMTP server that accepts everything and delivers
+  # nothing, with a web inbox at http://localhost:8025. Off by default (a dev
+  # tool, like pgadmin), and the api does NOT point at it unless you say so:
+  #   docker compose --profile mail up -d mailpit
+  #   SMTP_HOST=mailpit docker compose up -d api
+  #
+  # This is how outbound mail is verified without a real provider or a real
+  # mailbox: the web UI shows the text and HTML parts side by side and the raw
+  # source, so `In-Reply-To`, `References`, `X-Deskly-Ticket-Id` and the RFC 2047
+  # encoding of a Thai subject are all readable. What it CANNOT show is whether a
+  # real client groups the thread — Mailpit lists messages, it does not thread
+  # them. That check needs Outlook or Gmail and a real send.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: deskly-mailpit
+    restart: unless-stopped
+    profiles: ["mail"]
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "8025:8025"
+      - "1025:1025"
 
   # Real-time event bus for multi-instance API. Off by default; start with
   # `docker compose --profile scale up -d` (then set REDIS_URL on the api).

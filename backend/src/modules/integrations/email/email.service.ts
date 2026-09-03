@@ -85,10 +85,20 @@ export const emailService = {
     }
 
     // --- reply path ---
+    //
+    // Two ways to name a ticket, and the header wins when both are present. The
+    // subject tag is the one that survives every client, but it is also the one
+    // a person edits, deletes, or has rewritten by an app tidying up prefixes;
+    // the header is only there when a client quoted our own headers back, and
+    // when it is, it is unambiguous.
+    //
+    // Neither is TRUSTED — both are attacker-supplied strings — which is why the
+    // decision below is still `senderMayReply`, not the identifier.
     const ref = parseTicketRef(mail.subject);
-    if (ref.ticketId != null) {
+    const targetTicketId = mail.ticketIdHeader ?? ref.ticketId;
+    if (targetTicketId != null) {
       const target = await emailRepository.findReplyTarget(
-        ref.ticketId,
+        targetTicketId,
         requesterId,
       );
       // An unknown or unauthorized reference is NOT an error: fall through and

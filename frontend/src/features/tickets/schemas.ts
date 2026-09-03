@@ -199,11 +199,16 @@ export type ReadMarker = z.infer<typeof readMarkerSchema>;
 
 export const replyResultSchema = z.object({
   comment: commentSchema,
+  /**
+   * What was QUEUED. The send happens on the server's outbox sweep moments
+   * later, so there is no transport or Message-ID to report at this point —
+   * a reply no longer fails because a mail server is down, and by the same
+   * token it can no longer be confirmed as delivered here.
+   */
   mail: z.object({
-    transport: z.string(),
+    queued: z.boolean(),
     to: z.string(),
     subject: z.string(),
-    messageId: z.string().optional(),
   }),
 });
 export const replyResultEnvelope = z.object({ data: replyResultSchema });

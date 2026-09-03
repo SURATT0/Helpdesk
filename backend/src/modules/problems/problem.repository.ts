@@ -3,7 +3,10 @@ import { isPlatformWide, type AuthUser } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { kbService } from "../kb/kb.service";
-import { notificationRepository } from "../notifications/notification.repository";
+import {
+  notificationRepository,
+  notifyBell,
+} from "../notifications/notification.repository";
 import { ticketScopeWhere } from "../tickets/ticket.scope";
 import type { ProblemState } from "./problem.rules";
 import type { ProblemStatus } from "./problem.types";
@@ -164,6 +167,7 @@ export const problemRepository = {
     actor: AuthUser,
     announce: boolean,
   ): Promise<ProblemDto> {
+    let notified: number[] = [];
     const updated = await prisma.$transaction(async (tx) => {
       const updated = await tx.problem.update({
         where: { id },
@@ -208,7 +212,7 @@ export const problemRepository = {
           where: { problemId: id, assigneeId: { not: null } },
           select: { id: true, assigneeId: true },
         });
-        await notificationRepository.createMany(
+        ({ notified } = await notificationRepository.createMany(
           linked
             .filter((t) => t.assigneeId !== actor.id)
             .map((t) => ({
@@ -218,11 +222,13 @@ export const problemRepository = {
               message: `A workaround is now documented for "${updated.title}" — see ticket #${t.id}`,
             })),
           tx,
-        );
+        ));
       }
 
       return updated;
     });
+    // After the commit, never inside it — see `notifyBell`.
+    notifyBell(notified);
     return toOneDto(updated, updated._count.tickets);
   },
 

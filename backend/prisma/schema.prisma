@@ -88,6 +88,29 @@ enum ProblemStatus {
   closed
 }
 
+// The languages outbound mail and the UI are written in. Kept as an enum rather
+// than a free string because it selects a template set: an unknown value would
+// mean "no template", and the failure would be a mail nobody can read.
+enum Language {
+  en
+  th
+}
+
+/// Lifecycle of one queued email. `pending` is the only state the sweep picks
+/// up; the other three are terminal.
+///
+/// `suppressed` is deliberately distinct from `failed`: it records a mail we
+/// DECIDED not to send (no usable address, the event switched off, a recipient
+/// rule) as opposed to one that was attempted and did not arrive. Collapsing the
+/// two would make "nobody was told" indistinguishable from "the provider was
+/// down", which is exactly the question the Activity log has to answer.
+enum EmailOutboxStatus {
+  pending
+  sent
+  failed
+  suppressed
+}
+
 // Where a thread message came from. `web` = posted in the app, `email` = arrived
 // by mail and was threaded onto the ticket. Drives the channel badge in the UI;
 // the thread itself is a single ordered list regardless of channel.
@@ -203,6 +226,17 @@ model User {
   // `Ticket.requesterId` is RESTRICT, so a person who ever raised a ticket can
   // never be removed without erasing their history with them.
   isActive               Boolean               @default(true) @map("is_active")
+  // Which language this person has CHOSEN to be written to in.
+  //
+  // Nullable, and deliberately without a default: null means "has never said",
+  // which is a different fact from "chose Thai" and the two must not be
+  // conflated. Each reader supplies its own fallback for null, and they do not
+  // agree — mail falls back to Thai (`DEFAULT_LANG`, the desk's correspondents
+  // are Thai-speaking unless they say otherwise) while the web app falls back to
+  // its own English default. A column defaulting to `th` would have quietly
+  // reversed that second one, flipping the UI to Thai for every existing account
+  // on their next sign-in, having never asked any of them.
+  language               Language?
   ownedProjects          Project[]             @relation("ProjectOwner")
   backupForProjects      Project[]             @relation("ProjectBackupOwner")
   deletedProjects        Project[]             @relation("ProjectDeletedBy")
@@ -216,6 +250,7 @@ model User {
   notifications          Notification[]
   attachments            Attachment[]
   ticketReads            TicketRead[]
+  queuedEmails           EmailOutbox[]
   // Tickets where this user is an *affected* party rather than the requester.
   affectedTickets        TicketAffectedUser[]
   ownedAssets            Asset[]               @relation("AssetOwner")
@@ -302,6 +337,7 @@ model Ticket {
   comments       Comment[]
   attachments    Attachment[]
   reads          TicketRead[]
+  queuedEmails   EmailOutbox[]
   // Who/what is affected. Deliberately separate from `requester` — the person
   // who reports a ticket is often not the person or machine impacted by it.
   // Both are optional and manually chosen; nothing is inferred from the session.
@@ -448,12 +484,12 @@ model Notification {
   ticketId  Int?      @map("ticket_id")
   message   String
   readAt    DateTime? @map("read_at")
-  // Email-delivery marker, which makes this table a transactional outbox: rows
-  // are written inside the mutation's transaction, and a background sweep mails
-  // the ones still null. Nothing is ever emailed for a rolled-back write, and a
-  // failed send simply leaves the row pending for the next pass. Set without
-  // sending when delivery is skipped (see notification.mailer), so a skipped row
-  // is never retried forever.
+  // Vestigial. This column made the table an email outbox until delivery moved
+  // to `email_outbox`, which carries what a bell entry cannot: the recipient's
+  // language, retry state, an RFC 5322 identity and a threading chain. NOTHING
+  // READS IT any more — the migration stamped every pending row so no build of
+  // the old sweep could double-send — and it is kept only so that dropping it is
+  // a decision of its own rather than a side effect of this change.
   emailedAt DateTime? @map("emailed_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
@@ -617,4 +653,89 @@ model KbArticle {
   @@index([categoryId])
   @@index([status])
   @@map("kb_articles")
+}
+
+/// One outbound email, queued rather than sent.
+///
+/// This is a transactional outbox, the same pattern `notifications.emailed_at`
+/// used before it: a row is written inside the mutation's own transaction and a
+/// background sweep delivers it. Nothing is mailed for work that later rolls
+/// back, network I/O stays off the request path, and a failed send is simply a
+/// row that is still pending — the user's action never fails because a mail
+/// server did.
+///
+/// It is a table of its own rather than more columns on `notifications` because
+/// the two have different lifetimes and different audiences. A notification is
+/// one person's bell entry, read once and done; an email carries retry state,
+/// an RFC 5322 identity, and a threading chain, and it must survive as the
+/// delivery record the Activity log reads. Notifications stay exactly what they
+/// were.
+model EmailOutbox {
+  id       Int    @id @default(autoincrement())
+  ticketId Int    @map("ticket_id")
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
+  /// The domain event this mail announces (`ticket.created`, `comment.public`,
+  /// …). Half of the idempotency key, and what the per-event on/off switch and
+  /// the template lookup both key on.
+  eventType String @map("event_type")
+
+  /// The row that CAUSED this mail — a comment id, a status-history id, or the
+  /// ticket id for events that have no record of their own. Non-nullable on
+  /// purpose: Postgres treats NULLs as distinct in a unique constraint, so a
+  /// nullable column here would silently let the duplicate it exists to prevent
+  /// straight through.
+  sourceRecordId Int @map("source_record_id")
+
+  recipientUserId Int  @map("recipient_user_id")
+  recipient       User @relation(fields: [recipientUserId], references: [id])
+
+  /// Snapshotted at queue time, not read from the user at send time: the address
+  /// and language we DECIDED to write to. A person who changes either between
+  /// queueing and delivery still receives the mail that was composed for them,
+  /// and the log records where it actually went.
+  recipientEmail String   @map("recipient_email")
+  lang           Language
+
+  /// Everything the template needs, frozen at the moment of the event: the
+  /// ticket's state, the message that triggered the mail, who did it. Rendered
+  /// from this rather than re-read at send time, so a mail describes the event
+  /// it announces and not the ticket's later state.
+  payload Json
+
+  status   EmailOutboxStatus @default(pending)
+  attempts Int               @default(0)
+
+  /// When the sweep may next try. Moves out on each failure (exponential
+  /// backoff), which is what stops a dead provider from being hammered once a
+  /// minute by every queued mail at once.
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+
+  /// RFC 5322 identity of the mail as sent, and the chain that threads it.
+  /// `inReplyTo`/`referencesHeader` point at earlier mail in the SAME
+  /// (ticket, recipient) conversation — per recipient rather than per ticket, so
+  /// a chain never references a message that person was never sent.
+  messageId        String? @unique @map("message_id")
+  inReplyTo        String? @map("in_reply_to")
+  referencesHeader String? @map("references_header")
+
+  /// Why nothing was sent. Set with `suppressed` (no address, event disabled,
+  /// no queue team to escalate to) — the difference between a decision and a
+  /// failure, which `error` records instead.
+  suppressedReason String?   @map("suppressed_reason")
+  error            String?
+  sentAt           DateTime? @map("sent_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  /// The idempotency key from the spec: one mail per (ticket, event, cause,
+  /// recipient). Enforced as a constraint rather than a check-then-insert
+  /// because two requests in flight together would both pass the check — the
+  /// same reasoning as `tickets.idempotency_key`.
+  @@unique([ticketId, eventType, sourceRecordId, recipientUserId])
+  /// The sweep's own query: pending rows whose backoff has elapsed, oldest first.
+  @@index([status, nextAttemptAt])
+  /// Finding the previous mail in a conversation to thread onto.
+  @@index([ticketId, recipientUserId])
+  @@map("email_outbox")
 }
