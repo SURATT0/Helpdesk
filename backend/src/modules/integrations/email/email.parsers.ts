@@ -36,19 +36,26 @@ export function derivePriority(subject: string): {
 }
 
 /**
- * Pull a ticket reference out of a subject line. Outbound replies are sent as
- * `Re: [#123] <subject>` (see reply.service), so a genuine reply round-trips the
- * tag through the recipient's mail client — that is what makes a mailed reply
- * land in the existing thread instead of opening a duplicate ticket.
- *
- * The tag is matched anywhere in the subject, because clients prepend their own
- * localised "Re:"/"Fwd:"/"RE[2]:" prefixes ahead of it. Returns the ticket id
- * and the subject with that tag removed.
+ * The tag as we WRITE it. Branded, because a subject line landing in a stranger's
+ * inbox has to say which desk it came from.
  */
-/** Format the reference tag for a ticket id — the one place it is constructed. */
 export function ticketRef(ticketId: number): string {
-  return `[#${ticketId}]`;
+  return `[Deskly #${ticketId}]`;
 }
+
+/**
+ * The tag as we READ it — deliberately wider than what we write.
+ *
+ * Outbound mail carried a bare `[#123]` before the tag was branded, and those
+ * messages are still sitting in correspondents' mailboxes. A reply to one of
+ * them has to keep landing on its ticket, so the `Deskly` half is optional here
+ * and mandatory in `ticketRef` above. Narrowing this to the branded form alone
+ * would turn every reply to an older mail into a duplicate ticket.
+ *
+ * Matched anywhere in the line, because mail clients prepend their own localised
+ * `Re:` / `Fwd:` / `RE[2]:` before it.
+ */
+const TICKET_REF_PATTERN = /\[(?:Deskly\s*)?#(\d{1,10})\]/;
 
 /**
  * Guarantee a subject carries its ticket reference, without duplicating one that
@@ -61,16 +68,22 @@ export function ticketRef(ticketId: number): string {
  */
 export function ensureTicketRef(subject: string, ticketId: number): string {
   const trimmed = subject.trim();
-  const found = trimmed.match(/\[#(\d{1,10})\]/);
+  const found = trimmed.match(TICKET_REF_PATTERN);
   if (found && Number(found[1]) === ticketId) return trimmed;
   return `${ticketRef(ticketId)} ${trimmed}`.trim();
 }
 
+/**
+ * Pull a ticket reference out of a subject line — the read side of
+ * `TICKET_REF_PATTERN`, and what makes a mailed reply land on its existing
+ * ticket instead of opening a duplicate. Returns the id and the subject with
+ * the tag removed.
+ */
 export function parseTicketRef(subject: string): {
   ticketId: number | null;
   subject: string;
 } {
-  const m = subject.match(/\[#(\d{1,10})\]/);
+  const m = subject.match(TICKET_REF_PATTERN);
   if (!m) return { ticketId: null, subject: subject.trim() };
   const ticketId = Number(m[1]);
   if (!Number.isSafeInteger(ticketId) || ticketId <= 0) {
@@ -132,6 +145,17 @@ export function normalizeInbound(body: unknown): InboundEmail {
     return undefined;
   };
 
+  // Header names are case-insensitive per RFC 5322 and every provider picks its
+  // own casing on the way through — nodemailer emits `X-Deskly-Ticket-ID`,
+  // SendGrid lowercases, Mailgun preserves. Listing the forms rather than
+  // matching one is what keeps the round trip working across providers.
+  const rawTicketId = pick(
+    "x-deskly-ticket-id",
+    "X-Deskly-Ticket-Id",
+    "X-Deskly-Ticket-ID",
+  );
+  const parsedTicketId = rawTicketId ? Number(rawTicketId) : NaN;
+
   return {
     from: email,
     fromName: name,
@@ -139,6 +163,10 @@ export function normalizeInbound(body: unknown): InboundEmail {
     text,
     messageId: pick("message-id", "Message-Id", "Message-ID", "messageId"),
     inReplyTo: pick("in-reply-to", "In-Reply-To", "inReplyTo"),
+    ticketIdHeader:
+      Number.isSafeInteger(parsedTicketId) && parsedTicketId > 0
+        ? parsedTicketId
+        : undefined,
   };
 }
 

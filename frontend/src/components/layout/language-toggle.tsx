@@ -1,20 +1,22 @@
 "use client";
 
-import { useI18n } from "@/features/i18n/context";
 import type { Lang } from "@/features/i18n/dictionary";
+import { useLanguagePreference } from "@/features/i18n/use-language-preference";
 import { cn } from "@/lib/utils";
 
 const LABELS: Record<Lang, string> = { en: "EN", th: "ไทย" };
 
 export function LanguageToggle() {
-  const { lang, setLang } = useI18n();
+  // Not `useI18n().setLang` directly: a signed-in change has to reach the
+  // account too, because that is what the desk's email is written in.
+  const { lang, setLanguage } = useLanguagePreference();
   return (
     <div className="inline-flex overflow-hidden rounded-md border border-line text-dense font-semibold">
       {(["en", "th"] as const).map((l) => (
         <button
           key={l}
           type="button"
-          onClick={() => setLang(l)}
+          onClick={() => setLanguage(l)}
           aria-pressed={lang === l}
           className={cn(
             // Grows vertically on a touch screen: 26px tall is well under the

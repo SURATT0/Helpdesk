@@ -17,9 +17,12 @@ import {
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { notificationRepository } from "../notifications/notification.repository";
+import { loadTicketEmailContext } from "../emails/email.context";
+import { emailOutboxService } from "../emails/email-outbox.service";
 import { projectRepository } from "../projects/project.repository";
 import { resolveRoutedAssignee } from "../projects/project.routing";
 import {
+  AUTO_CLOSE_MS,
   computeDueAt,
   deriveSla,
   SLA_ACTIVE_STATUSES,
@@ -637,6 +640,53 @@ export const ticketRepository = {
           tx,
         );
 
+        const emailCtx = await loadTicketEmailContext(created.id, tx);
+        if (emailCtx) {
+          // The acknowledgement, and the ONE case where the person who acted is
+          // deliberately mailed about their own action. "Do not echo an action
+          // back at its author" exists so nobody is told about their own reply;
+          // a receipt confirming we have the request, and giving the number to
+          // quote, is the opposite — it is addressed to the person who acted
+          // precisely because they acted. Hence `actorId: null` rather than the
+          // real actor, which would suppress it as self-notification.
+          await emailOutboxService.queue(
+            {
+              event: "ticket.created",
+              ctx: { ...emailCtx.ctx, actorId: null },
+              sourceRecordId: created.id,
+              ticket: emailCtx.summary,
+              occurredAt: created.createdAt,
+              message: {
+                authorName: emailCtx.summary.requesterName,
+                body: created.description,
+              },
+            },
+            tx,
+          );
+
+          // Nobody was routed to it. This is the #1046 case — a ticket arriving
+          // with no owner is exactly the one that can sit unread until it
+          // breaches, so the queue behind the category is told at arrival
+          // rather than only when the SLA clock finally fires.
+          if (assigneeId == null) {
+            await emailOutboxService.queue(
+              {
+                event: "queue.ticket_unassigned",
+                ctx: { ...emailCtx.ctx, actorId: actorId ?? null },
+                sourceRecordId: created.id,
+                ticket: emailCtx.summary,
+                occurredAt: created.createdAt,
+                message: {
+                  authorName: emailCtx.summary.requesterName,
+                  body: created.description,
+                },
+                problem: emailCtx.problem,
+              },
+              tx,
+            );
+          }
+        }
+
         return toTicketDto(created);
       });
     } catch (err) {
@@ -736,6 +786,31 @@ export const ticketRepository = {
           })),
           tx,
         );
+
+        // Only the arrival is mailed, not the departure: the person who no
+        // longer holds it has nothing to do, and telling them would make every
+        // reassignment two mails. Unassigning (`assigneeId` null) mails nobody
+        // for the same reason — the queue is told when work ARRIVES in it, by
+        // the create path and by the requester-replied event.
+        if (assigneeId != null) {
+          const emailCtx = await loadTicketEmailContext(id, tx);
+          if (emailCtx) {
+            await emailOutboxService.queue(
+              {
+                event: "ticket.assigned",
+                ctx: { ...emailCtx.ctx, actorId: changedById ?? null },
+                // The new assignee, not the ticket: handing a ticket to Ann,
+                // then to Bob, then back to Ann is three distinct pieces of
+                // news, and keying on the ticket would deliver only the first.
+                sourceRecordId: assigneeId,
+                ticket: emailCtx.summary,
+                occurredAt: new Date(),
+                problem: emailCtx.problem,
+              },
+              tx,
+            );
+          }
+        }
       }
 
       return toTicketDto(updated);
@@ -848,7 +923,7 @@ export const ticketRepository = {
 
       // Append the SLA source-of-truth row + audit. Reached only on a real
       // change: the no-op case returned above.
-      await tx.ticketStatusHistory.create({
+      const historyRow = await tx.ticketStatusHistory.create({
         data: {
           ticketId: id,
           fromStatus: current.status,
@@ -875,6 +950,53 @@ export const ticketRepository = {
         })),
         tx,
       );
+
+      // Two of the three destinations are worth writing to the requester about,
+      // and the third is not:
+      //
+      //   → pending  the work is done and it is now THEIR move — the mail
+      //              carries the confirm/reopen links, because a two-sided
+      //              closure that nobody is told to answer is a 72h timeout
+      //              wearing an agreement's clothes
+      //   → closed   it is over, and the mail says whether a person decided
+      //              that or the clock did
+      //   → new      a reopen. Announced by whoever caused it: the requester's
+      //              rejection is mailed to the desk from the closure path,
+      //              which is the only caller that knows a rejection is what
+      //              this was. Mailing from here would say "reopened" without
+      //              being able to say why.
+      if (status === "pending" || status === "closed") {
+        const emailCtx = await loadTicketEmailContext(id, tx);
+        if (emailCtx) {
+          const actorName =
+            changedById != null
+              ? ((
+                  await tx.user.findUnique({
+                    where: { id: changedById },
+                    select: { name: true },
+                  })
+                )?.name ?? undefined)
+              : undefined;
+          await emailOutboxService.queue(
+            {
+              event: status === "pending" ? "ticket.pending" : "ticket.closed",
+              // The requester confirming their own closure does not need to be
+              // told they confirmed it; the desk closing it means they do.
+              ctx: { ...emailCtx.ctx, actorId: changedById ?? null },
+              // The history row: a ticket can travel pending → new → pending,
+              // and each arrival is its own piece of news.
+              sourceRecordId: historyRow.id,
+              ticket: emailCtx.summary,
+              occurredAt: new Date(),
+              vars: {
+                ...(actorName ? { actor: actorName } : {}),
+                hours: Math.round(AUTO_CLOSE_MS / 3_600_000),
+              },
+            },
+            tx,
+          );
+        }
+      }
 
       // `updateMany` cannot return relations, so re-read for the DTO.
       const updated = await tx.ticket.findUnique({

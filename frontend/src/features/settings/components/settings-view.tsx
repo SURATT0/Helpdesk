@@ -11,6 +11,7 @@ import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { useLanguagePreference } from "@/features/i18n/use-language-preference";
 import { useUpdateMyProfile } from "@/features/users/queries";
 import { IntegrationsPanel } from "@/features/integrations/components/integrations-panel";
 import type { Lang } from "@/features/i18n/dictionary";
@@ -46,7 +47,9 @@ const LANGS: { value: Lang; label: string }[] = [
 ];
 
 export function SettingsView() {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
+  // Writes the account too, not just this browser — the desk mails you in it.
+  const { lang, setLanguage } = useLanguagePreference();
   const { user, patchUser, logout } = useAuth();
   const router = useRouter();
   const [name, setName] = React.useState(user?.name ?? "");
@@ -174,7 +177,7 @@ export function SettingsView() {
             <button
               key={l.value}
               type="button"
-              onClick={() => setLang(l.value)}
+              onClick={() => setLanguage(l.value)}
               className={cn(
                 "px-4 py-2",
                 i > 0 && "border-l border-line",

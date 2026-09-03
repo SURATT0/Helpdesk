@@ -7,6 +7,10 @@ const TABLES = [
   "attachments",
   "comments",
   "notifications",
+  // Queued mail. Truncated with everything else so the idempotency constraint
+  // (ticket, event, cause, recipient) starts clean each test — otherwise a row
+  // left by the previous case makes the next one's enqueue a silent no-op.
+  "email_outbox",
   "audit_logs",
   "ticket_status_history",
   "refresh_tokens",

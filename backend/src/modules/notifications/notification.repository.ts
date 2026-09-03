@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../shared/db";
 import { bus } from "../../shared/events";
-import type { PendingNotification } from "./notification.mailer";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -85,62 +84,6 @@ export const notificationRepository = {
       select: { ticketId: true, userId: true, type: true },
     });
     return new Set(rows.map((r) => `${r.ticketId}:${r.userId}:${r.type}`));
-  },
-
-  /**
-   * Notifications awaiting email delivery, oldest first, joined to the recipient.
-   *
-   * `createdAt >= notBefore` is a safety valve independent of the migration's
-   * backfill: if the sweep is disabled for a long stretch and then re-enabled, an
-   * old backlog is stale news and mailing it would be worse than dropping it. The
-   * caller stamps whatever it skips so nothing loops forever.
-   */
-  async findPendingEmail(
-    limit: number,
-    notBefore: Date,
-  ): Promise<PendingNotification[]> {
-    const rows = await prisma.notification.findMany({
-      where: { emailedAt: null, createdAt: { gte: notBefore } },
-      orderBy: { id: "asc" },
-      take: limit,
-      select: {
-        id: true,
-        type: true,
-        ticketId: true,
-        message: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      type: r.type,
-      ticketId: r.ticketId,
-      message: r.message,
-      recipient: r.user,
-    }));
-  },
-
-  /** Ids of un-emailed rows older than the cutoff — stamped without sending. */
-  async findStalePendingEmailIds(
-    notBefore: Date,
-    limit: number,
-  ): Promise<number[]> {
-    const rows = await prisma.notification.findMany({
-      where: { emailedAt: null, createdAt: { lt: notBefore } },
-      orderBy: { id: "asc" },
-      take: limit,
-      select: { id: true },
-    });
-    return rows.map((r) => r.id);
-  },
-
-  /** Stamp rows as handled, whether they were sent or deliberately skipped. */
-  async markEmailed(ids: number[], at: Date = new Date()): Promise<void> {
-    if (ids.length === 0) return;
-    await prisma.notification.updateMany({
-      where: { id: { in: ids } },
-      data: { emailedAt: at },
-    });
   },
 
   async listForUser(userId: number, limit = 20): Promise<NotificationDto[]> {

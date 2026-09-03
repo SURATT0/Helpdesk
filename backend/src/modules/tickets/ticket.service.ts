@@ -1,3 +1,4 @@
+import { env } from "../../config/env";
 import { canTransition } from "../../shared/ticket-status";
 import {
   type Priority,
@@ -15,9 +16,11 @@ import {
 import { auditRepository } from "../audit/audit.repository";
 import { commentService } from "../comments/comment.service";
 import { notificationRepository } from "../notifications/notification.repository";
+import { loadTicketEmailContext } from "../emails/email.context";
+import { emailOutboxService } from "../emails/email-outbox.service";
 import { mayImportForRequester, mayReceiveAssignment } from "./ticket.scope";
 import { resolvePeriod, type Granularity, type Period } from "./history.period";
-import { formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
+import { AUTO_CLOSE_MS, formatRemaining, slaAlertKind, SLA_WARN_MS } from "./sla";
 import { ACTIVE_STATUSES } from "./ticket.validators";
 
 /**
@@ -33,7 +36,6 @@ export type ClosedPeriod = { start: Date; end: Date; count: number };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REOPEN_WINDOW_MS = 30 * DAY_MS;
-const AUTO_CLOSE_MS = 72 * 60 * 60 * 1000;
 
 /**
  * Notification `type` per SLA alert kind. Distinct types are what make the
@@ -409,6 +411,35 @@ export const ticketService = {
       entityId: ticket.id,
       meta: { via: "in_app", withReason: Boolean(reason) },
     });
+
+    // Tell the desk their work came back, and why. Queued here rather than from
+    // the status write, because `pending → new` alone cannot distinguish a
+    // rejection from any other reopen — this is the only caller that knows.
+    //
+    // The assignee is kept across a rejection (see the transition rules), so
+    // this reaches the person who actually did the work; when nobody owns it,
+    // the recipient rules fall through to the category's queue.
+    const emailCtx = await loadTicketEmailContext(ticket.id);
+    if (emailCtx) {
+      await emailOutboxService.queue({
+        event: "ticket.closure_rejected",
+        ctx: { ...emailCtx.ctx, actorId: user.id },
+        // One mail per rejection, and a ticket can be rejected more than once.
+        // `closedAt` is null here and the status row id is not in hand, so the
+        // reason comment is the cause when there is one; without a reason the
+        // rejection has no record of its own and the ticket id stands in, which
+        // makes a second reasonless rejection a duplicate. Acceptable: the
+        // second one says exactly what the first did.
+        sourceRecordId: ticket.id,
+        ticket: emailCtx.summary,
+        occurredAt: new Date(),
+        ...(reason
+          ? { message: { authorName: user.name, body: reason } }
+          : {}),
+        vars: { author: user.name },
+        problem: emailCtx.problem,
+      });
+    }
     return reopened;
   },
 
@@ -683,6 +714,69 @@ export const ticketService = {
     }
 
     await notificationRepository.createMany(entries);
+
+    // The email half. Queued per ticket rather than per notification row: the
+    // mail layer resolves its own recipients (the assignee, or the queue behind
+    // the category when nobody owns it), and the outbox's unique key does the
+    // deduping the `existing` set above does for the bell — so a sweep that
+    // re-sees the same at-risk ticket every 15 minutes queues nothing new.
+    for (const ticket of atRisk) {
+      const kind = slaAlertKind(ticket.dueAt, now);
+      if (!kind) continue;
+      const emailCtx = await loadTicketEmailContext(ticket.id);
+      if (!emailCtx) continue;
+      await emailOutboxService.queue({
+        event: kind === "breach" ? "ticket.sla_breach" : "ticket.sla_warning",
+        // No actor: a clock ran out, nobody did this.
+        ctx: { ...emailCtx.ctx, actorId: null },
+        // The ticket, because the alert IS about the ticket reaching a stage.
+        // Warning and breach are separate events, so crossing the line still
+        // produces a second mail after the first.
+        sourceRecordId: ticket.id,
+        ticket: emailCtx.summary,
+        occurredAt: now,
+        vars: {
+          dueAt: ticket.dueAt?.toISOString() ?? "",
+        },
+        problem: emailCtx.problem,
+      });
+    }
+
     return { warned, breached };
+  },
+
+  /**
+   * Warn a requester before the 72h sweep closes their ticket for them.
+   *
+   * The reminder is what makes silence a decision rather than an accident. A
+   * two-sided closure that auto-closes without ever saying so leaves the
+   * requester with a ticket that quietly ended while they were waiting for
+   * someone else to move.
+   *
+   * Idempotent by the outbox's own unique key: the reminder is one event on one
+   * ticket, so running this every hour re-queues nothing. Tickets already past
+   * the reminder point but not yet closed are included deliberately — a desk
+   * that was down for a day should still warn before it closes anything.
+   */
+  async sweepAutoCloseReminders(now: Date = new Date()): Promise<number> {
+    const leadMs = env.ticketEmail.autoCloseReminderLeadMs;
+    // Resolved long enough ago that the close is within the lead window.
+    const resolvedBefore = new Date(now.getTime() - (AUTO_CLOSE_MS - leadMs));
+    const ids = await ticketRepository.findStalePending(resolvedBefore);
+    let queued = 0;
+    for (const id of ids) {
+      const emailCtx = await loadTicketEmailContext(id);
+      if (!emailCtx) continue;
+      const written = await emailOutboxService.queue({
+        event: "ticket.auto_close_reminder",
+        ctx: { ...emailCtx.ctx, actorId: null },
+        sourceRecordId: id,
+        ticket: emailCtx.summary,
+        occurredAt: now,
+        vars: { hours: Math.round(leadMs / 3_600_000) },
+      });
+      queued += written;
+    }
+    return queued;
   },
 };

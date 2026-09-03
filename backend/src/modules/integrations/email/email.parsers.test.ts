@@ -141,18 +141,28 @@ describe("normalizeInbound", () => {
 
 describe("ensureTicketRef", () => {
   it("formats the tag consistently", () => {
-    expect(ticketRef(9)).toBe("[#9]");
+    expect(ticketRef(9)).toBe("[Deskly #9]");
   });
 
   it("stamps a ref onto a subject that has none", () => {
     expect(ensureTicketRef("Re: Printer is down", 42)).toBe(
-      "[#42] Re: Printer is down",
+      "[Deskly #42] Re: Printer is down",
     );
   });
 
   it("does not duplicate a ref that is already correct", () => {
-    expect(ensureTicketRef("[#42] Re: Printer is down", 42)).toBe(
-      "[#42] Re: Printer is down",
+    expect(ensureTicketRef("[Deskly #42] Re: Printer is down", 42)).toBe(
+      "[Deskly #42] Re: Printer is down",
+    );
+  });
+
+  // A reply to mail we sent BEFORE the tag was branded comes back carrying the
+  // bare form. Re-stamping it would put two tags on one subject and grow one
+  // more on every round trip; recognising it as already correct is what keeps a
+  // long-running thread stable.
+  it("accepts the older unbranded tag as already correct", () => {
+    expect(ensureTicketRef("Re: [#42] Printer is down", 42)).toBe(
+      "Re: [#42] Printer is down",
     );
   });
 
@@ -160,7 +170,7 @@ describe("ensureTicketRef", () => {
   // stamp goes first, so parseTicketRef reads ours.
   it("adds the right ref when the subject quotes a different ticket", () => {
     const subject = ensureTicketRef("[#7] old thread", 42);
-    expect(subject).toBe("[#42] [#7] old thread");
+    expect(subject).toBe("[Deskly #42] [#7] old thread");
     expect(parseTicketRef(subject).ticketId).toBe(42);
   });
 
@@ -175,17 +185,32 @@ describe("ensureTicketRef", () => {
   });
 
   it("trims surrounding whitespace", () => {
-    expect(ensureTicketRef("   spaced out   ", 3)).toBe("[#3] spaced out");
+    expect(ensureTicketRef("   spaced out   ", 3)).toBe("[Deskly #3] spaced out");
   });
 });
 
 describe("parseTicketRef", () => {
-  it("finds the tag our own outbound replies emit", () => {
-    // reply.service sends `Re: [#123] <subject>` — this is the round-trip case.
+  it("finds the tag our own outbound mail emits", () => {
+    // Everything we send carries `[Deskly #id]` — this is the round-trip case.
+    expect(parseTicketRef("Re: [Deskly #1042] VPN drops")).toEqual({
+      ticketId: 1042,
+      subject: "Re: VPN drops",
+    });
+  });
+
+  // Mail sent before the tag was branded is still in people's mailboxes, and a
+  // reply to one of those has to keep landing on its ticket rather than opening
+  // a duplicate. This is the whole reason the read pattern is wider than the
+  // write one.
+  it("still finds the older unbranded tag", () => {
     expect(parseTicketRef("Re: [#1042] VPN drops")).toEqual({
       ticketId: 1042,
       subject: "Re: VPN drops",
     });
+  });
+
+  it("tolerates the spacing mail clients introduce inside the tag", () => {
+    expect(parseTicketRef("RE[2]: [Deskly  #77] printer").ticketId).toBe(77);
   });
 
   it("survives the prefixes mail clients pile on", () => {

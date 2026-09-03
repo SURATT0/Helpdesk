@@ -18,6 +18,12 @@ export type UpdateMyProfileInput = {
    * owner; it does not restrict anything you can see or do.
    */
   availableForAssignment?: boolean;
+  /**
+   * The language to write to you in. Stored on the account rather than only in
+   * this browser because the server composes your email hours later, with no
+   * browser to ask.
+   */
+  language?: "en" | "th";
 };
 
 /**

@@ -135,6 +135,38 @@ export const env = {
       tls: process.env.IMAP_TLS !== "false",
     },
   },
+  // Outbound ticket notifications (see src/modules/emails). Every value here is
+  // destined for the system-settings surface a later change adds; until then env
+  // is the only way to turn one off, which is why the switch is a DENY list —
+  // adding an event to the catalogue must not require touching config to make it
+  // work, only to make it stop.
+  ticketEmail: {
+    // Master switch for the outbound sweep. Off = events are still queued (so
+    // nothing is lost and the log still shows what would have gone) but nothing
+    // is delivered.
+    enabled: process.env.TICKET_EMAILS !== "false",
+    // Comma-separated event types NOT to send, e.g. "ticket.sla_warning,queue.requester_replied".
+    disabledEvents: new Set(
+      (process.env.TICKET_EMAIL_DISABLED_EVENTS ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+    // Anti-spam: at most this many mails per ticket per window, per recipient.
+    // Anything over it collapses into one "several updates" summary.
+    ratePerTicket: Number(process.env.EMAIL_RATE_LIMIT_PER_TICKET ?? 3),
+    rateWindowMs: Number(process.env.EMAIL_RATE_WINDOW_MS ?? 5 * 60 * 1000),
+    // Delivery attempts before a row is given up on as `failed`.
+    maxAttempts: Number(process.env.EMAIL_MAX_ATTEMPTS ?? 3),
+    // Exponential backoff base; attempt N waits base * 5^(N-1).
+    backoffBaseMs: Number(process.env.EMAIL_BACKOFF_BASE_MS ?? 60 * 1000),
+    // Rows handled per sweep pass — bounds one tick's work and mail volume.
+    batchLimit: Number(process.env.EMAIL_BATCH_LIMIT ?? 100),
+    // How long before the 72h auto-close the requester is reminded.
+    autoCloseReminderLeadMs: Number(
+      process.env.EMAIL_AUTO_CLOSE_REMINDER_LEAD_MS ?? 24 * 60 * 60 * 1000,
+    ),
+  },
   // Outbound SMTP for agent reply emails. When SMTP_HOST is set the reply
   // endpoint sends real mail via nodemailer; otherwise a "log" transport records
   // the message (so the feature works end-to-end in dev without a mail server).

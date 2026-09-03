@@ -32,6 +32,18 @@ export const SLA_DANGER_MS = HOUR_MS;
 export const SLA_WARN_MS = 4 * HOUR_MS;
 
 /**
+ * How long a finished ticket waits for the requester before it closes itself.
+ *
+ * The fallback the two-sided closure rests on: the desk moving a ticket to
+ * `pending` is a request for confirmation, and this is what happens when the
+ * request goes unanswered. Lives beside the SLA windows because it is the same
+ * kind of value — a lifecycle deadline — and because three places now need it:
+ * the sweep that closes on it, the reminder that warns before it, and the mail
+ * that tells the requester how long they have.
+ */
+export const AUTO_CLOSE_MS = 72 * HOUR_MS;
+
+/**
  * Statuses whose SLA clock is running — the only ones an alert can apply to.
  *
  * `new` is the whole of it, which is the whole of unfinished work: New and In

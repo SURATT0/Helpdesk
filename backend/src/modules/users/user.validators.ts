@@ -40,8 +40,17 @@ export const updateProfileBody = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
     availableForAssignment: z.boolean().optional(),
+    /**
+     * Which language this person is written to in. Self-service for the same
+     * reason availability is: it is a statement about yourself, and the language
+     * a help desk mails you in should not need a manager.
+     */
+    language: z.enum(["en", "th"]).optional(),
   })
   .refine(
-    (d) => d.name !== undefined || d.availableForAssignment !== undefined,
+    (d) =>
+      d.name !== undefined ||
+      d.availableForAssignment !== undefined ||
+      d.language !== undefined,
     { message: "Nothing to update" },
   );

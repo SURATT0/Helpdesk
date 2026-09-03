@@ -14,6 +14,13 @@ export const authUserSchema = z.object({
    * read the user directory to find themselves there.
    */
   availableForAssignment: z.boolean(),
+  /**
+   * The language this person reads. In the session payload so the app opens in
+   * it on the first paint after signing in, rather than in whatever this
+   * particular browser's localStorage happens to remember — which on a shared
+   * machine is the last person's choice, not this one's.
+   */
+  language: z.enum(["en", "th"]),
 });
 
 export const sessionSchema = z.object({
