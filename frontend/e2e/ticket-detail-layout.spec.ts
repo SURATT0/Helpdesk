@@ -41,29 +41,49 @@ test("the header spans both columns, and the rail starts beneath it", async ({
   expect(r!.x).toBeGreaterThan(c!.x + c!.width - 1);
 });
 
-test("the title, its badges and the SLA box share one row", async ({ page }) => {
+test("the title and its badges share one row", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await login(page);
   await page.goto("/tickets/1042");
 
   const title = page.getByRole("heading", { level: 1 });
-  const sla = page.locator('[aria-label^="SLA: "]').first();
   const status = page.locator("header").first().getByText(/^(New|In Progress|Pending|Closed)$/).first();
 
-  const [t, s, st] = await Promise.all([
-    title.boundingBox(),
-    sla.boundingBox(),
-    status.boundingBox(),
-  ]);
-  expect(t && s && st).toBeTruthy();
+  const [t, st] = await Promise.all([title.boundingBox(), status.boundingBox()]);
+  expect(t && st).toBeTruthy();
 
   // Same horizontal band — compared on centres, since the boxes have different
   // heights and a shared row does not mean shared edges.
   const centre = (b: { y: number; height: number }) => b.y + b.height / 2;
   expect(Math.abs(centre(t!) - centre(st!))).toBeLessThan(14);
-  expect(Math.abs(centre(t!) - centre(s!))).toBeLessThan(14);
-  // The SLA box sits at the far end of that row.
-  expect(s!.x).toBeGreaterThan(t!.x + t!.width);
+});
+
+/**
+ * The SLA box moved up to the breadcrumb, beside the number whose clock it is
+ * describing — it used to sit at the far end of the title row, which on a phone
+ * put it a row and a half away from the thing it refers to.
+ */
+test("the SLA box sits with the ticket number, at every width", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/tickets/1042");
+
+  for (const width of [375, 390, 768, DESKTOP.width]) {
+    await page.setViewportSize({ width, height: 800 });
+    const number = page.locator("header").first().getByText(/^#\d+$/).first();
+    const sla = page.locator('[aria-label^="SLA: "]').first();
+    const [n, s] = await Promise.all([number.boundingBox(), sla.boundingBox()]);
+    expect(n && s, `boxes missing at ${width}px`).toBeTruthy();
+
+    const centre = (b: { y: number; height: number }) => b.y + b.height / 2;
+    expect(
+      Math.abs(centre(n!) - centre(s!)),
+      `SLA box left the number's row at ${width}px`,
+    ).toBeLessThan(14);
+    // Beside it, not before it.
+    expect(s!.x).toBeGreaterThan(n!.x);
+  }
 });
 
 test("the conversation scrolls without taking the header with it", async ({
