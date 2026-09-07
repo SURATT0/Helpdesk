@@ -27,6 +27,14 @@ const FAMILY_STYLE: Record<string, ColourPair> = {
   problem: BADGE.rose,
   asset: BADGE.teal,
   attachment: BADGE.slate,
+  // Outbound mail — `email.sent` / `email.failed` / `email.suppressed`. Given
+  // the one remaining unused colour because it is the family a reader scans for
+  // most: "did they actually get told?"
+  email: BADGE.blue,
+  // `settings.*` is deliberately left on the default. Every other colour is
+  // spoken for, and two families sharing one is worse than one family being
+  // neutral — configuration changes are rare and are read by going looking for
+  // them, not by spotting them in a scroll.
 };
 /** An action family this build has no colour for — never a blank cell. */
 const DEFAULT_STYLE = BADGE.slate;

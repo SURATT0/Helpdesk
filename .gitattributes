@@ -1,0 +1,17 @@
+# Prisma migrations are CHECKSUMMED, so their bytes are part of their identity.
+#
+# Prisma records a SHA-256 of each migration.sql in `_prisma_migrations` when it
+# applies one, and compares it on every later `migrate dev`. A mismatch is read
+# as "somebody edited an applied migration" and the answer is to demand a full
+# database reset.
+#
+# On a machine with core.autocrlf=true — the Windows default, and what this repo
+# is developed on — git checks these files out with CRLF while the recorded
+# checksums were taken over LF. Nothing about the SQL changed; the file simply
+# came back off disk in a different encoding of the same lines, and every
+# migration in the repo read as edited. That is the whole of the long-standing
+# "prisma wants to reset the DB" problem here.
+#
+# Pinning them to LF makes the working copy match what was hashed, and keeps it
+# matching on the next fresh clone.
+backend/prisma/migrations/**/*.sql text eol=lf
