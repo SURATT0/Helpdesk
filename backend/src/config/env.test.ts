@@ -77,3 +77,60 @@ describe("validateEnv", () => {
     expect(warnings[0]).toMatch(/COOKIE_SECURE/);
   });
 });
+
+/**
+ * WEB_ORIGIN answers two questions that are easy to conflate: where may a
+ * browser load the app FROM (a list), and which address do we WRITE INTO links
+ * we send people (exactly one). Getting the second wrong is the quiet failure —
+ * a link built from a phone's LAN address is dead the moment the mail leaves the
+ * building — so the split is pinned here.
+ */
+async function loadEnv(webOrigin: string | undefined) {
+  vi.resetModules();
+  if (webOrigin === undefined) delete process.env.WEB_ORIGIN;
+  else process.env.WEB_ORIGIN = webOrigin;
+  return (await import("./env")).env;
+}
+
+describe("WEB_ORIGIN", () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it("defaults to localhost for both the canonical address and the allow-list", async () => {
+    const env = await loadEnv(undefined);
+    expect(env.webOrigin).toBe("http://localhost:3000");
+    expect(env.corsOrigins).toEqual(["http://localhost:3000"]);
+  });
+
+  it("allows every listed origin", async () => {
+    const env = await loadEnv(
+      "http://localhost:3000,http://192.168.1.20:3000,https://desk.example.com",
+    );
+    expect(env.corsOrigins).toEqual([
+      "http://localhost:3000",
+      "http://192.168.1.20:3000",
+      "https://desk.example.com",
+    ]);
+  });
+
+  it("writes links with the FIRST one, not whichever a request came from", async () => {
+    const env = await loadEnv("https://desk.example.com,http://192.168.1.20:3000");
+    expect(env.webOrigin).toBe("https://desk.example.com");
+  });
+
+  it("tolerates the spacing people actually type", async () => {
+    const env = await loadEnv(" http://localhost:3000 , http://192.168.1.20:3000 ");
+    expect(env.webOrigin).toBe("http://localhost:3000");
+    expect(env.corsOrigins).toEqual([
+      "http://localhost:3000",
+      "http://192.168.1.20:3000",
+    ]);
+  });
+
+  it("drops a trailing comma rather than allowing an empty origin", async () => {
+    const env = await loadEnv("http://localhost:3000,");
+    expect(env.corsOrigins).toEqual(["http://localhost:3000"]);
+  });
+});
