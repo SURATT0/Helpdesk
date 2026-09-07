@@ -8,6 +8,7 @@ import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { randomId } from "@/lib/random-id";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { uploadAttachment } from "@/features/attachments/api";
@@ -69,7 +70,10 @@ export function CreateTicketModal({
    */
   const [idempotencyKey, setIdempotencyKey] = React.useState("");
   React.useEffect(() => {
-    setIdempotencyKey(crypto.randomUUID());
+    // Not `crypto.randomUUID()` directly: it is secure-context only, so it is
+    // missing when the app is opened by IP over plain HTTP — and this effect
+    // runs with the shell, so the throw took the whole page down. See randomId.
+    setIdempotencyKey(randomId());
   }, [subject, description, categoryId, priority]);
 
   // Live KB deflection: suggest articles from the subject once it's meaningful.

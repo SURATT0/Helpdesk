@@ -36,7 +36,22 @@ services:
       # Override per deployment; it must match the calendar the users read.
       TZ: ${TZ:-Asia/Bangkok}
       DATABASE_URL: postgresql://deskly:deskly@postgres:5432/deskly?schema=public
-      WEB_ORIGIN: http://localhost:3000
+      # Every origin the browser may load the app from, comma-separated. The
+      # FIRST one is canonical and is what goes into emailed links; the rest are
+      # only added to the CORS allow-list.
+      #
+      # To reach the stack from a phone on the same Wi-Fi, add the machine's LAN
+      # address here AND rebuild `web` with a matching NEXT_PUBLIC_API_URL (that
+      # one is baked into the bundle at build time, so an env change alone does
+      # nothing). Both are read from the shell or a root `.env`:
+      #
+      #   WEB_ORIGIN=http://localhost:3000,http://192.168.1.20:3000 \
+      #   NEXT_PUBLIC_API_URL=http://192.168.1.20:4000/api/v1 \
+      #     docker compose up -d --build api web
+      #
+      # Keeping localhost first means desktop, the E2E suite and the phone all
+      # work at once, and emailed links keep naming a host that resolves.
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       # Attachment files live on a named volume so they survive image rebuilds
       # (the default ./.uploads is inside the container's ephemeral filesystem).
       LOCAL_STORAGE_DIR: /data/uploads
@@ -149,8 +164,12 @@ services:
     build:
       context: ./frontend
       args:
-        # Baked into the client bundle — the URL the browser uses to reach the API.
-        NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+        # Baked into the client bundle at BUILD time — the URL the browser uses
+        # to reach the API. Because it is baked, pointing a phone at this stack
+        # needs `--build`, not just a restart; and it must name an address the
+        # PHONE can resolve, so `localhost` is wrong there (that is the phone
+        # itself). See the WEB_ORIGIN note on the api service.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
     container_name: deskly-web
     restart: unless-stopped
     depends_on:

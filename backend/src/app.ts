@@ -58,7 +58,12 @@ export function createApp() {
     }),
   );
 
-  app.use(cors({ origin: env.webOrigin, credentials: true }));
+  // The allow-list, not the canonical address: one deployment is often reachable
+  // by several names at once (localhost for the developer and the E2E suite, a
+  // LAN address for a phone on the same Wi-Fi). `credentials: true` means the
+  // matching origin is reflected back, so this stays an allow-list rather than a
+  // wildcard — the refresh cookie depends on that.
+  app.use(cors({ origin: env.corsOrigins, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 

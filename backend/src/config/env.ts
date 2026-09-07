@@ -15,7 +15,34 @@ export const env = {
   nodeEnv,
   logLevel:
     process.env.LOG_LEVEL ?? (nodeEnv === "production" ? "info" : "debug"),
-  webOrigin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+  /**
+   * Where the web app lives, as a CANONICAL single address.
+   *
+   * This is the one that goes into links we send people — the "view the ticket"
+   * button in an email has to name one host, and it must be the one that will
+   * still resolve tomorrow from wherever they open their mail. So it is the
+   * FIRST entry of WEB_ORIGIN, never the one a given request happened to come
+   * from: a link built from a phone's LAN address would be dead the moment that
+   * mail left the building.
+   */
+  webOrigin: (process.env.WEB_ORIGIN ?? "http://localhost:3000")
+    .split(",")[0]
+    .trim(),
+  /**
+   * Every origin the browser may load the app from — the CORS allow-list.
+   *
+   * A list because one deployment is commonly reachable by more than one name
+   * at once: `localhost` from the developer's own browser and from the E2E
+   * suite, a LAN address from a phone on the same Wi-Fi, a hostname in staging.
+   * Serving only one of those does not fail loudly; the page loads and then
+   * every API call is refused, which reads as "login is broken".
+   *
+   * Set WEB_ORIGIN to a comma-separated list to allow several.
+   */
+  corsOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
   databaseUrl: process.env.DATABASE_URL ?? "",
   storageDriver: (process.env.STORAGE_DRIVER ?? "local") as "local" | "s3",
   localStorageDir: process.env.LOCAL_STORAGE_DIR ?? "./.uploads",
