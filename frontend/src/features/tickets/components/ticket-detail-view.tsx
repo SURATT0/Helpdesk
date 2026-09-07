@@ -379,12 +379,25 @@ export function TicketDetailView({ id }: { id: number }) {
           column, which squeezed the title and the badge row into 1fr while the
           rail stood empty beside them. */}
       <header className="flex-none border-b border-line bg-panel px-5 py-4 sm:px-7">
-        <div className="mb-2 flex items-center gap-2 text-dense text-faint">
+        {/* `flex-wrap` so the SLA badge below can drop to a line of its own on a
+            narrow screen instead of squeezing the breadcrumb or widening the
+            header. `gap-y-2` gives it room when it does. */}
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-2 text-dense text-faint">
           <Link href="/tickets" className="hover:text-muted">
             {t("detail.tickets")}
           </Link>
           <span>›</span>
           <span className="font-mono font-medium">#{ticket.id}</span>
+          {/* Beside the number the clock belongs to, rather than at the far end
+              of the title row below. The badge names its own state; "SLA" is
+              what says which clock that state belongs to, which the header has
+              no other label for.
+
+              Position only — `SlaBadge` and its six states are untouched. */}
+          <span className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1 text-dense">
+            <span className="text-caption font-semibold text-muted">SLA</span>
+            <SlaBadge sla={assess(ticket)} />
+          </span>
           {canResolve || awaitingMyConfirmation ? (
             // flex-wrap: a requester answering their own pending ticket gets two
             // buttons here on top of whatever the desk is offered, and the strip
@@ -443,12 +456,6 @@ export function TicketDetailView({ id }: { id: number }) {
             {ticket.category} · {t("detail.opened")}{" "}
             {formatOpened(ticket.createdAt, lang)} {t("detail.by")}{" "}
             <strong className="text-ink">{ticket.requester}</strong>
-          </span>
-          {/* The badge names its own state; "SLA" is what says which clock
-              that state belongs to, which the header has no other label for. */}
-          <span className="ml-auto inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5">
-            <span className="text-caption font-semibold text-muted">SLA</span>
-            <SlaBadge sla={assess(ticket)} />
           </span>
         </div>
       </header>

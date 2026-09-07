@@ -36,6 +36,31 @@ export function NotificationsBell() {
   const items = data?.items ?? [];
   const unread = data?.unread ?? 0;
 
+  // Escape closes it on both layouts. A panel you can open with one tap and only
+  // close by aiming at the backdrop is the complaint this started from.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // Freeze the page behind — but only where this is a MODAL. Above `md` it is
+  // still a dropdown, and a dropdown that stops the page scrolling would be a
+  // new bug rather than a fix. Restores the previous value instead of clearing
+  // it, so opening this over another modal cannot leave the body stuck.
+  React.useEffect(() => {
+    if (!open) return;
+    if (window.matchMedia("(min-width: 768px)").matches) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   function openNotification(n: Notification) {
     if (!n.readAt) markRead.mutate(n.id);
     setOpen(false);
@@ -63,13 +88,23 @@ export function NotificationsBell() {
 
       {open ? (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          {/* 340px is the design's width, but it is not a floor: anchored to
+          {/* Tinted where this is a modal, invisible where it is a dropdown —
+              a scrim behind a dropdown would dim the whole app for a menu. */}
+          <div
+            className="fixed inset-0 z-40 bg-ink/20 md:bg-transparent"
+            onClick={() => setOpen(false)}
+          />
+          {/* Below md: a real modal, centred on the VIEWPORT rather than hung
+              off the bell. Anchored, it was cut off by the right edge on a
+              phone and the messages could not be read to the end.
+              From md up: the original dropdown, unchanged.
+
+              340px is the design's width, but it is not a floor: anchored to
               the right edge of a topbar with px-4, a fixed 340 hangs ~36px off
               the LEFT edge of a 320px screen — and leftward overflow is not
               scrollable, so the document-width check in mobile-tables.spec.ts
               cannot see it. `min()` gives it the width it has room for. */}
-          <div className="absolute right-0 z-50 mt-2 w-[min(340px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-line bg-white shadow-modal">
+          <div className="fixed left-1/2 top-1/2 z-50 flex max-h-[80vh] w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-line bg-white shadow-modal md:absolute md:left-auto md:top-auto md:mt-2 md:block md:max-h-none md:w-[min(340px,calc(100vw-2rem))] md:translate-x-0 md:translate-y-0 md:right-0">
             <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
               <span className="text-control font-bold text-ink">
                 {t("topbar.notifications")}
@@ -85,7 +120,10 @@ export function NotificationsBell() {
               ) : null}
             </div>
 
-            <div className="max-h-[380px] overflow-y-auto">
+            {/* As a modal the list takes whatever the 80vh panel has left, so
+                the header stays put while the list scrolls; as a dropdown it
+                keeps its own 380px cap. */}
+            <div className="min-h-0 flex-1 overflow-y-auto md:max-h-[380px] md:flex-none">
               {items.length === 0 ? (
                 <div className="px-4 py-8 text-center text-body text-faint">
                   {t("notif.empty")}

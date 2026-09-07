@@ -96,6 +96,9 @@ export function AttachmentImage({
         style={box ? { width: box.width, height: box.height } : undefined}
         className={cn(
           "flex min-h-[80px] flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-line bg-wash px-3 py-4 text-center",
+          // Same cap as the loaded state, so a broken image occupies the same
+          // space as the one it replaced instead of reflowing the thread.
+          "max-w-full",
           className,
         )}
       >
@@ -114,6 +117,17 @@ export function AttachmentImage({
       style={box ? { width: box.width, height: box.height } : undefined}
       className={cn(
         "group relative block overflow-hidden rounded-md border border-line bg-wash",
+        // The reserved box above is computed from a fixed cap, so on a phone it
+        // came out WIDER than the cell holding it — measured at 375px: a 324px
+        // box inside a 241px grid. `max-w-full` puts the container back in
+        // charge without giving up the reservation that stops the thread
+        // jumping as bytes land.
+        //
+        // The height ceiling is NOT here: it belongs to the single-image layout
+        // alone (see MessageAttachments). Applied to every cell it only ever
+        // caught the tallest one in a multi-image grid, which left a row of
+        // 118px thumbnails with a 220px one wedged in the middle.
+        "max-w-full",
         state === "loading" && "animate-pulse",
         className,
       )}

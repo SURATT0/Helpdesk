@@ -115,7 +115,20 @@ export function MessageAttachments({
               maxWidth={Math.floor((BUBBLE_MAX_WIDTH - (columns - 1) * 6) / columns)}
               onBroken={() => markBroken(a.id)}
               onOpen={() => setLightboxAt(i)}
-              className={columns === 1 ? undefined : "aspect-square"}
+              className={
+                columns === 1
+                  ? // A single image gets the bubble's full width, so a portrait
+                    // photo grew as tall as it liked — 578px on a 780px screen,
+                    // three quarters of the viewport for one attachment. Capped
+                    // on phones only; `object-cover` on the img crops rather
+                    // than squashes, and tapping still opens the full picture.
+                    //
+                    // Only here: in a multi-image grid the cells are already
+                    // ~118px, and a cap would catch nothing but the tallest of
+                    // them and leave the row ragged.
+                    "max-h-[220px] sm:max-h-none"
+                  : "aspect-square"
+              }
             />
           ))}
         </div>
