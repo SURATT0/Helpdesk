@@ -1,20 +1,15 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import { asyncHandler } from "../../middlewares";
 import { requireAuth } from "../../middlewares/auth";
 import { env } from "../../config/env";
 import { authController } from "./auth.controller";
+import { createLoginLimiter } from "./auth.rate-limit";
 
 const router = Router();
 
-// Brute-force guard on the credential endpoint (per-IP).
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: env.authRateLimit,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: { code: "RATE_LIMITED", message: "Too many attempts, try again later" } },
-});
+// Brute-force guard on the credential endpoint — per ACCOUNT, not per address.
+// See auth.rate-limit.ts for why the address is not usable here.
+const loginLimiter = createLoginLimiter(env.authRateLimit);
 
 /**
  * POST /login   — verify credentials, issue access token + httpOnly refresh cookie
