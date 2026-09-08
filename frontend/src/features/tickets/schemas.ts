@@ -63,6 +63,17 @@ export const ticketSchema = z.object({
   assigneeId: z.number().nullable(),
   category: z.string(),
   /**
+   * The project this ticket belongs to, or null. Grouping and routing — never
+   * a visibility scope; a ticket in a project is still visible to every agent
+   * of its customer.
+   */
+  project: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
+  /**
+   * The tenant it is filed under. Shown only to a viewer who reaches more than
+   * one — for everyone else it is the same value on every row.
+   */
+  customer: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
+  /**
    * The SLA target and the actual finish time — the only SLA fields the client
    * takes. The server also sends `slaDue`/`slaState`, a pre-rendered snapshot
    * that clamps an overrun to "0h 0m" and collapses three different situations
@@ -173,6 +184,13 @@ export const categorySchema = z.object({
   id: z.number(),
   name: z.string(),
   defaultTeamId: z.number().nullable(),
+  /**
+   * Which tenant owns this category; null = shared with every customer.
+   *
+   * Defaulted, so a response from a server that predates scoped categories
+   * still parses — as shared, which is what every category was then.
+   */
+  customerId: z.number().nullable().default(null),
 });
 export const categoryListSchema = z.object({ data: z.array(categorySchema) });
 

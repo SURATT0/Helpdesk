@@ -15,6 +15,9 @@ import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
 import { uploadAttachment } from "@/features/attachments/api";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
+import { useAuth } from "@/features/auth/context";
+import { useCustomers } from "@/features/customers/queries";
+import { useProjects } from "@/features/projects/queries";
 import { useCategories, useCreateTicket } from "../queries";
 import { PRIORITIES_ASCENDING, TEXT_MAX, type Priority } from "@/lib/domain";
 
@@ -39,12 +42,31 @@ export function CreateTicketModal({
 }) {
   const router = useRouter();
   const { t } = useI18n();
-  const { data: categories = [] } = useCategories();
+  const { user } = useAuth();
+  const { data: allCategories = [] } = useCategories();
+  const { data: customers = [] } = useCustomers();
+  // Projects need `project:read`, which a requester does not hold — asking for
+  // them would be a guaranteed 403. Their ticket still routes through their own
+  // project automatically, exactly as it did before this field existed.
+  const canPickProject = user != null && user.role !== "user";
+  const { data: projectData } = useProjects({ enabled: canPickProject });
   const createTicket = useCreateTicket();
 
   const [subject, setSubject] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [categoryId, setCategoryId] = React.useState<number | null>(null);
+  /**
+   * The tenant the rest of the form is filtered by.
+   *
+   * NOT where the ticket is filed — the server always files it under the
+   * REQUESTER's customer, which for a self-service create is the signed-in
+   * person's own. What this governs is which projects and categories are on
+   * offer, and it only becomes a question for someone who reaches more than one
+   * tenant. With a single customer it is preselected and fixed, because a picker
+   * with one option is not a choice.
+   */
+  const [customerId, setCustomerId] = React.useState<number | null>(null);
+  const [projectId, setProjectId] = React.useState<number | null>(null);
   const [priority, setPriority] = React.useState<Priority>("medium");
   const [files, setFiles] = React.useState<File[]>([]);
   const [dragging, setDragging] = React.useState(false);
@@ -73,6 +95,62 @@ export function CreateTicketModal({
     setIdempotencyKey(randomId());
   }, [subject, description, categoryId, priority]);
 
+  const projects = projectData?.projects ?? [];
+
+  /**
+   * The cascade. Each list is what the level above allows, so a choice can never
+   * be left pointing at something the current customer does not own.
+   *
+   * Categories include the SHARED ones (`customerId: null`) alongside that
+   * customer's own — the server scopes the same way, and a tenant with no
+   * categories of its own must still have the standard list to file under.
+   */
+  const projectsForCustomer = React.useMemo(
+    () => (customerId == null ? [] : projects.filter((p) => p.customerId === customerId)),
+    [projects, customerId],
+  );
+  const categories = React.useMemo(
+    () =>
+      customerId == null
+        ? allCategories.filter((c) => c.customerId == null)
+        : allCategories.filter(
+            (c) => c.customerId == null || c.customerId === customerId,
+          ),
+    [allCategories, customerId],
+  );
+
+  // One customer means there is nothing to choose: preselect it and leave the
+  // control fixed, rather than making someone confirm the only answer.
+  const customerFixed = customers.length <= 1;
+  React.useEffect(() => {
+    if (customerId == null && customers.length === 1) setCustomerId(customers[0].id);
+  }, [customers, customerId]);
+
+  /**
+   * Changing the customer clears what it invalidated.
+   *
+   * Both, not just the project: categories are scoped too, so a category picked
+   * under the previous customer can be one this one cannot use. Clearing rather
+   * than remapping is deliberate — silently moving a choice to a same-named
+   * category in another tenant would file the ticket somewhere nobody chose.
+   */
+  const lastCustomer = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (lastCustomer.current === customerId) return;
+    const firstFill = lastCustomer.current === null;
+    lastCustomer.current = customerId;
+    if (firstFill) return; // preselecting the only customer is not a change
+    // The project always goes: it belonged to the other tenant by definition.
+    setProjectId(null);
+    // The category only if it went stale. Most are SHARED and survive the
+    // switch, and clearing a still-valid choice would make the field flicker
+    // back to the first option for no reason the person can see.
+    setCategoryId((current) =>
+      current != null && categories.some((c) => c.id === current) ? current : null,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
+
   // Live KB deflection: suggest articles from the subject once it's meaningful.
   const suggest = useKbSuggest(subject, subject.trim().length >= 3);
   const suggestions = suggest.data ?? [];
@@ -91,7 +169,11 @@ export function CreateTicketModal({
     setSubject("");
     setDescription("");
     setPriority("medium");
-    setCategoryId(categories[0]?.id ?? null);
+    setCategoryId(null);
+    setProjectId(null);
+    // Leave the customer alone: with one it is already right, and with several
+    // the person is about to choose. Resetting it here would clear a preselect
+    // this same render just made.
     setFiles([]);
     setAttaching(false);
     setAttachError(null);
@@ -99,12 +181,14 @@ export function CreateTicketModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Default the category once the list loads.
+  // Default the category once the list loads — but not before a customer is
+  // chosen. The field is disabled until then, and a disabled control showing a
+  // pre-picked value contradicts the placeholder sitting above it.
   React.useEffect(() => {
-    if (categoryId == null && categories.length > 0) {
+    if (customerId != null && categoryId == null && categories.length > 0) {
       setCategoryId(categories[0].id);
     }
-  }, [categories, categoryId]);
+  }, [categories, categoryId, customerId]);
 
   if (!open) return null;
 
@@ -136,6 +220,7 @@ export function CreateTicketModal({
         subject: subject.trim(),
         description: description.trim(),
         categoryId,
+        projectId,
         priority,
         idempotencyKey,
       });
@@ -242,6 +327,77 @@ export function CreateTicketModal({
 
           {/* Side by side only once there is room: at 375px two columns
               left each field about 110px, which is not a usable input. */}
+          {/* Customer → Project, in that order and on their own row.
+              One column below `sm` on purpose: at 375px a two-column split
+              leaves each select about 110px, which is not a usable control —
+              the same reason the row underneath stacks. */}
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="ticket-customer">{t("create.customer")}</Label>
+              <select
+                id="ticket-customer"
+                value={customerId ?? ""}
+                disabled={customerFixed}
+                onChange={(e) =>
+                  setCustomerId(e.target.value ? Number(e.target.value) : null)
+                }
+                className={cn(
+                  "w-full rounded-md border border-edge bg-white px-3.5 py-2.5 text-ink",
+                  "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
+                  // Fixed rather than absent when there is only one: the field
+                  // still says which company the ticket is for, which is worth
+                  // seeing even when it cannot be changed.
+                  customerFixed && "cursor-not-allowed bg-wash text-muted",
+                  FIELD_TEXT_13,
+                )}
+              >
+                {customerFixed ? null : (
+                  <option value="">{t("create.customerChoose")}</option>
+                )}
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {canPickProject ? (
+              <div>
+                <Label htmlFor="ticket-project">{t("create.project")}</Label>
+                <select
+                  id="ticket-project"
+                  value={projectId ?? ""}
+                  // Disabled, not merely empty: an enabled picker with nothing
+                  // in it reads as "this customer has no projects", when the
+                  // real answer is "choose a customer first".
+                  disabled={customerId == null}
+                  onChange={(e) =>
+                    setProjectId(e.target.value ? Number(e.target.value) : null)
+                  }
+                  className={cn(
+                    "w-full rounded-md border border-edge bg-white px-3.5 py-2.5 text-ink",
+                    "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
+                    customerId == null && "cursor-not-allowed bg-wash text-muted",
+                    FIELD_TEXT_13,
+                  )}
+                >
+                  <option value="">
+                    {customerId == null
+                      ? t("create.projectPickCustomerFirst")
+                      : projectsForCustomer.length === 0
+                        ? t("create.projectNone")
+                        : t("create.projectOptional")}
+                  </option>
+                  {projectsForCustomer.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <div>
               <Label htmlFor="ticket-category">
@@ -250,13 +406,20 @@ export function CreateTicketModal({
               <select
                 id="ticket-category"
                 value={categoryId ?? ""}
+                disabled={customerId == null}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
                 className={cn(
                   "w-full rounded-md border border-edge bg-white px-3.5 py-2.5 text-ink",
                   "focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15",
+                  customerId == null && "cursor-not-allowed bg-wash text-muted",
                   FIELD_TEXT_13,
                 )}
               >
+                {/* Categories are scoped too, so this waits on the customer for
+                    the same reason the project picker does. */}
+                {customerId == null ? (
+                  <option value="">{t("create.projectPickCustomerFirst")}</option>
+                ) : null}
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

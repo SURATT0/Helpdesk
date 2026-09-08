@@ -139,6 +139,25 @@ model Customer {
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
 
+  /// Archived, not deleted. A tenant is never removed from disk: its id is on
+  /// every ticket, audit row and project it ever had, and a hard delete would
+  /// either take those with it or strand them. Refused while the customer still
+  /// has live projects, tickets or users — see `customerService.archive`, which
+  /// says what to move first rather than deciding for you.
+  ///
+  /// Filtered out by `customerScopeWhere`, so an archived tenant leaves every
+  /// picker at once, the way `projectScopeWhere` handles a deleted project.
+  deletedAt   DateTime?             @map("deleted_at")
+  /// Who archived it. Nullable because it is only set then, and named so it
+  /// cannot be confused with the membership relation above.
+  deletedById Int?                  @map("deleted_by_id")
+  deletedBy   User?                 @relation("CustomerDeletedBy", fields: [deletedById], references: [id])
+
+  // Names stay unique across ARCHIVED rows too, unlike projects. A tenant name
+  // is what appears on an invoice and in an audit trail; letting a new customer
+  // take an archived one's name would make two different companies
+  // indistinguishable in the history. Reviving the old row is the right move
+  // there, and is why archiving is reversible.
   @@map("customers")
 }
 
@@ -333,6 +352,7 @@ model User {
   ownedProjects          Project[]             @relation("ProjectOwner")
   backupForProjects      Project[]             @relation("ProjectBackupOwner")
   deletedProjects        Project[]             @relation("ProjectDeletedBy")
+  archivedCustomers      Customer[]            @relation("CustomerDeletedBy")
   passwordHash           String?               @map("password_hash") // filled by the auth milestone
   requestedTickets       Ticket[]              @relation("TicketRequester")
   assignedTickets        Ticket[]              @relation("TicketAssignee")

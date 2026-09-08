@@ -51,20 +51,30 @@ const TILES: {
 export function SlaSummary() {
   const { t } = useI18n();
   const { data } = useTickets();
-  const { query, statuses, priorities, assignees, slaStates, setSlaOnly } =
-    useSearch();
+  const {
+    query,
+    statuses,
+    priorities,
+    assignees,
+    customers,
+    slaStates,
+    setSlaOnly,
+  } = useSearch();
   const now = useSlaNow();
 
   const counts = React.useMemo(() => {
     const tally = new Map<SlaState, number>();
-    const scope = { query, statuses, priorities, assignees };
+    // The customer facet IS included, unlike the SLA one above: narrowing to a
+    // tenant should narrow its breach counts too, and unlike the SLA facet it
+    // cannot zero the tiles it is displayed beside.
+    const scope = { query, statuses, priorities, assignees, customers };
     for (const x of data?.tickets ?? []) {
       if (!matchesFilters(x, scope, now)) continue;
       const { state } = judgeSla(x, now);
       tally.set(state, (tally.get(state) ?? 0) + 1);
     }
     return tally;
-  }, [data, query, statuses, priorities, assignees, now]);
+  }, [data, query, statuses, priorities, assignees, customers, now]);
 
   const shown = TILES.filter((tile) => (counts.get(tile.state) ?? 0) > 0);
   // Nothing overdue and nothing about to be: say nothing rather than three zeros.

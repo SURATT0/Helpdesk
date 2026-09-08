@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Archive,
+  Building2,
   LayoutDashboard,
   Ticket,
   Users,
@@ -47,6 +48,16 @@ const NAV: Array<{
   // Mirrors the server's project:read grant, like the audit entry below. Reading
   // the routing table is desk work — it says where a queue's work comes from —
   // while changing who owns a project stays with project:write, above admin.
+  // Above projects, because that is the shape: a customer holds projects, and
+  // the nav should read the same way the data nests. Same roles — the list is
+  // open to anyone authenticated, but a requester has no use for a page of one
+  // row they cannot act on.
+  {
+    href: "/customers",
+    key: "nav.customers",
+    icon: Building2,
+    roles: ["admin", "super_admin"],
+  },
   {
     href: "/projects",
     key: "nav.projects",

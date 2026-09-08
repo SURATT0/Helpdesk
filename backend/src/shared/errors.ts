@@ -109,6 +109,31 @@ export const ProjectHasMembers = (count: number) =>
     `This project still has ${count} member${count === 1 ? "" : "s"} routing through it — move them first`,
   );
 
+/**
+ * Thrown when archiving a customer that still has something live under it.
+ *
+ * Says what is in the way and how much of it, rather than "cannot archive": the
+ * caller's next step is to move or close those things, and a count is what tells
+ * them whether that is five minutes or a project. Same shape and same reasoning
+ * as ProjectHasMembers above.
+ */
+export const CustomerNotEmpty = (counts: {
+  projects: number;
+  tickets: number;
+  users: number;
+}) => {
+  const parts = [
+    counts.tickets > 0 ? `${counts.tickets} open ticket${counts.tickets === 1 ? "" : "s"}` : null,
+    counts.projects > 0 ? `${counts.projects} project${counts.projects === 1 ? "" : "s"}` : null,
+    counts.users > 0 ? `${counts.users} user${counts.users === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  return new AppError(
+    409,
+    "CUSTOMER_NOT_EMPTY",
+    `This customer still has ${parts.join(", ")} — close or move them first`,
+  );
+};
+
 /** Thrown when reopening a ticket closed more than 30 days ago. */
 export const ReopenWindowExpired = (
   message = "Reopen window (30 days) has expired — open a new ticket instead",

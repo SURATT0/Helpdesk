@@ -16,6 +16,12 @@ type TicketLike = {
   assignee: string | null;
   assigneeId: number | null;
   /**
+   * Optional for the same reason the SLA timestamps below are: callers that do
+   * not filter by tenant — and the tests that predate the facet — should not
+   * have to supply it. Absent simply never matches a customer selection.
+   */
+  customer?: { id: number; name: string } | null;
+  /**
    * Optional so callers that only filter on the other facets — and the tests
    * that predate the SLA facet — don't have to supply timestamps they never use.
    * Absent reads as "no SLA target", which is what the badge shows too.
@@ -42,6 +48,14 @@ type SearchValue = {
   /** Empty = no assignee filter, which is NOT the same as selecting "none". */
   assignees: Set<AssigneeKey>;
   toggleAssignee: (a: AssigneeKey) => void;
+  /**
+   * Which tenants to show. Empty = all of them, which for almost everyone is
+   * the only state this ever has: the facet is offered only to a viewer who
+   * reaches more than one customer, because for anyone else every row carries
+   * the same value and the filter could only ever remove all of them or none.
+   */
+  customers: Set<number>;
+  toggleCustomer: (id: number) => void;
   slaStates: Set<SlaState>;
   toggleSla: (s: SlaState) => void;
   /** Replace the SLA selection outright — the summary tiles jump straight to one. */
@@ -62,6 +76,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
   const [priorities, setPriorities] = React.useState<Set<Priority>>(
     () => new Set(),
   );
+  const [customers, setCustomers] = React.useState<Set<number>>(() => new Set());
   const [assignees, setAssignees] = React.useState<Set<AssigneeKey>>(
     () => new Set(),
   );
@@ -93,6 +108,14 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const toggleCustomer = React.useCallback((id: number) => {
+    setCustomers((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
   const toggleSla = React.useCallback((s: SlaState) => {
     setSlaStates((prev) => {
       const next = new Set(prev);
@@ -113,6 +136,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     setStatuses(new Set());
     setPriorities(new Set());
     setAssignees(new Set());
+    setCustomers(new Set());
     setSlaStates(new Set());
   }, []);
 
@@ -126,12 +150,18 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       togglePriority,
       assignees,
       toggleAssignee,
+      customers,
+      toggleCustomer,
       slaStates,
       toggleSla,
       setSlaOnly,
       clearFilters,
       activeCount:
-        statuses.size + priorities.size + assignees.size + slaStates.size,
+        statuses.size +
+        priorities.size +
+        assignees.size +
+        customers.size +
+        slaStates.size,
     }),
     [
       query,
@@ -141,6 +171,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       togglePriority,
       assignees,
       toggleAssignee,
+      customers,
+      toggleCustomer,
       slaStates,
       toggleSla,
       setSlaOnly,
@@ -182,7 +214,7 @@ export function matchesFilters(
   f: Pick<
     SearchValue,
     "query" | "statuses" | "priorities" | "assignees"
-  > & { slaStates?: Set<SlaState> },
+  > & { slaStates?: Set<SlaState>; customers?: Set<number> },
   now: number = Date.now(),
 ): boolean {
   if (!matchesQuery(t, f.query)) return false;
@@ -193,6 +225,11 @@ export function matchesFilters(
     // An unassigned ticket only matches the explicit "none" selection.
     const key: AssigneeKey = t.assigneeId ?? "none";
     if (!f.assignees.has(key)) return false;
+  }
+  if (f.customers && f.customers.size > 0) {
+    // A ticket always has a customer, so there is no "none" bucket here — unlike
+    // the assignee facet, where unassigned is a real thing to filter for.
+    if (t.customer == null || !f.customers.has(t.customer.id)) return false;
   }
   if (f.slaStates && f.slaStates.size > 0) {
     const { state } = judgeSla(

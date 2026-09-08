@@ -9,6 +9,7 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
+import { useCustomers } from "@/features/customers/queries";
 import { holds } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useProjects, useUpdateProject } from "../queries";
@@ -27,6 +28,13 @@ import { OwnerSelect } from "./owner-select";
  */
 const COLS = "grid-cols-[1.3fr_1fr_1fr_110px]";
 const COLS_WITH_ACTIONS = "grid-cols-[1.3fr_1fr_1fr_110px_44px]";
+/**
+ * The same two, with the tenant column. Only reached by a viewer who covers
+ * more than one customer — for anyone else every project belongs to the same
+ * one, and a constant column is not information.
+ */
+const COLS_C = "grid-cols-[1.3fr_130px_1fr_1fr_110px]";
+const COLS_C_WITH_ACTIONS = "grid-cols-[1.3fr_130px_1fr_1fr_110px_44px]";
 
 /** Where a project's next ticket actually lands, mirroring resolveRoutedAssignee. */
 function routesTo(project: Project): {
@@ -105,6 +113,21 @@ export function ProjectsView() {
    * only decides whether the button is in the document.
    */
   const canDelete = user != null && holds(user.role, "project:delete");
+  // Which tenant a project belongs to, shown only when that can differ between
+  // rows. Same rule as the ticket table's customer column, and the same reason.
+  const { data: customers = [] } = useCustomers({ enabled: canRead });
+  const showCustomer = customers.length > 1;
+  const customerName = React.useMemo(
+    () => new Map(customers.map((c) => [c.id, c.name])),
+    [customers],
+  );
+  const cols = showCustomer
+    ? canDelete
+      ? COLS_C_WITH_ACTIONS
+      : COLS_C
+    : canDelete
+      ? COLS_WITH_ACTIONS
+      : COLS;
   const [deleting, setDeleting] = React.useState<Project | null>(null);
   const { data, isLoading, isError, refetch } = useProjects({ enabled: canRead });
   // Only the pickers need the directory, so a read-only viewer doesn't fetch it.
@@ -146,14 +169,17 @@ export function ProjectsView() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <TableScroll minWidth={canDelete ? 804 : 760}>
+          <TableScroll
+            minWidth={(canDelete ? 804 : 760) + (showCustomer ? 130 : 0)}
+          >
               <div
                 className={cn(
                   "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-columns text-faint",
-                  canDelete ? COLS_WITH_ACTIONS : COLS,
+                  cols,
                 )}
               >
                 <span>{t("projects.col.name")}</span>
+                {showCustomer ? <span>{t("col.customer")}</span> : null}
                 <span>{t("projects.col.owner")}</span>
                 <span>{t("projects.col.backup")}</span>
                 <span>{t("projects.col.members")}</span>
@@ -181,7 +207,7 @@ export function ProjectsView() {
                     key={p.id}
                     className={cn(
                       "grid items-center px-4 py-3 text-control",
-                      canDelete ? COLS_WITH_ACTIONS : COLS,
+                      cols,
                       i < projects.length - 1 && "border-b border-rule",
                     )}
                   >
@@ -199,6 +225,12 @@ export function ProjectsView() {
                             : t("projects.routesTo", { name: target.name })}
                       </span>
                     </span>
+
+                    {showCustomer ? (
+                      <span className="truncate pr-3 text-body text-subtle">
+                        {customerName.get(p.customerId) ?? "—"}
+                      </span>
+                    ) : null}
 
                     <OwnerCell
                       owner={p.owner}
