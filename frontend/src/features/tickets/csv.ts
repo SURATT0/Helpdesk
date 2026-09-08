@@ -134,8 +134,13 @@ export const IMPORT_COLUMNS = [
  * `status` is here so a file that has one is read and judged rather than
  * silently dropped: a row saying `Open` would otherwise import as New while the
  * reader believed it had imported something else.
+ *
+ * `project` is optional because most sources have no such column and a ticket
+ * with no project is an ordinary ticket. A blank cell means "no project"; only
+ * a name that resolves to nothing is an error, so a typo is reported rather
+ * than quietly dropped.
  */
-export const OPTIONAL_IMPORT_COLUMNS = ["status"] as const;
+export const OPTIONAL_IMPORT_COLUMNS = ["status", "project"] as const;
 
 export type ImportColumn =
   | (typeof IMPORT_COLUMNS)[number]
@@ -156,6 +161,9 @@ const HEADER_ALIASES: Record<string, ImportColumn> = {
   requester_email: "requesterEmail",
   status: "status",
   state: "status",
+  project: "project",
+  projectname: "project",
+  project_name: "project",
 };
 
 function normaliseHeader(h: string): string {

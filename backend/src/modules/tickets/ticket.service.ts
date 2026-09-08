@@ -82,6 +82,8 @@ export type ImportRow = {
   description: string;
   priority: Priority;
   category: string;
+  /** Optional. Blank = no project, which is an ordinary outcome. */
+  project?: string;
   requesterEmail: string;
 };
 
@@ -100,6 +102,7 @@ export type ImportRow = {
  */
 export type ImportErrorReason =
   | "unknown_category"
+  | "unknown_project"
   | "unknown_requester"
   | "create_failed";
 
@@ -245,8 +248,38 @@ export const ticketService = {
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
       try {
+        // The REQUESTER comes first now, and has to: they decide which tenant
+        // the row is filed under, and both lookups below are scoped to it. A
+        // category or project name means nothing until we know whose it is.
+        //
+        // (The consequence: a row with a bad address AND a bad category now
+        // reports the address. That is the right one to report — the address is
+        // what makes the rest of the row resolvable.)
+        const requester = await ticketRepository.findRequesterByEmail(
+          row.requesterEmail,
+        );
+        // One message for "no such user" and "not yours to file for", on purpose.
+        // Telling them apart would turn the import into a directory probe: feed it
+        // a list of addresses and the wording says which ones exist in other
+        // customers. The row fails either way, so the importer loses nothing.
+        if (
+          requester == null ||
+          requester.customerId == null ||
+          !mayImportForRequester(user, requester)
+        ) {
+          results.push({
+            index,
+            ok: false,
+            field: "requesterEmail",
+            reason: "unknown_requester",
+            error: `No user with email "${row.requesterEmail}"`,
+          });
+          continue;
+        }
+
         const categoryId = await ticketRepository.findCategoryIdByName(
           row.category,
+          requester.customerId,
         );
         if (categoryId == null) {
           results.push({
@@ -258,28 +291,35 @@ export const ticketService = {
           });
           continue;
         }
-        const requester = await ticketRepository.findRequesterByEmail(
-          row.requesterEmail,
-        );
-        // One message for "no such user" and "not yours to file for", on purpose.
-        // Telling them apart would turn the import into a directory probe: feed it
-        // a list of addresses and the wording says which ones exist in other
-        // customers. The row fails either way, so the importer loses nothing.
-        if (requester == null || !mayImportForRequester(user, requester)) {
-          results.push({
-            index,
-            ok: false,
-            field: "requesterEmail",
-            reason: "unknown_requester",
-            error: `No user with email "${row.requesterEmail}"`,
-          });
-          continue;
+
+        // Optional column. An empty cell is "no project", which is an ordinary
+        // outcome — only a name that resolves to nothing is an error, so a
+        // typo is reported rather than silently dropping the row's project.
+        let projectId: number | null = null;
+        const wantedProject = row.project?.trim();
+        if (wantedProject) {
+          projectId = await ticketRepository.findProjectIdByName(
+            wantedProject,
+            requester.customerId,
+          );
+          if (projectId == null) {
+            results.push({
+              index,
+              ok: false,
+              field: "project",
+              reason: "unknown_project",
+              error: `Unknown project "${wantedProject}"`,
+            });
+            continue;
+          }
         }
+
         const ticket = await ticketRepository.create({
           subject: row.subject,
           description: row.description,
           priority: row.priority,
           categoryId,
+          projectId,
           requesterId: requester.id,
           actorId: user.id,
         });

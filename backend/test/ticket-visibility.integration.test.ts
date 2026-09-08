@@ -27,8 +27,8 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 /** Ids are seeded deterministically, but the category is looked up by name. */
 async function networkCategoryId(): Promise<number> {
-  const c = await prisma.category.findUniqueOrThrow({
-    where: { name: "Network" },
+  const c = await prisma.category.findFirstOrThrow({
+    where: { name: "Network", customerId: null },
   });
   return c.id;
 }

@@ -34,7 +34,12 @@ function refreshCookie(res: { headers: Record<string, unknown> }): string {
 }
 
 async function categoryId(name: string): Promise<number> {
-  const c = await prisma.category.findUniqueOrThrow({ where: { name } });
+  // The seed's categories are the SHARED ones. `name` is no longer a Prisma
+  // unique — a customer may have their own of the same name — so the lookup
+  // has to say which it means.
+  const c = await prisma.category.findFirstOrThrow({
+    where: { name, customerId: null },
+  });
   return c.id;
 }
 

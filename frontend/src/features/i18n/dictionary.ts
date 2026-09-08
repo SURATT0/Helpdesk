@@ -522,6 +522,7 @@ const en: Dict = {
   "import.err.status": "Must be New / Pending / Closed — imports always start as New",
   // Rejections that only the server can decide, keyed by its reason code.
   "import.srv.unknownCategory": "No category named “{category}”",
+  "import.srv.unknownProject": "No project named “{project}” for this requester",
   "import.srv.unknownRequester": "No user with the email {email}",
   "import.srv.failed": "Couldn't create this ticket",
 
@@ -1238,6 +1239,7 @@ const th: Dict = {
   "import.err.category": "ไม่รู้จักหมวดหมู่นี้",
   "import.err.status": "ต้องเป็น New / Pending / Closed — ที่นำเข้าจะเริ่มที่ New เสมอ",
   "import.srv.unknownCategory": "ไม่มีหมวดหมู่ชื่อ “{category}”",
+  "import.srv.unknownProject": "ไม่มีโครงการชื่อ “{project}” สำหรับผู้แจ้งรายนี้",
   "import.srv.unknownRequester": "ไม่พบผู้ใช้ที่ใช้อีเมล {email}",
   "import.srv.failed": "สร้าง Ticket นี้ไม่สำเร็จ",
 

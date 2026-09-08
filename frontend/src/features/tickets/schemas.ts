@@ -242,7 +242,12 @@ export const historyListSchema = z.object({
  * parse error. `error` carries the server's own English sentence for that case.
  */
 export const importErrorReasonSchema = z
-  .enum(["unknown_category", "unknown_requester", "create_failed"])
+  .enum([
+    "unknown_category",
+    "unknown_project",
+    "unknown_requester",
+    "create_failed",
+  ])
   .catch("create_failed");
 
 export const importRowResultSchema = z.discriminatedUnion("ok", [
