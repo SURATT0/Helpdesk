@@ -54,3 +54,17 @@ export const updateProfileBody = z
       d.language !== undefined,
     { message: "Nothing to update" },
   );
+
+/**
+ * The full set of customers a member of staff may reach beyond their own.
+ *
+ * A complete set, not a delta — see `userRepository.setReach`. An empty array
+ * is meaningful and allowed: it revokes everything.
+ *
+ * Capped so one request cannot write an unbounded number of rows, and because
+ * the list rides in the access token: reach is resolved at sign time, so a
+ * pathological grant would grow every request that principal makes.
+ */
+export const setReachBody = z.object({
+  customerIds: z.array(z.number().int().positive()).max(100),
+});

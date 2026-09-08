@@ -123,19 +123,53 @@ enum CommentChannel {
 // within their own customer (across departments) but nothing of other customers;
 // platform admins (customerId = null) span all customers.
 model Customer {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  users     User[]
-  teams     Team[]
-  tickets   Ticket[]
-  assets    Asset[]
-  problems  Problem[]
-  projects  Project[]
-  settings  NotificationSettings?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id          Int                   @id @default(autoincrement())
+  name        String                @unique
+  users       User[]
+  teams       Team[]
+  tickets     Ticket[]
+  assets      Asset[]
+  problems    Problem[]
+  projects    Project[]
+  settings    NotificationSettings?
+  /// Staff granted reach INTO this customer without belonging to it.
+  reachGrants UserCustomer[]
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
 
   @@map("customers")
+}
+
+/// A member of staff may WORK a customer they do not BELONG to.
+///
+/// `users.customer_id` answers "which company is this person at" and stays a
+/// single value, because it is what a ticket they raise is filed under — a
+/// ticket belongs to one customer and always will. This table answers a
+/// different question: which customers may this person see into. One agent
+/// covering three client companies needs the second answer to be a list while
+/// the first stays one value, and conflating them is what would break filing.
+///
+/// Absent rows are not a missing configuration. A user with no row here reaches
+/// exactly their own customer, which is what every user did before this table
+/// existed — so it starts empty and nothing changes until someone is explicitly
+/// granted more. That is also why there is nothing to backfill.
+///
+/// Granting is a cross-tenant act and is reserved to a platform-wide
+/// super_admin (see `mayGrantReach`): an admin who could widen their own reach
+/// would be their own approver.
+model UserCustomer {
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId Int      @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([userId, customerId])
+  // Reach is read on every sign-in and token refresh, by user.
+  @@index([userId])
+  // "Who can see into this customer" — the grant list on a customer's page.
+  @@index([customerId])
+  @@map("user_customers")
 }
 
 /// One customer's notification policy: which events are mailed, how often, and
@@ -194,17 +228,17 @@ model NotificationSettings {
 // unavailable (see User.availableForAssignment) — without it, "the owner is out"
 // would silently mean "nobody is assigned".
 model Project {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   name          String
-  customerId    Int      @map("customer_id")
-  customer      Customer @relation(fields: [customerId], references: [id])
-  ownerId       Int?     @map("owner_id")
-  owner         User?    @relation("ProjectOwner", fields: [ownerId], references: [id])
-  backupOwnerId Int?     @map("backup_owner_id")
-  backupOwner   User?    @relation("ProjectBackupOwner", fields: [backupOwnerId], references: [id])
-  members       User[]   @relation("ProjectMember")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  customerId    Int       @map("customer_id")
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  ownerId       Int?      @map("owner_id")
+  owner         User?     @relation("ProjectOwner", fields: [ownerId], references: [id])
+  backupOwnerId Int?      @map("backup_owner_id")
+  backupOwner   User?     @relation("ProjectBackupOwner", fields: [backupOwnerId], references: [id])
+  members       User[]    @relation("ProjectMember")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
   // Soft delete, super-admin only, and refused while anyone is still a member.
   //
   // The row stays on disk because the audit trail points at it by id and a
@@ -251,8 +285,14 @@ model User {
   role                   Role
   teamId                 Int?                  @map("team_id")
   team                   Team?                 @relation(fields: [teamId], references: [id])
-  customerId             Int?                  @map("customer_id") // tenant; null = platform-wide (admin)
+  // The customer this person BELONGS to — their home tenant. Null = platform
+  // staff. Single-valued on purpose: it is what a ticket they raise is filed
+  // under, and a ticket has one customer. Reach — which customers they may see
+  // INTO — is a separate, wider question answered by `reachGrants` below.
+  customerId             Int?                  @map("customer_id")
   customer               Customer?             @relation(fields: [customerId], references: [id])
+  /// Customers this person may work BEYOND their own. See UserCustomer.
+  reachGrants            UserCustomer[]
   // Project this user's tickets route through. Routing only — never visibility.
   projectId              Int?                  @map("project_id")
   project                Project?              @relation("ProjectMember", fields: [projectId], references: [id])
@@ -327,14 +367,14 @@ model RefreshToken {
 }
 
 model Category {
-  id            Int      @id @default(autoincrement())
-  name          String   @unique
-  defaultTeamId Int?     @map("default_team_id") // auto-assignment target
-  defaultTeam   Team?    @relation(fields: [defaultTeamId], references: [id])
+  id            Int         @id @default(autoincrement())
+  name          String      @unique
+  defaultTeamId Int?        @map("default_team_id") // auto-assignment target
+  defaultTeam   Team?       @relation(fields: [defaultTeamId], references: [id])
   tickets       Ticket[]
   kbArticles    KbArticle[]
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
   @@map("categories")
 }
@@ -392,6 +432,11 @@ model Ticket {
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
 
+  // What makes a repeated create idempotent: the second insert loses on this
+  // constraint instead of producing a second ticket, and the loser answers with
+  // the row that won. Doing it with a constraint rather than a check-then-insert
+  // is deliberate — two requests in flight together would both pass the check.
+  @@unique([requesterId, idempotencyKey])
   @@index([status])
   @@index([priority])
   @@index([customerId])
@@ -401,11 +446,6 @@ model Ticket {
   // Every read pairs the tenant filter with `deletedAt IS NULL` (ticketScopeWhere),
   // so the two travel together rather than as two separate indexes.
   @@index([customerId, deletedAt])
-  // What makes a repeated create idempotent: the second insert loses on this
-  // constraint instead of producing a second ticket, and the loser answers with
-  // the row that won. Doing it with a constraint rather than a check-then-insert
-  // is deliberate — two requests in flight together would both pass the check.
-  @@unique([requesterId, idempotencyKey])
   @@map("tickets")
 }
 
@@ -426,14 +466,14 @@ model TicketRead {
 
 // SLA source of truth: one row per status change (append-only).
 model TicketStatusHistory {
-  id          Int           @id @default(autoincrement())
-  ticketId    Int           @map("ticket_id")
-  ticket      Ticket        @relation(fields: [ticketId], references: [id])
+  id          Int                 @id @default(autoincrement())
+  ticketId    Int                 @map("ticket_id")
+  ticket      Ticket              @relation(fields: [ticketId], references: [id])
   fromStatus  TicketStatusRecord? @map("from_status")
   toStatus    TicketStatusRecord  @map("to_status")
-  changedById Int?          @map("changed_by_id")
-  changedBy   User?         @relation(fields: [changedById], references: [id])
-  createdAt   DateTime      @default(now()) @map("created_at")
+  changedById Int?                @map("changed_by_id")
+  changedBy   User?               @relation(fields: [changedById], references: [id])
+  createdAt   DateTime            @default(now()) @map("created_at")
 
   @@index([ticketId])
   @@map("ticket_status_history")
@@ -442,23 +482,23 @@ model TicketStatusHistory {
 // Ticket conversation: public replies + internal notes (agent-only). Soft
 // delete via `deletedAt` — comments are the one entity that can be removed.
 model Comment {
-  id        Int            @id @default(autoincrement())
-  ticketId  Int            @map("ticket_id")
-  ticket    Ticket         @relation(fields: [ticketId], references: [id])
-  authorId  Int            @map("author_id")
-  author    User           @relation(fields: [authorId], references: [id])
-  body      String
-  internal  Boolean        @default(false)
+  id          Int            @id @default(autoincrement())
+  ticketId    Int            @map("ticket_id")
+  ticket      Ticket         @relation(fields: [ticketId], references: [id])
+  authorId    Int            @map("author_id")
+  author      User           @relation(fields: [authorId], references: [id])
+  body        String
+  internal    Boolean        @default(false)
   // Channel this message arrived on. Web and email messages share one thread —
   // `channel` is presentation metadata, never a filter on the conversation.
-  channel   CommentChannel @default(web)
+  channel     CommentChannel @default(web)
   // RFC 5322 Message-ID, stored for both directions: set on outbound replies we
   // send, and on inbound mail we thread. Lets a future upgrade match replies by
   // In-Reply-To/References header without another migration.
-  messageId String?        @unique @map("message_id")
-  deletedAt DateTime?      @map("deleted_at")
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
+  messageId   String?        @unique @map("message_id")
+  deletedAt   DateTime?      @map("deleted_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
   /// Files sent with this message. The thread draws these inside the bubble;
   /// files attached to the ticket without a message are not here.
   attachments Attachment[]
@@ -661,40 +701,44 @@ enum KbStatus {
 
 /**
  * A knowledge-base article.
- *
  * The id is a human-readable code (`KB-042`), not an autoincrement, and that is
  * load-bearing rather than decorative: `problems.kb_article_id` already stores
  * these strings as a soft reference, so keeping the shape means every existing
  * link keeps resolving and no row of `problems` has to be rewritten. It is also
  * the id support staff say out loud.
- *
  * No `customerId`. Every tenant-scoped table here carries one and the spec's
  * `kb_articles` deliberately does not — an article about resetting a password is
  * the same article for everyone, which is also how the static dataset this
  * replaces behaved.
  */
 model KbArticle {
-  id         String    @id
+  id         String   @id
   title      String
-  /** One-paragraph summary, shown in the browse list without loading the body. */
+  /**
+   * One-paragraph summary, shown in the browse list without loading the body.
+   */
   excerpt    String
-  /** Markdown-lite: "## " headings, "- " bullets, blank line = new block. */
+  /**
+   * Markdown-lite: "## " headings, "- " bullets, blank line = new block.
+   */
   body       String
-  categoryId Int       @map("category_id")
-  category   Category  @relation(fields: [categoryId], references: [id])
+  categoryId Int      @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id])
   tags       String[]
-  /** Rough reading time in minutes, written by the author rather than computed. */
-  readMin    Int       @map("read_min")
-  status     KbStatus  @default(published)
+  /**
+   * Rough reading time in minutes, written by the author rather than computed.
+   */
+  readMin    Int      @map("read_min")
+  status     KbStatus @default(published)
   /**
    * Who wrote it. Nullable because the articles that seeded this table predate
    * the notion of an author, and `SetNull` because retiring the person who wrote
    * an article must not take the article with them.
    */
-  authorId   Int?      @map("author_id")
-  author     User?     @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  authorId   Int?     @map("author_id")
+  author     User?    @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([categoryId])
   @@index([status])

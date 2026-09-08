@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { AuthUser } from "../../shared/auth";
-import { projectScopeWhere, resolveProjectCustomerId } from "./project.scope";
+import {
+  mustChooseProjectCustomer,
+  projectScopeWhere,
+  resolveProjectCustomerId,
+} from "./project.scope";
 
 const user = (over: Partial<AuthUser> = {}): AuthUser =>
   ({
@@ -9,6 +13,7 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
     name: "X",
     role: "super_admin",
     customerId: 7,
+    customerIds: [],
     permissions: [],
     ...over,
   }) as AuthUser;
@@ -22,13 +27,30 @@ describe("projectScopeWhere", () => {
     );
   });
 
-  it("confines everyone else to their own customer", () => {
+  it("confines everyone else to the customers they reach", () => {
     for (const role of ["super_admin", "admin", "user"] as const) {
       expect(projectScopeWhere(user({ role }))).toEqual({
-        customerId: 7,
+        customerId: { in: [7] },
         deletedAt: null,
       });
     }
+  });
+
+  it("widens to every customer a grant reaches, home included", () => {
+    expect(
+      projectScopeWhere(user({ role: "admin", customerIds: [7, 9] })),
+    ).toEqual({ customerId: { in: [7, 9] }, deletedAt: null });
+  });
+
+  it("is still not platform-wide once a grant covers every customer today", () => {
+    // The distinction the whole model rests on: reaching all of them now is not
+    // the same as reaching the one created tomorrow. A granted admin gets an
+    // explicit list; only `isPlatformWide` gets the unfiltered clause.
+    const granted = projectScopeWhere(
+      user({ role: "admin", customerIds: [7, 9] }),
+    );
+    expect(granted).not.toEqual({ deletedAt: null });
+    expect(granted.customerId).toBeDefined();
   });
 
   it("matches nothing for a customer-less principal below the top role", () => {
@@ -97,5 +119,37 @@ describe("resolveProjectCustomerId", () => {
     expect(
       resolveProjectCustomerId(user({ role: "admin", customerId: null }), 99),
     ).toBeNull();
+  });
+
+  it("makes someone who covers several say which one", () => {
+    const wide = user({ role: "admin", customerIds: [7, 9] });
+    // No default: with two customers in reach, picking one for them would file
+    // the project in a tenant nobody chose.
+    expect(resolveProjectCustomerId(wide, undefined)).toBeNull();
+    expect(resolveProjectCustomerId(wide, 9)).toBe(9);
+  });
+
+  it("refuses a customer outside the grant, however it is asked for", () => {
+    expect(
+      resolveProjectCustomerId(user({ role: "admin", customerIds: [7, 9] }), 99),
+    ).toBeNull();
+  });
+
+  it("still ignores the request when reach is a single customer", () => {
+    // One customer means there is nothing to choose, so a stale or hostile field
+    // cannot move the project — the pre-existing rule, unchanged.
+    expect(resolveProjectCustomerId(user({ role: "admin" }), 99)).toBe(7);
+  });
+});
+
+describe("mustChooseProjectCustomer", () => {
+  it("asks only when there is more than one answer", () => {
+    expect(mustChooseProjectCustomer(user({ role: "admin" }))).toBe(false);
+    expect(
+      mustChooseProjectCustomer(user({ role: "admin", customerIds: [7, 9] })),
+    ).toBe(true);
+    expect(
+      mustChooseProjectCustomer(user({ role: "super_admin", customerId: null })),
+    ).toBe(true);
   });
 });

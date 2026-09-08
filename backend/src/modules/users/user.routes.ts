@@ -22,4 +22,19 @@ router.patch(
   asyncHandler(userController.update),
 );
 
+// Which customers this person may work beyond their own. Deliberately its own
+// endpoint rather than a field on PATCH /:id — `user:write` is held by every
+// admin, and this is platform-wide only. Keeping it separate means the stricter
+// gate is the whole route, and no future field added to the patch body can
+// accidentally travel through the looser one.
+//
+// The gate itself is in the service (`mayGrantReach`), not middleware, because
+// it keys on reach rather than on a permission string, and `super_admin` holds
+// the `*` wildcard that any grant string would satisfy.
+router.put(
+  "/:id/reach",
+  requirePermission("user:write"),
+  asyncHandler(userController.setReach),
+);
+
 export const userRoutes = router;

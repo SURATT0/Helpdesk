@@ -93,17 +93,29 @@ These are load-bearing invariants — get them right in whatever layer you touch
   boundary. `users.customer_id` / `tickets.customer_id` carry it; `AuthUser.customerId` rides the JWT.
   Roles `super_admin > admin > user`: a **user** raises tickets and follows them, an **admin** works
   cases, a **super_admin** additionally manages the admins.
-  **Role and reach are two separate axes.** The role says what you may do; `customerId` says which
-  customers you reach — and cross-tenant reach requires *both* the top role and no customer of your
-  own. That predicate lives in exactly one place, `isPlatformWide` in `shared/auth.ts`; never re-derive
-  it inline, and never key cross-tenant access on the role name alone (a super_admin who belongs to a
+  **Role and reach are two separate axes.** The role says what you may do; reach says which customers
+  you see into. Cross-tenant reach requires *both* the top role and no customer of your own — that
+  predicate lives in exactly one place, `isPlatformWide` in `shared/auth.ts`; never re-derive it
+  inline, and never key cross-tenant access on the role name alone (a super_admin who belongs to a
   customer must stay inside it) or on `customerId == null` alone (staff who merely lack a customer must
   not be promoted to every tenant).
+  **`users.customer_id` is ownership, not reach.** It is the customer a person BELONGS to and what a
+  ticket they raise is filed under, so it stays single-valued. Which customers they may WORK is a
+  list: their own plus any granted in `user_customers`, answered by `customerReach` in `shared/auth.ts`
+  — the second predicate that must never be re-derived. Every row-level scope filters
+  `customerId: { in: customerReach(actor) }`; none of them may read `actor.customerId` directly.
+  Reach rides the access token, so a grant or revocation bites at the next sign-in or refresh.
+  **A grant is not platform-wide reach** and the two must stay distinct: covering every customer that
+  exists today is a list, while `isPlatformWide` also follows the platform to the customer created
+  tomorrow. Granting reach is platform-wide only (`mayGrantReach`) — an `admin` may create a customer,
+  so letting them also grant reach would let them make a tenant and walk into it unreviewed.
   Permission checks are middleware, but **row-level scope is enforced in the repository (WHERE
-  clause)**: users see only their own tickets; staff see everything within their own customer (across
-  all departments); a platform-wide super_admin sees every customer. The user directory/management is
-  scoped the same way, and **only a platform-wide super_admin may grant `super_admin`** — keyed on
-  reach, not role, so a customer's own super_admin cannot promote past their tenant.
+  clause)**: users see only their own tickets; staff see everything within the customers they reach
+  (across all departments); a platform-wide super_admin sees every customer. The user
+  directory/management is scoped the same way — reach lets you see a tenant's work, never makes you a
+  member of it, so a granted agent stays out of that customer's directory, assignee picker and
+  workload report. **Only a platform-wide super_admin may grant `super_admin`** — keyed on reach, not
+  role, so a customer's own super_admin cannot promote past their tenant.
   Team/department are retained for routing & display, not visibility.
 - **Auth:** access token (15 min, kept in memory only — never localStorage) + refresh token (7 day,
   httpOnly cookie, rotated on use; reuse of a revoked token revokes the whole family).

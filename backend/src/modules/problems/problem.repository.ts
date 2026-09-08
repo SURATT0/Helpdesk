@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  type AuthUser,
+} from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
 import { kbService } from "../kb/kb.service";
@@ -14,8 +18,9 @@ import type { UpdateProblemInput } from "./problem.validators";
 
 /**
  * Row-level problem visibility, mirroring `ticketScopeWhere`: a platform-wide
- * principal sees every customer, staff only their own. Staff without a customer
- * who are not platform-wide match nothing (defensive).
+ * principal sees every customer, staff only the ones they reach — normally just
+ * their own. Staff who reach no customer and are not platform-wide match nothing
+ * (defensive).
  *
  * A requester reaches a problem only THROUGH a ticket they can see. The register
  * itself is somebody else's work — other people's incidents, grouped by a cause
@@ -28,11 +33,12 @@ import type { UpdateProblemInput } from "./problem.validators";
  */
 export function problemScopeWhere(user: AuthUser): Prisma.ProblemWhereInput {
   if (isPlatformWide(user)) return {};
-  if (user.customerId == null) return { id: -1 };
-  const ownCustomer = { customerId: user.customerId };
-  if (user.role !== "user") return ownCustomer;
+  const reach = customerReach(user);
+  if (reach.length === 0) return { id: -1 };
+  const reachable = { customerId: { in: reach } };
+  if (user.role !== "user") return reachable;
   return {
-    AND: [ownCustomer, { tickets: { some: ticketScopeWhere(user) } }],
+    AND: [reachable, { tickets: { some: ticketScopeWhere(user) } }],
   };
 }
 

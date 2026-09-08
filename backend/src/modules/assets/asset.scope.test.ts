@@ -9,6 +9,7 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
     name: "X",
     role: "admin",
     customerId: 7,
+    customerIds: [],
     permissions: [],
     ...over,
   }) as AuthUser;
@@ -18,10 +19,10 @@ describe("assetScopeWhere", () => {
     expect(assetScopeWhere(user({ role: "super_admin", customerId: null }))).toEqual({});
   });
 
-  it("confines staff to their own customer", () => {
+  it("confines staff to the customers they reach", () => {
     for (const role of ["super_admin", "admin", "user"] as const) {
       expect(assetScopeWhere(user({ role, customerId: 7 }))).toEqual({
-        customerId: 7,
+        customerId: { in: [7] },
       });
     }
   });

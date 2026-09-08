@@ -16,6 +16,11 @@ const TABLES = [
   // rate limit and SLA window.
   "notification_settings",
   "audit_logs",
+  // Cross-tenant grants. TRUNCATE ... CASCADE would take these with `users`
+  // anyway, but named here like notification_settings above: a grant left
+  // behind would silently widen the next test's reach, which is the one kind of
+  // leftover that makes a scoping test pass for the wrong reason.
+  "user_customers",
   "ticket_status_history",
   "refresh_tokens",
   "tickets",

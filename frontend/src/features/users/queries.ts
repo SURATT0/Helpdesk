@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchUsers,
+  setUserReach,
   updateMyProfile,
   updateUser,
   type UpdateMyProfileInput,
@@ -61,5 +62,26 @@ export function useUpdateMyProfile(
       onSaved?.(user);
       qc.invalidateQueries({ queryKey: userKeys.all });
     },
+  });
+}
+
+/**
+ * Set which customers a member of staff may work beyond their own.
+ *
+ * Invalidates far more than the directory, and deliberately: reach decides what
+ * every scoped list returns, so a grant changes the ticket list, the projects,
+ * the assets and the dashboard for that person. Cheaper to drop the lot than to
+ * reason about which screens a tenant boundary touches.
+ *
+ * What it CANNOT do is refresh the granted person's own session — their reach
+ * is fixed in their access token until it is renewed. That is the server's
+ * behaviour, not something to paper over here.
+ */
+export function useSetUserReach() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, customerIds }: { id: number; customerIds: number[] }) =>
+      setUserReach(id, customerIds),
+    onSuccess: () => qc.invalidateQueries(),
   });
 }

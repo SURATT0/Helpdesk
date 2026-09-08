@@ -1,5 +1,5 @@
 import type { Role } from "@prisma/client";
-import { isPlatformWide } from "../../../shared/auth";
+import { customerReach, isPlatformWide } from "../../../shared/auth";
 
 /** The ticket a mailed reply claims, reduced to what the decision needs. */
 export type ReplyTargetFacts = {
@@ -13,7 +13,10 @@ export type ReplyTargetFacts = {
 export type ReplySenderFacts = {
   id: number;
   role: Role;
+  /** Home tenant. */
   customerId: number | null;
+  /** Customers granted beyond it — see UserCustomer. */
+  customerIds?: number[];
 };
 
 /**
@@ -26,7 +29,7 @@ export type ReplySenderFacts = {
  *
  *   participant   → requester, assignee, or a listed affected user;
  *   platform-wide → any ticket, any customer;
- *   other staff   → only inside their own customer.
+ *   other staff   → only inside a customer they reach.
  *
  * Cross-tenant reach goes through `isPlatformWide`, which requires the top role
  * AND no tenant of its own, so this agrees with `ticketScopeWhere`: staff who
@@ -49,5 +52,8 @@ export function senderMayReply(
   }
   if (isPlatformWide(sender)) return true;
   if (sender.role === "user") return false;
-  return sender.customerId != null && sender.customerId === ticket.customerId;
+  return (
+    ticket.customerId != null &&
+    customerReach(sender).includes(ticket.customerId)
+  );
 }

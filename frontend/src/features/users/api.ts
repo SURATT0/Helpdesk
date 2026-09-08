@@ -67,3 +67,25 @@ export async function updateUser(
   });
   return userEnvelopeSchema.parse(body).data;
 }
+
+/**
+ * Replace the whole set of customers a member of staff may work beyond their
+ * own. An empty array revokes everything.
+ *
+ * A replace rather than add/remove, matching the server: reach is a statement
+ * about a person, not a log of adjustments, so sending the intended set makes
+ * a retry harmless and leaves one audit row saying what it became.
+ *
+ * Platform-wide staff only — a customer's own super admin gets a 403, and so
+ * does anyone pointing this at themselves.
+ */
+export async function setUserReach(
+  id: number,
+  customerIds: number[],
+): Promise<User> {
+  const body = await apiRequest(`/users/${id}/reach`, {
+    method: "PUT",
+    body: JSON.stringify({ customerIds }),
+  });
+  return userEnvelopeSchema.parse(body).data;
+}

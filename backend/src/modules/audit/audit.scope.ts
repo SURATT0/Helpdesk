@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  type AuthUser,
+} from "../../shared/auth";
 
 /**
  * Row-level audit visibility as a Prisma where-clause — the audit equivalent of
@@ -8,7 +12,8 @@ import { isPlatformWide, type AuthUser } from "../../shared/auth";
  * `audit_logs` has no `customer_id` of its own, so the tenant is derived from the
  * ACTOR (`audit_logs.user_id → users.customer_id`):
  *   platform-wide → every entry, all customers, including system rows;
- *   customer-bound super_admin → entries written by users of their own customer;
+ *   super_admin with reach → entries written by users of the customers they
+ *                            reach, normally just their own;
  *   anyone else   → nothing (the route also requires `audit:read`).
  *
  * KNOWN LIMITATION, deliberate: entries with a null actor (system writes, e.g.
@@ -23,6 +28,7 @@ export function auditScopeWhere(user: AuthUser): Prisma.AuditLogWhereInput {
   if (isPlatformWide(user)) return {};
   // Ids are positive autoincrements, so this matches nothing — the same
   // "no tenant, no scope" sentinel problemScopeWhere uses.
-  if (user.customerId == null) return { id: -1 };
-  return { user: { customerId: user.customerId } };
+  const reach = customerReach(user);
+  if (reach.length === 0) return { id: -1 };
+  return { user: { customerId: { in: reach } } };
 }

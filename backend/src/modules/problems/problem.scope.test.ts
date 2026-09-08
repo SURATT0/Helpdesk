@@ -9,6 +9,7 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
     name: "X",
     role: "admin",
     customerId: 7,
+    customerIds: [],
     permissions: [],
     ...over,
   }) as AuthUser;
@@ -20,9 +21,9 @@ describe("problemScopeWhere", () => {
     );
   });
 
-  it("confines everyone else to their own customer", () => {
+  it("confines everyone else to the customers they reach", () => {
     expect(problemScopeWhere(user({ role: "super_admin", customerId: 3 }))).toEqual({
-      customerId: 3,
+      customerId: { in: [3] },
     });
   });
 
@@ -33,7 +34,7 @@ describe("problemScopeWhere", () => {
     // can bring a problem into reach.
     expect(problemScopeWhere(user({ role: "user", id: 42, customerId: 7 }))).toEqual({
       AND: [
-        { customerId: 7 },
+        { customerId: { in: [7] } },
         { tickets: { some: { deletedAt: null, requesterId: 42 } } },
       ],
     });
