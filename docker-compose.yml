@@ -51,6 +51,26 @@ services:
       #
       # Keeping localhost first means desktop, the E2E suite and the phone all
       # work at once, and emailed links keep naming a host that resolves.
+      #
+      # A LAN address is enough to CHECK A LAYOUT on a phone and misleading for
+      # anything else. `http://<ip>` is not a secure context — only HTTPS and
+      # `localhost` are — and the browser withholds a set of APIs there that the
+      # app uses: `crypto.randomUUID` (whose absence took the whole page down
+      # until `randomId()` got a fallback), the camera behind a file input's
+      # "Take Photo" (a black frame on iOS Safari), and the clipboard. Measured
+      # on one static page served two ways:
+      #
+      #   http://<lan-ip>:8080   isSecureContext false   camera black
+      #   https://<tunnel>       isSecureContext true    camera works
+      #
+      # So bugs appear over a LAN address that do not exist in the deployed app.
+      # For anything beyond layout, put HTTPS in front — a throwaway tunnel does:
+      #
+      #   npx untun@latest tunnel http://localhost:3000
+      #
+      # then add that URL here and rebuild `web` with a matching
+      # NEXT_PUBLIC_API_URL, and set COOKIE_SECURE=true since TLS now terminates
+      # in front of the stack.
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       # Attachment files live on a named volume so they survive image rebuilds
       # (the default ./.uploads is inside the container's ephemeral filesystem).
