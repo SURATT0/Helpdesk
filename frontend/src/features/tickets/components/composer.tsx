@@ -7,14 +7,11 @@ import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
 import { useUploadAttachment } from "@/features/attachments/queries";
 import { sendTyping } from "../api";
 import { useCreateComment, useSendReply } from "../queries";
 
-const ACCEPT =
-  "image/*,.pdf,.csv,.xls,.xlsx,application/pdf,text/csv," +
-  "application/vnd.ms-excel," +
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -335,7 +332,7 @@ export function Composer({
           ref={fileInputRef}
           type="file"
           multiple
-          accept={ACCEPT}
+          accept={ATTACHMENT_ACCEPT}
           className="hidden"
           onChange={(e) => {
             addFiles(e.target.files);

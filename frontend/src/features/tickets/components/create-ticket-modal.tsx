@@ -11,6 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { randomId } from "@/lib/random-id";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
 import { uploadAttachment } from "@/features/attachments/api";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
@@ -18,10 +19,6 @@ import { useCategories, useCreateTicket } from "../queries";
 import { PRIORITIES_ASCENDING, TEXT_MAX, type Priority } from "@/lib/domain";
 
 // Images + common help-desk data files (mirrors the backend allowlist).
-const ACCEPT =
-  "image/*,.pdf,.csv,.xls,.xlsx,application/pdf,text/csv," +
-  "application/vnd.ms-excel," +
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -346,7 +343,7 @@ export function CreateTicketModal({
               ref={fileInputRef}
               type="file"
               multiple
-              accept={ACCEPT}
+              accept={ATTACHMENT_ACCEPT}
               className="hidden"
               onChange={(e) => {
                 addFiles(e.target.files);
