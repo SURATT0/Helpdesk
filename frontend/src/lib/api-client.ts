@@ -1,8 +1,22 @@
 import { logger } from "./logger";
 import { tokenStore } from "@/features/auth/token-store";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+/**
+ * Same-origin by default: a relative path, so every call goes back to whatever
+ * host served the page and the Next server proxies it on to the API (see the
+ * rewrite in next.config.mjs). That is what lets one URL — localhost, a LAN
+ * address, an HTTPS tunnel — serve the whole app with no rebuild, and it also
+ * takes CORS and cross-site cookies out of the picture entirely.
+ *
+ * Set NEXT_PUBLIC_API_URL to an absolute URL only to point the browser straight
+ * at an API on another host, bypassing the proxy; then the API's WEB_ORIGIN must
+ * list this app's origin again.
+ *
+ * `||`, not `??`: a build arg that is declared but left empty (an unset
+ * `${NEXT_PUBLIC_API_URL:-}` in compose) inlines as `""`, which is "no opinion"
+ * here, not "call the site root".
+ */
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 export class ApiError extends Error {
   constructor(

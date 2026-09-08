@@ -36,21 +36,17 @@ services:
       # Override per deployment; it must match the calendar the users read.
       TZ: ${TZ:-Asia/Bangkok}
       DATABASE_URL: postgresql://deskly:deskly@postgres:5432/deskly?schema=public
-      # Every origin the browser may load the app from, comma-separated. The
-      # FIRST one is canonical and is what goes into emailed links; the rest are
-      # only added to the CORS allow-list.
+      # The canonical address of the web app: the host that goes into the "view
+      # the ticket" link in every outbound email. It must still resolve tomorrow
+      # from wherever someone opens their mail, so keep localhost (or the real
+      # public hostname) first — a phone's LAN address would be a dead link.
       #
-      # To reach the stack from a phone on the same Wi-Fi, add the machine's LAN
-      # address here AND rebuild `web` with a matching NEXT_PUBLIC_API_URL (that
-      # one is baked into the bundle at build time, so an env change alone does
-      # nothing). Both are read from the shell or a root `.env`:
-      #
-      #   WEB_ORIGIN=http://localhost:3000,http://192.168.1.20:3000 \
-      #   NEXT_PUBLIC_API_URL=http://192.168.1.20:4000/api/v1 \
-      #     docker compose up -d --build api web
-      #
-      # Keeping localhost first means desktop, the E2E suite and the phone all
-      # work at once, and emailed links keep naming a host that resolves.
+      # It is ALSO the CORS allow-list (comma-separated for several), but that
+      # list no longer decides whether a phone can use the app: the browser only
+      # ever talks to the web app's own origin now and `web` forwards /api/v1 to
+      # the api, so there is no cross-origin call to allow. Reaching this stack
+      # from a phone or a tunnel takes no change here and no rebuild —
+      # `docker compose up -d` and open the address.
       #
       # A LAN address is enough to CHECK A LAYOUT on a phone and misleading for
       # anything else. `http://<ip>` is not a secure context — only HTTPS and
@@ -68,9 +64,9 @@ services:
       #
       #   npx untun@latest tunnel http://localhost:3000
       #
-      # then add that URL here and rebuild `web` with a matching
-      # NEXT_PUBLIC_API_URL, and set COOKIE_SECURE=true since TLS now terminates
-      # in front of the stack.
+      # and open the URL it prints. Nothing here has to change for that to work;
+      # set WEB_ORIGIN to the tunnel only if you also want emailed links to name
+      # it, and COOKIE_SECURE=true once TLS terminates in front of the stack.
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       # Attachment files live on a named volume so they survive image rebuilds
       # (the default ./.uploads is inside the container's ephemeral filesystem).
@@ -87,8 +83,12 @@ services:
       ACCESS_TTL_SEC: "900"
       REFRESH_TTL_SEC: "604800"
       # Brute-force login guard (attempts/IP/15min). Raised for this demo/e2e
-      # stack because the Playwright suite logs in many times from one IP; lower
-      # it (or drop the override → default 20) for a real deployment.
+      # stack because the Playwright suite logs in many times from one IP — and
+      # now for a second reason: `web` proxies /api/v1 here, so every login
+      # arrives from the web container and the window is shared by the whole
+      # site rather than per visitor. Lowering it to the default 20 here would
+      # let one person's failed logins lock everyone out. See AUTH_RATE_LIMIT in
+      # backend/.env.example.
       AUTH_RATE_LIMIT: "1000"
       # Email-to-ticket webhook. Setting the secret enables
       # POST /api/v1/integrations/email-inbound (providers present it via the
@@ -184,12 +184,20 @@ services:
     build:
       context: ./frontend
       args:
-        # Baked into the client bundle at BUILD time — the URL the browser uses
-        # to reach the API. Because it is baked, pointing a phone at this stack
-        # needs `--build`, not just a restart; and it must name an address the
-        # PHONE can resolve, so `localhost` is wrong there (that is the phone
-        # itself). See the WEB_ORIGIN note on the api service.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+        # Where THIS server forwards /api/v1/* to. A hop inside the compose
+        # network that no browser ever sees, so it is the same string however
+        # the app is reached.
+        API_PROXY_TARGET: http://api:4000
+        # Where the BROWSER goes for the API. Empty — the default — leaves it on
+        # the app's own origin (`/api/v1`) and through the proxy above, so a
+        # phone, a tunnel and localhost all work off one image with no rebuild.
+        #
+        # Set it to an absolute URL only to send the browser straight at an API
+        # somewhere else. That is baked into the bundle at BUILD time, so it
+        # needs `--build`, it must name an address the PHONE can resolve
+        # (`localhost` is the phone itself), and the api's WEB_ORIGIN has to
+        # list this app's origin for CORS.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: deskly-web
     restart: unless-stopped
     depends_on:
