@@ -138,6 +138,13 @@ export const createTicketBody = z.object({
   subject: freeText({ min: 3, max: TEXT_MAX.SUBJECT }),
   description: freeText({ max: TEXT_MAX.BODY }),
   categoryId: z.coerce.number().int().positive(),
+  /**
+   * Which project to file this under. Optional here even though the web form
+   * asks for it: the same endpoint serves callers with no project to give, and
+   * the column is nullable for good reasons (see Ticket.projectId). Making the
+   * FORM insist is a rule about that form, not about the API.
+   */
+  projectId: z.coerce.number().int().positive().nullish(),
   priority: priority.default("medium"),
 });
 

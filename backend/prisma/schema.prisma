@@ -132,6 +132,8 @@ model Customer {
   problems    Problem[]
   projects    Project[]
   settings    NotificationSettings?
+  /// Categories private to this customer. Shared ones have a null customerId.
+  categories  Category[]
   /// Staff granted reach INTO this customer without belonging to it.
   reachGrants UserCustomer[]
   createdAt   DateTime              @default(now()) @map("created_at")
@@ -237,6 +239,8 @@ model Project {
   backupOwnerId Int?      @map("backup_owner_id")
   backupOwner   User?     @relation("ProjectBackupOwner", fields: [backupOwnerId], references: [id])
   members       User[]    @relation("ProjectMember")
+  /// Tickets filed under this project. Routing AND grouping, never visibility.
+  tickets       Ticket[]
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   // Soft delete, super-admin only, and refused while anyone is still a member.
@@ -252,14 +256,17 @@ model Project {
   deletedById   Int?      @map("deleted_by_id")
   deletedBy     User?     @relation("ProjectDeletedBy", fields: [deletedById], references: [id])
 
-  // Names are unique per customer, not globally: two customers may each run a
-  // project called "Migration" without colliding.
+  // Names are unique per customer AMONG LIVE PROJECTS, not globally: two
+  // customers may each run a "Migration", and archiving one frees the name for
+  // the next. That last part is a partial unique index
+  // (`WHERE deleted_at IS NULL`) which Prisma cannot express, so it lives in
+  // the migration as raw SQL and is NOT declared here — see the "Database
+  // objects Prisma does not know about" note in backend/CLAUDE.md, and
+  // constraints.integration.test.ts, which fails if it is ever dropped.
   //
-  // Note this constraint does NOT exclude deleted rows: a deleted "Migration"
-  // still occupies the name for its customer, so recreating one requires a new
-  // name. Deliberate — a partial unique index would let two projects share a
-  // name in the audit trail, where only the id distinguishes them.
-  @@unique([customerId, name])
+  // The trade, accepted deliberately: two archived projects may now share a
+  // name, so in the audit trail only the id tells them apart.
+  @@unique([id, customerId])
   @@index([customerId])
   @@map("projects")
 }
@@ -366,9 +373,21 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+/// What a ticket is about. Either the platform's own, or one customer's.
+///
+/// `customerId` is nullable and null means SHARED — available to every tenant.
+/// That is not a placeholder for un-migrated data: the six categories the desk
+/// started with are genuinely everyone's, 292 tickets point at them, and giving
+/// each customer a private copy would have meant rewriting every one of those
+/// rows to say something no one had decided. So null is a real state with a
+/// meaning, and a customer's own categories sit alongside it rather than
+/// replacing it. A picker shows the shared ones plus that customer's.
 model Category {
   id            Int         @id @default(autoincrement())
-  name          String      @unique
+  name          String
+  /// Null = shared with every customer. A value confines it to that tenant.
+  customerId    Int?        @map("customer_id")
+  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: Restrict)
   defaultTeamId Int?        @map("default_team_id") // auto-assignment target
   defaultTeam   Team?       @relation(fields: [defaultTeamId], references: [id])
   tickets       Ticket[]
@@ -376,6 +395,12 @@ model Category {
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 
+  // Unique per owner. NOT the whole story: Postgres treats NULLs as distinct,
+  // so this constraint alone would let two SHARED categories both be called
+  // "Hardware". The migration adds a partial unique index over `name WHERE
+  // customer_id IS NULL` to close that half — see the migration's own note.
+  @@unique([customerId, name])
+  @@index([customerId])
   @@map("categories")
 }
 
@@ -391,6 +416,25 @@ model Ticket {
   assignee       User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
   categoryId     Int                   @map("category_id")
   category       Category              @relation(fields: [categoryId], references: [id])
+  /// Which project this ticket belongs to, if any.
+  ///
+  /// Nullable and staying that way. Not a column waiting to be tightened: mail
+  /// and CSV arrive naming no project, a customer may run none at all, and the
+  /// tickets raised before this column existed have no project anyone can
+  /// honestly infer. Requiring it in the web form is a rule for that one path
+  /// and belongs in its validator, not here, where it would break intake.
+  ///
+  /// A project only ROUTED a ticket before this: the assignee was read from the
+  /// requester's project at creation and nothing recorded which one. So moving
+  /// someone between projects silently rewrote where their past work appeared
+  /// to have come from — this column is what fixes that.
+  ///
+  /// The tenant match is enforced in the database, not by convention: the
+  /// migration adds a composite foreign key on (project_id, customer_id) so a
+  /// ticket can never point at another customer's project. Prisma cannot
+  /// express that, so it lives in raw SQL beside this relation.
+  projectId      Int?                  @map("project_id")
+  project        Project?              @relation(fields: [projectId, customerId], references: [id, customerId], onDelete: Restrict)
   // Tenant boundary (= the requester's customer). Required, unlike users.customerId:
   // a user with no customer is platform staff, but a TICKET with no customer is
   // unreachable — ticketScopeWhere matches staff on customerId equality, so a null

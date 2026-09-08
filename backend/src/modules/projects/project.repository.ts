@@ -154,6 +154,50 @@ export const projectRepository = {
     };
   },
 
+  /**
+   * The caseworker for a NAMED project, and a check that it is one this
+   * customer may be given.
+   *
+   * The sibling of `findRoutingForRequester` above, for when the ticket says
+   * which project it belongs to instead of leaving it to be inferred. The named
+   * project wins: someone who files under project X is asking for X's
+   * caseworker, and routing to the requester's own project instead would
+   * quietly ignore what they said.
+   *
+   * `ok` is separate from the routing because they answer different questions.
+   * A project that is missing, archived, or another customer's is a BAD
+   * REQUEST — the composite foreign key would refuse the insert anyway, but as
+   * a 500 rather than a sentence the caller can act on. A project that exists
+   * and simply has nobody available is fine, and leaves the ticket in the queue.
+   */
+  async findRoutingForProject(
+    projectId: number,
+    customerId: number,
+    db: Db = prisma,
+  ): Promise<{ ok: boolean; routing: ProjectRouting | null }> {
+    const project = await db.project.findFirst({
+      where: { id: projectId, customerId, deletedAt: null },
+      select: {
+        ownerId: true,
+        owner: { select: { availableForAssignment: true, isActive: true } },
+        backupOwnerId: true,
+        backupOwner: { select: { availableForAssignment: true, isActive: true } },
+      },
+    });
+    if (!project) return { ok: false, routing: null };
+    const usable = (u: { availableForAssignment: boolean; isActive: boolean } | null) =>
+      (u?.availableForAssignment ?? false) && (u?.isActive ?? false);
+    return {
+      ok: true,
+      routing: {
+        ownerId: project.ownerId,
+        ownerAvailable: usable(project.owner),
+        backupOwnerId: project.backupOwnerId,
+        backupOwnerAvailable: usable(project.backupOwner),
+      },
+    };
+  },
+
   async create(
     data: {
       name: string;

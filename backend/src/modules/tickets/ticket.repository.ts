@@ -107,6 +107,20 @@ export type Ticket = {
    */
   assigneeId: number | null;
   category: string;
+  /**
+   * The project this ticket belongs to, or null.
+   *
+   * Grouping and routing, never visibility: a ticket in a project is still
+   * visible to every agent of its customer, exactly as before. Null is an
+   * ordinary state — mail and CSV name no project, and most tickets raised
+   * before the column existed have none.
+   */
+  project: { id: number; name: string } | null;
+  /**
+   * The customer this ticket is filed under. Shown only to a viewer who can
+   * see more than one — for everyone else it is the same value on every row.
+   */
+  customer: { id: number; name: string } | null;
   slaDue: string;
   slaState: SlaState;
   /**
@@ -175,6 +189,16 @@ export type CreateTicketInput = {
   priority: Priority;
   requesterId: number;
   /**
+   * Which project to file this under. Optional everywhere — mail and CSV name
+   * none, and a customer may run none.
+   *
+   * Validated against the REQUESTER's customer, not the caller's: the ticket is
+   * filed under the requester's tenant, so that is the tenant the project has
+   * to belong to. An importer with reach into two customers filing for someone
+   * in one of them must not be able to attach the other's project.
+   */
+  projectId?: number | null;
+  /**
    * Who performed the creation, for history/audit. Defaults to the requester
    * (self-service). On CSV import the importer differs from the requester.
    */
@@ -192,6 +216,8 @@ const ticketInclude = {
   requester: true,
   assignee: true,
   category: true,
+  project: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true } },
   problem: { select: { id: true, title: true, status: true } },
   affectedUsers: {
     select: { user: { select: { id: true, name: true, email: true } } },
@@ -270,6 +296,8 @@ function toTicketDto(
     assignee: row.assignee?.name ?? null,
     assigneeId: row.assigneeId,
     category: row.category.name,
+    project: row.project,
+    customer: row.customer,
     slaDue,
     slaState,
     dueAt: row.dueAt?.toISOString() ?? null,
@@ -641,18 +669,47 @@ export const ticketRepository = {
           );
         }
 
-        // Auto-assignment. If the requester belongs to a project, the ticket goes
-        // to that project's caseworker — its owner, or the backup when the owner is
-        // unavailable. Read inside this transaction so the routing decision sees
-        // the same snapshot as the insert.
+        // The category has to be one this tenant may use: their own, or one of
+        // the shared ones. Checked here rather than left to the picker, because
+        // an id in a request body is not a choice made in a picker — without
+        // this, naming another customer's category id files a ticket under a
+        // label from a tenant the requester cannot see.
+        if (category.customerId != null && category.customerId !== requester.customerId) {
+          throw BadRequest("Unknown category");
+        }
+
+        // Auto-assignment, from a project. Two ways to reach one, and the
+        // explicit one wins: a ticket that NAMES a project is asking for that
+        // project's caseworker, and falling back to the requester's own would
+        // quietly ignore what the caller said. With no project named, this is
+        // the pre-existing behaviour exactly — the requester's project routes it.
         //
-        // Falling through to null is the pre-existing behaviour and a fine outcome:
-        // an unassigned ticket sits in the queue where the category's default team
-        // picks it up (implicitly, via the repository scope), which is better than
-        // parking it on someone who is away.
-        const assigneeId = resolveRoutedAssignee(
-          await projectRepository.findRoutingForRequester(input.requesterId, tx),
-        );
+        // Read inside this transaction so the routing decision sees the same
+        // snapshot as the insert.
+        //
+        // Falling through to null is a fine outcome either way: an unassigned
+        // ticket sits in the queue where the category's default team picks it up,
+        // which is better than parking it on someone who is away.
+        const projectId = input.projectId ?? null;
+        let routing;
+        if (projectId != null) {
+          const named = await projectRepository.findRoutingForProject(
+            projectId,
+            requester.customerId,
+            tx,
+          );
+          // Missing, archived, or another customer's. The composite foreign key
+          // would refuse the insert regardless, but as a 500 rather than
+          // something the caller can read and fix.
+          if (!named.ok) throw BadRequest(`Unknown project #${projectId}`);
+          routing = named.routing;
+        } else {
+          routing = await projectRepository.findRoutingForRequester(
+            input.requesterId,
+            tx,
+          );
+        }
+        const assigneeId = resolveRoutedAssignee(routing);
 
         const now = new Date();
         const created = await tx.ticket.create({
@@ -665,6 +722,7 @@ export const ticketRepository = {
             customerId: requester.customerId,
             assigneeId,
             categoryId: input.categoryId,
+            projectId,
             dueAt: computeDueAt(input.priority, now),
             createdAt: now,
             idempotencyKey: input.idempotencyKey ?? null,
@@ -756,10 +814,52 @@ export const ticketRepository = {
     }
   },
 
-  /** Resolve a category name to its id (case-insensitive). Null if unknown. */
-  async findCategoryIdByName(name: string): Promise<number | null> {
+  /**
+   * Resolve a category name to its id (case-insensitive), within one tenant.
+   *
+   * Scoped now that a category may belong to a customer: an unscoped lookup
+   * would let an import name another tenant's category and file a ticket under
+   * a label its own customer cannot see.
+   *
+   * The customer's OWN wins over the shared one of the same name. A tenant that
+   * has made its own "Hardware" has said which one it means, and falling back
+   * to the platform's would quietly file the row somewhere else. The order by
+   * `customerId desc` puts the non-null first.
+   */
+  async findCategoryIdByName(
+    name: string,
+    customerId: number,
+  ): Promise<number | null> {
     const row = await prisma.category.findFirst({
-      where: { name: { equals: name.trim(), mode: "insensitive" } },
+      where: {
+        name: { equals: name.trim(), mode: "insensitive" },
+        OR: [{ customerId: null }, { customerId }],
+      },
+      orderBy: { customerId: "desc" },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  },
+
+  /**
+   * Resolve a LIVE project name to its id (case-insensitive) within one tenant.
+   *
+   * Same scoping and the same reason as the category lookup above, with one
+   * more: the tenant here is the REQUESTER's, never the importer's. An importer
+   * who reaches two customers and files a row for someone in one of them must
+   * not be able to name the other's project — and the composite foreign key
+   * would refuse that insert anyway, as a 500 instead of a readable row error.
+   */
+  async findProjectIdByName(
+    name: string,
+    customerId: number,
+  ): Promise<number | null> {
+    const row = await prisma.project.findFirst({
+      where: {
+        name: { equals: name.trim(), mode: "insensitive" },
+        customerId,
+        deletedAt: null,
+      },
       select: { id: true },
     });
     return row?.id ?? null;

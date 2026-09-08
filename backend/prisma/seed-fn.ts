@@ -402,11 +402,23 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     const backupOwnerId = p.backupOwner
       ? (userIds.get(p.backupOwner) ?? null)
       : null;
-    const row = await prisma.project.upsert({
-      where: { customerId_name: { customerId, name: p.name } },
-      update: { ownerId, backupOwnerId },
-      create: { name: p.name, customerId, ownerId, backupOwnerId },
+    // Find-then-write rather than `upsert`. (customer, name) is no longer a
+    // Prisma unique — live projects are kept distinct by a partial index the
+    // ORM cannot see — so there is no compound key to upsert on. Matching only
+    // LIVE rows is also the behaviour we want: re-seeding must not resurrect a
+    // project someone archived, it must make a new one, exactly as the app would.
+    const existing = await prisma.project.findFirst({
+      where: { customerId, name: p.name, deletedAt: null },
+      select: { id: true },
     });
+    const row = existing
+      ? await prisma.project.update({
+          where: { id: existing.id },
+          data: { ownerId, backupOwnerId },
+        })
+      : await prisma.project.create({
+          data: { name: p.name, customerId, ownerId, backupOwnerId },
+        });
     for (const member of p.members) {
       const memberId = userIds.get(member);
       if (memberId == null) continue;
@@ -420,11 +432,24 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   const categoryIds = new Map<string, number>();
   for (const c of CATEGORIES) {
     const defaultTeamId = teamIds.get(c.team);
-    const row = await prisma.category.upsert({
-      where: { name: c.name },
-      update: { defaultTeamId },
-      create: { name: c.name, defaultTeamId },
+    // The seed's categories are the SHARED ones — customerId null, available to
+    // every tenant. `name` is no longer globally unique (a customer may name
+    // their own category anything), so the key is the pair, and null on the
+    // customer side is matched explicitly rather than upserted on: Prisma's
+    // compound-unique key cannot carry a null, and Postgres would not match it
+    // if it could.
+    const existing = await prisma.category.findFirst({
+      where: { name: c.name, customerId: null },
+      select: { id: true },
     });
+    const row = existing
+      ? await prisma.category.update({
+          where: { id: existing.id },
+          data: { defaultTeamId },
+        })
+      : await prisma.category.create({
+          data: { name: c.name, customerId: null, defaultTeamId },
+        });
     categoryIds.set(c.name, row.id);
   }
 

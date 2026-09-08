@@ -36,6 +36,13 @@ type Draft = {
    */
   status?: string;
   /**
+   * Only present when the file carried a project column. Optional the whole way
+   * down: a blank cell means "no project", which is an ordinary ticket, so it is
+   * never a validation error here — only a name the server cannot resolve is,
+   * and that comes back as `unknown_project`.
+   */
+  project?: string;
+  /**
    * Why the server refused this row, as its code. The wording is built at render
    * time from this app's dictionary — the server's own `error` string is written
    * in English and would otherwise land in the middle of a Thai screen.
@@ -161,6 +168,7 @@ export function ImportTicketsModal({
             category: categoryByLower.get(rawCategory.toLowerCase()) ?? "",
             requesterEmail: at("requesterEmail"),
             ...(cols.status === undefined ? {} : { status: at("status") }),
+            ...(cols.project === undefined ? {} : { project: at("project") }),
           };
         });
         setBanner(t("import.rowsFound", { n: next.length }));
@@ -197,6 +205,13 @@ export function ImportTicketsModal({
         return (DB_STATUSES as readonly string[]).includes(v.toLowerCase())
           ? null
           : t("import.err.status");
+      case "project":
+        // Never invalid here. Whether a name resolves depends on the requester's
+        // customer, which only the server knows — checking it against this
+        // reader's own projects would refuse a row an importer with reach into
+        // two tenants is entitled to file. A bad name comes back as
+        // `unknown_project` on submit.
+        return null;
     }
   }
 
@@ -212,6 +227,8 @@ export function ImportTicketsModal({
     switch (d.serverReason) {
       case "unknown_category":
         return t("import.srv.unknownCategory", { category: d.category });
+      case "unknown_project":
+        return t("import.srv.unknownProject", { project: d.project ?? "" });
       case "unknown_requester":
         return t("import.srv.unknownRequester", { email: d.requesterEmail });
       case "create_failed":

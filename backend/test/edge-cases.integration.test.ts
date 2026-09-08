@@ -29,7 +29,9 @@ async function login(email: string): Promise<string> {
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 async function categoryId(name: string): Promise<number> {
-  const c = await prisma.category.findUniqueOrThrow({ where: { name } });
+  const c = await prisma.category.findFirstOrThrow({
+    where: { name, customerId: null },
+  });
   return c.id;
 }
 
