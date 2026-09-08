@@ -9,6 +9,11 @@ export const userSchema = z.object({
   role: userRoleSchema,
   team: z.object({ id: z.number(), name: z.string() }).nullable(),
   /**
+   * The customer this person BELONGS to; null for platform staff. Distinct from
+   * `reach` below — this is where they are, that is where else they may work.
+   */
+  customer: z.object({ id: z.number(), name: z.string() }).nullable(),
+  /**
    * Routing group this user's new tickets flow through — never a visibility
    * scope. Null means nothing is routed and their tickets land in the queue.
    */
@@ -24,6 +29,13 @@ export const userSchema = z.object({
    * `availableForAssignment` above: that one is a rota, this one is the door.
    */
   isActive: z.boolean(),
+  /**
+   * Customers this person may work BEYOND the one they belong to.
+   *
+   * Only the granted extras: their own customer is not repeated here, so an
+   * empty array — which is almost everyone — means "just their own".
+   */
+  reach: z.array(z.object({ id: z.number(), name: z.string() })),
   /** The language this person has chosen, or null if they never have. */
   language: z.enum(["en", "th"]).nullable(),
   createdAt: z.string(),

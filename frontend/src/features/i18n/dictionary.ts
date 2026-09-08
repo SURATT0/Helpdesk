@@ -659,6 +659,20 @@ const en: Dict = {
   "handover.remaining":
     "{n} more still to move — run it again to continue (one call is capped).",
   "handover.statusNote": "Statuses moved: {statuses}",
+  "reach.none": "Add customer access",
+  "reach.editFor": "Customer access for {name}",
+  "reach.title": "Customer access",
+  "reach.note":
+    "Which other customers {name} may work in. This is access to their tickets, not membership of their desk.",
+  "reach.belongsTo": "Belongs to {customer}",
+  "reach.loading": "Loading customers…",
+  "reach.noOtherCustomers": "There is no other customer to give access to.",
+  "reach.tokenLag":
+    "Takes effect the next time they sign in — an open session keeps the access it started with for up to 15 minutes.",
+  "reach.cancel": "Cancel",
+  "reach.save": "Save access",
+  "reach.close": "Close",
+  "reach.error": "Couldn't change customer access",
   "users.explainer":
     "A user's project decides who their new tickets are assigned to. Marking someone away sends their project's tickets to the backup caseworker instead — it does not change what they can see or work on.",
   "users.saveError": "Couldn't save that change",
@@ -1361,6 +1375,20 @@ const th: Dict = {
   "handover.remaining":
     "ยังเหลืออีก {n} Ticket — กดอีกครั้งเพื่อย้ายต่อ (หนึ่งครั้งมีเพดานจำกัด)",
   "handover.statusNote": "สถานะที่ย้าย: {statuses}",
+  "reach.none": "เพิ่มสิทธิ์เข้าถึงลูกค้า",
+  "reach.editFor": "สิทธิ์เข้าถึงลูกค้าของ {name}",
+  "reach.title": "สิทธิ์เข้าถึงลูกค้า",
+  "reach.note":
+    "{name} ทำงานให้ลูกค้ารายใดได้อีกบ้าง เป็นสิทธิ์เข้าถึง Ticket ของลูกค้ารายนั้น ไม่ใช่การเป็นสมาชิกของทีมนั้น",
+  "reach.belongsTo": "สังกัด {customer}",
+  "reach.loading": "กำลังโหลดรายชื่อลูกค้า…",
+  "reach.noOtherCustomers": "ไม่มีลูกค้ารายอื่นให้เพิ่มสิทธิ์",
+  "reach.tokenLag":
+    "มีผลเมื่อเขาเข้าสู่ระบบครั้งถัดไป — เซสชันที่เปิดอยู่จะยังใช้สิทธิ์เดิมได้นานสุด 15 นาที",
+  "reach.cancel": "ยกเลิก",
+  "reach.save": "บันทึกสิทธิ์",
+  "reach.close": "ปิด",
+  "reach.error": "เปลี่ยนสิทธิ์เข้าถึงลูกค้าไม่สำเร็จ",
   "users.explainer":
     "โปรเจกต์ของผู้ใช้กำหนดว่า Ticket ใหม่ของเขาจะถูก assign ให้ใคร การตั้งว่าไม่สะดวกจะทำให้ Ticket ของโปรเจกต์นั้นไปที่ผู้ดูแลสำรองแทน — ไม่ได้เปลี่ยนสิ่งที่เขามองเห็นหรือทำงานได้",
   "users.saveError": "บันทึกการเปลี่ยนแปลงไม่สำเร็จ",

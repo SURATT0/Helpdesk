@@ -4,7 +4,7 @@ import { env } from "../../config/env";
 import { Unauthorized } from "../../shared/errors";
 import type { Role } from "../../shared/domain";
 import type { Lang } from "../../shared/i18n";
-import { customerReach } from "../../shared/auth";
+import { customerReach, isPlatformWide } from "../../shared/auth";
 import { authRepository } from "./auth.repository";
 import {
   generateRefreshToken,
@@ -36,6 +36,16 @@ export type PublicUser = {
    * them and not to this DTO.
    */
   language: Lang | null;
+  /**
+   * Whether this principal reaches every customer, including ones created
+   * later. The ANSWER, not the inputs it is computed from.
+   *
+   * The client needs it to decide whether to offer cross-tenant controls at
+   * all, and shipping `customerId` for the client to test itself would be a
+   * second copy of `isPlatformWide` — in a language where nobody would notice
+   * it drifting from the server's. The server decides; the client is told.
+   */
+  platformWide: boolean;
 };
 
 export type Session = {
@@ -83,6 +93,7 @@ function toPublicUser(u: UserRow): PublicUser {
     teamId: u.teamId,
     availableForAssignment: u.availableForAssignment,
     language: u.language,
+    platformWide: isPlatformWide(u),
   };
 }
 

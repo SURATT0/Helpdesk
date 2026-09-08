@@ -11,6 +11,7 @@ import { useAuth } from "@/features/auth/context";
 import { useProjects } from "@/features/projects/queries";
 import { useUpdateUser, useUsers } from "@/features/users/queries";
 import { AccountToggle } from "@/features/users/components/account-toggle";
+import { CustomerAccess } from "@/features/users/components/customer-access";
 import { AvailabilityToggle } from "@/features/users/components/availability-toggle";
 import { HandoverQueueModal } from "@/features/users/components/handover-queue-modal";
 import { ProjectSelect } from "@/features/users/components/project-select";
@@ -58,6 +59,10 @@ export default function UsersPage() {
   // Handing over a whole queue needs ticket:assign — managers and admins only,
   // unlike single-ticket assignment which any agent may do.
   const canHandover = canEdit;
+  // Reach is the one thing on this page a customer's own super admin may NOT
+  // change: granting it crosses the tenant boundary, so it is platform-wide
+  // only. The server is the gate; this just avoids offering a refused control.
+  const canGrantReach = me?.platformWide === true;
   const [handoverFor, setHandoverFor] = React.useState<User | null>(null);
   // Projects are only needed for the editable picker, and requesters/agents
   // cannot write anyway — so don't fetch them for a read-only view.
@@ -130,7 +135,14 @@ export default function UsersPage() {
               >
                 <span className="flex items-center gap-2 font-medium text-ink">
                   <Avatar name={u.name} tone={toneForName(u.name)} size={24} />
-                  <span className="truncate">{u.name}</span>
+                  {/* Cross-tenant access sits under the name rather than in a
+                      column of its own: it is empty on nearly every row, and a
+                      tenth column would cost every reader width on a table that
+                      already scrolls sideways on a phone. */}
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{u.name}</span>
+                    <CustomerAccess user={u} canGrant={canGrantReach} />
+                  </span>
                 </span>
                 <span className="truncate text-body text-subtle">
                   {u.email}

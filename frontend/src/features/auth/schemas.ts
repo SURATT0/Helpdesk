@@ -24,6 +24,19 @@ export const authUserSchema = z.object({
    * mean Thai, even though that is what the server falls back to for mail.
    */
   language: z.enum(["en", "th"]).nullable(),
+  /**
+   * Whether I reach every customer, including ones created later.
+   *
+   * Sent as the ANSWER rather than as the `customerId` it is computed from, on
+   * purpose: the rule lives in one function on the server (`isPlatformWide`),
+   * and a client that re-derived it would be a second copy nobody would notice
+   * drifting. Use it only to decide whether to OFFER a cross-tenant control —
+   * every such endpoint checks for itself, and this flag is not the gate.
+   *
+   * Defaulted so a session restored from an older payload reads as false, which
+   * hides the controls rather than showing ones the server will refuse.
+   */
+  platformWide: z.boolean().default(false),
 });
 
 export const sessionSchema = z.object({

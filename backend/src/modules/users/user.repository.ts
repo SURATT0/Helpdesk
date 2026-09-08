@@ -43,6 +43,7 @@ function reachOrNothing(actor: AuthUser): number[] {
 }
 
 const userInclude = {
+  customer: { select: { id: true, name: true } },
   team: { select: { id: true, name: true } },
   project: { select: { id: true, name: true } },
   // Named, not just counted: "covers Acme and Globex" is the whole content of
@@ -61,6 +62,14 @@ export type UserDto = {
   email: string;
   role: Role;
   team: { id: number; name: string } | null;
+  /**
+   * The customer this person BELONGS to. Null for platform staff.
+   *
+   * Distinct from `reach` below: this is where they are, that is where else
+   * they may work. Shown only to viewers who can see more than one tenant —
+   * for everyone else the column would hold the same name on every row.
+   */
+  customer: { id: number; name: string } | null;
   /** Routing group this user's tickets flow through. Never a visibility scope. */
   project: { id: number; name: string } | null;
   /** False = project routing skips this person (they are away). */
@@ -90,6 +99,7 @@ function toDto(row: UserRow): UserDto {
     name: row.name,
     email: row.email,
     role: row.role,
+    customer: row.customer,
     team: row.team,
     project: row.project,
     availableForAssignment: row.availableForAssignment,
