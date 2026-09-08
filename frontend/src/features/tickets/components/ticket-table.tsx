@@ -15,6 +15,7 @@ import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
+import { useCustomers } from "@/features/customers/queries";
 import { matchesFilters, useSearch } from "../search-context";
 import { BulkActionBar } from "./bulk-action-bar";
 import { SlaBadge } from "./sla-badge";
@@ -33,6 +34,13 @@ import { cn } from "@/lib/utils";
 // The SLA column is wide enough for the longest label a badge can hold
 // ("missed by 9d 20h"); anything narrower and it runs under Priority.
 const COLS = "grid-cols-[40px_82px_1fr_128px_152px_100px_140px_130px]";
+/**
+ * With the tenant column. Only ever used by a viewer who reaches more than one
+ * customer — for anyone else it would hold the same name on every row, and a
+ * constant column costs 130px on a table that already scrolls sideways.
+ */
+const COLS_WITH_CUSTOMER =
+  "grid-cols-[40px_82px_1fr_128px_152px_100px_140px_130px_130px]";
 
 /** The row's left edge, coloured only when the row needs someone to act. */
 const STRIPE: Partial<Record<SlaState, string>> = {
@@ -147,9 +155,30 @@ export function TicketTable() {
   const unassignedLabel = t("bulk.unassigned");
   const openRowLabel = (id: number) => t("tickets.openRow", { id });
   const selectRowLabel = (id: number) => t("tickets.selectRow", { id });
-  const { query, statuses, priorities, assignees, slaStates, activeCount } =
-    useSearch();
+  const {
+    query,
+    statuses,
+    priorities,
+    assignees,
+    customers: selectedCustomers,
+    slaStates,
+    activeCount,
+  } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
+  const { user } = useAuth();
+  /**
+   * Show the tenant column only when it can say something.
+   *
+   * Two conditions, and both are needed. The ROLE, because a requester has no
+   * business reading the desk's tenant structure. And reach, because with one
+   * customer every row carries the same name — a column that is constant is not
+   * information, and it costs 130px on a table that already scrolls sideways on
+   * a phone.
+   */
+  const staff = user != null && user.role !== "user";
+  const { data: customers = [] } = useCustomers({ enabled: staff });
+  const showCustomer = staff && customers.length > 1;
+  const cols = showCustomer ? COLS_WITH_CUSTOMER : COLS;
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
   const [sort, setSort] = React.useState<SortState | null>(null);
   const assess = useAssessSla();
@@ -181,7 +210,14 @@ export function TicketTable() {
   }
 
   const rows = React.useMemo(() => {
-    const filters = { query, statuses, priorities, assignees, slaStates };
+    const filters = {
+      query,
+      statuses,
+      priorities,
+      assignees,
+      customers: selectedCustomers,
+      slaStates,
+    };
     const base = (data?.tickets ?? []).filter((x) =>
       matchesFilters(x, filters, now),
     );
@@ -201,6 +237,7 @@ export function TicketTable() {
     statuses,
     priorities,
     assignees,
+    selectedCustomers,
     slaStates,
     sort,
     now,
@@ -218,12 +255,12 @@ export function TicketTable() {
     <div className="mx-4 mb-2 overflow-hidden rounded-lg border border-line bg-panel sm:mx-6">
       {/* Columns use fixed widths, so let them scroll horizontally on narrow
           screens instead of squishing. */}
-      <TableScroll minWidth={960}>
+      <TableScroll minWidth={showCustomer ? 1090 : 960}>
       {/* header */}
       <div
         className={cn(
           "grid items-center border-b border-hairline bg-wash px-4 py-2.5 text-caption font-semibold tracking-columns text-faint",
-          COLS,
+          cols,
         )}
       >
         <button
@@ -276,6 +313,7 @@ export function TicketTable() {
           sort={sort}
           onSort={onSort}
         />
+        {showCustomer ? <span>{t("col.customer")}</span> : null}
       </div>
 
       {isLoading ? <LoadingRow /> : null}
@@ -322,7 +360,7 @@ export function TicketTable() {
               // Every row carries the 3px edge, transparent unless the clock is
               // against it, so nothing shifts sideways as a ticket changes state.
               "grid cursor-pointer items-center border-l-[3px] px-4 py-3 text-control",
-              COLS,
+              cols,
               // One colour class, never two: `cn` is a plain join with no
               // tailwind-merge behind it, so a transparent default left in place
               // would race the real colour on stylesheet order and usually win.
@@ -379,6 +417,11 @@ export function TicketTable() {
               )}
             </span>
             <span className="text-body text-subtle">{t.category}</span>
+            {showCustomer ? (
+              <span className="truncate pr-2 text-body text-subtle">
+                {t.customer?.name ?? "—"}
+              </span>
+            ) : null}
           </div>
         );
       })}

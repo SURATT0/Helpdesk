@@ -9,6 +9,7 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
+import { useCustomers } from "@/features/customers/queries";
 import { PRIORITIES } from "@/lib/domain";
 import { maySeeTeamWorkload } from "@/lib/permissions";
 import { DISPLAY_STATUSES } from "@/lib/ticket-status";
@@ -143,6 +144,8 @@ export function FilterBar() {
     togglePriority,
     assignees,
     toggleAssignee,
+    customers: selectedCustomers,
+    toggleCustomer,
     slaStates,
     toggleSla,
     clearFilters,
@@ -155,6 +158,18 @@ export function FilterBar() {
     user != null &&
     user.role !== "user";
   const { data: users = [] } = useUsers({ enabled: isStaff });
+  /**
+   * The tenant facet exists only for a viewer who reaches more than one.
+   * With a single customer every ticket carries the same one, so the filter
+   * could only ever show everything or nothing — a control with no useful
+   * position is worse than no control.
+   */
+  const { data: customerOptions = [] } = useCustomers({ enabled: isStaff });
+  const showCustomerFacet = isStaff && customerOptions.length > 1;
+  const customerName = React.useMemo(
+    () => new Map(customerOptions.map((c) => [c.id, c.name])),
+    [customerOptions],
+  );
 
   // Anyone who can hold a queue. Requesters raise tickets, they don't own them.
   const assignable = React.useMemo(
@@ -221,6 +236,20 @@ export function FilterBar() {
         onToggle={toggleSla}
         renderOption={(s) => <SlaStateLabel state={s} />}
       />
+
+      {showCustomerFacet ? (
+        <FacetDropdown
+          label={t("filter.customer")}
+          options={customerOptions.map((c) => c.id)}
+          selected={selectedCustomers}
+          onToggle={toggleCustomer}
+          renderOption={(id) => (
+            <span className="truncate text-body text-ink">
+              {customerName.get(id)}
+            </span>
+          )}
+        />
+      ) : null}
 
       {isStaff ? (
         <FacetDropdown

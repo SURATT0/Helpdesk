@@ -136,6 +136,7 @@ const en: Dict = {
   "filter.status": "Status",
   "filter.priority": "Priority",
   "filter.sla": "SLA",
+  "filter.customer": "Customer",
   "filter.assignee": "Assignee",
   "filter.unassigned": "Unassigned",
   "filter.you": "you",
@@ -422,6 +423,7 @@ const en: Dict = {
   "sla.summary.breachedClosed": "{n} breached, closed",
   "col.assignee": "Assignee",
   "col.category": "Category",
+  "col.customer": "Customer",
 
   "report.range": "Last 7 days",
   "report.export": "Export CSV",
@@ -914,6 +916,7 @@ const th: Dict = {
   "filter.status": "สถานะ",
   "filter.priority": "ความสำคัญ",
   "filter.sla": "SLA",
+  "filter.customer": "ลูกค้า",
   "filter.assignee": "ผู้รับผิดชอบ",
   "filter.unassigned": "ยังไม่มีผู้รับผิดชอบ",
   "filter.you": "คุณ",
@@ -1184,6 +1187,7 @@ const th: Dict = {
   "sla.summary.breachedClosed": "ปิดแล้วแต่เลยกำหนด {n} ใบ",
   "col.assignee": "ผู้รับผิดชอบ",
   "col.category": "หมวดหมู่",
+  "col.customer": "ลูกค้า",
 
   "report.range": "7 วันล่าสุด",
   "report.export": "ส่งออก CSV",
