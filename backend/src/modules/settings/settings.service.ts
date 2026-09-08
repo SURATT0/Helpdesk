@@ -1,4 +1,8 @@
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  type AuthUser,
+} from "../../shared/auth";
 import { BadRequest, Forbidden, NotFound } from "../../shared/errors";
 import { prisma } from "../../shared/db";
 import { EMAIL_EVENTS } from "../emails/email.events";
@@ -11,14 +15,19 @@ import { isKnownEvent, type SettingsDto, type StoredSettings } from "./settings.
  *
  * The two axes stay apart here as everywhere else: the ROLE says whether you may
  * manage settings at all (the routes require `settings:write`, which only the
- * top tier holds), and `customerId` says WHOSE settings you may reach. A
- * customer's own super_admin manages their tenant and no other; a platform-wide
- * super_admin — top role AND no customer of their own, which is what
- * `isPlatformWide` means — reaches every tenant.
+ * top tier holds), and REACH says WHOSE settings you may touch. A super_admin
+ * confined to one customer manages that tenant and no other; one who covers
+ * several must say which of them they mean; a platform-wide super_admin — top
+ * role AND no customer of their own, which is what `isPlatformWide` means —
+ * reaches every tenant.
  *
- * Returns the customer id the caller is allowed to act on. Staff with no
- * customer who are not platform-wide have no tenant to manage and are refused,
+ * Returns the customer id the caller is allowed to act on. Staff who reach no
+ * customer and are not platform-wide have no tenant to manage and are refused,
  * rather than silently defaulting to somebody's.
+ *
+ * Note there is no "apply to all my customers": a policy is one tenant's
+ * decision about how its own desk writes to its own people, and quietly fanning
+ * an edit across several would be one customer's manager changing another's.
  */
 function resolveTarget(actor: AuthUser, requested?: number): number {
   if (isPlatformWide(actor)) {
@@ -30,16 +39,25 @@ function resolveTarget(actor: AuthUser, requested?: number): number {
     }
     return requested;
   }
-  if (actor.customerId == null) {
+  const reach = customerReach(actor);
+  if (reach.length === 0) {
     throw Forbidden(
       "You belong to no customer, so there are no notification settings to manage",
     );
   }
-  // A tenant's manager may name their own customer explicitly, but nothing else.
-  if (requested != null && requested !== actor.customerId) {
-    throw Forbidden("You may only manage your own customer's notification settings");
+  if (requested == null) {
+    if (reach.length === 1) return reach[0];
+    throw BadRequest(
+      "Name the customer whose notification settings you mean — you cover more " +
+        "than one, so there is no default",
+    );
   }
-  return actor.customerId;
+  if (!reach.includes(requested)) {
+    throw Forbidden(
+      "You may only manage the notification settings of a customer you have access to",
+    );
+  }
+  return requested;
 }
 
 export const settingsService = {

@@ -16,7 +16,10 @@ type SignableUser = {
   role: Role;
   teamId: number | null;
   department: string | null;
+  /** Home tenant — what a ticket this person raises is filed under. */
   customerId: number | null;
+  /** Every customer they may see into, home included. See `customerReach`. */
+  customerIds: number[];
 };
 
 export function signAccessToken(user: SignableUser): string {
@@ -28,6 +31,7 @@ export function signAccessToken(user: SignableUser): string {
       teamId: user.teamId,
       department: user.department,
       customerId: user.customerId,
+      customerIds: user.customerIds,
       permissions: permissionsFor(user.role),
     },
     env.jwtAccessSecret,
@@ -45,6 +49,12 @@ export function verifyAccessToken(token: string): AuthUser {
     teamId: (payload.teamId as number | null) ?? null,
     department: (payload.department as string | null) ?? null,
     customerId: (payload.customerId as number | null) ?? null,
+    // Absent on a token minted before grants existed, and on one minted for
+    // someone with no tenant. `customerReach` treats both as "your own customer
+    // and nothing more", so a token in flight across the deploy keeps working.
+    customerIds: Array.isArray(payload.customerIds)
+      ? (payload.customerIds as number[])
+      : [],
     permissions: (payload.permissions as string[]) ?? [],
   };
 }

@@ -9,6 +9,7 @@ const user = (over: Partial<AuthUser> = {}): AuthUser =>
     name: "X",
     role: "super_admin",
     customerId: 7,
+    customerIds: [],
     permissions: [],
     ...over,
   }) as AuthUser;
@@ -20,7 +21,7 @@ describe("auditScopeWhere", () => {
 
   it("confines a customer-bound super admin to entries written by their own customer's users", () => {
     expect(auditScopeWhere(user({ role: "super_admin", customerId: 3 }))).toEqual({
-      user: { customerId: 3 },
+      user: { customerId: { in: [3] } },
     });
   });
 

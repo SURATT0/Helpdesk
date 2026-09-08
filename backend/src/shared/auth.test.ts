@@ -8,7 +8,12 @@ import {
 } from "./auth";
 import type { Role } from "./domain";
 
-const user = (role: Role, id = 1, customerId: number | null = null): AuthUser => ({
+const user = (
+  role: Role,
+  id = 1,
+  customerId: number | null = null,
+  customerIds: number[] = [],
+): AuthUser => ({
   id,
   name: "Test",
   email: "test@acme.com",
@@ -16,6 +21,7 @@ const user = (role: Role, id = 1, customerId: number | null = null): AuthUser =>
   teamId: null,
   department: null,
   customerId,
+  customerIds,
   permissions: permissionsFor(role),
 });
 

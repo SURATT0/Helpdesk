@@ -4,13 +4,29 @@ import { prisma } from "../../shared/db";
  * Data access for auth. Like every repository, this is the only auth layer that
  * touches Prisma — the service works through these methods.
  */
+/**
+ * Cross-tenant grants, loaded with the user on every sign-in and refresh so the
+ * access token can carry the reach it was minted with. Ids only — the customer
+ * rows themselves are never needed here, and pulling them would make the login
+ * query grow with the number of customers someone covers.
+ */
+const REACH_INCLUDE = {
+  reachGrants: { select: { customerId: true } },
+} as const;
+
 export const authRepository = {
   findUserByEmail(email: string) {
-    return prisma.user.findUnique({ where: { email }, include: { team: true } });
+    return prisma.user.findUnique({
+      where: { email },
+      include: { team: true, ...REACH_INCLUDE },
+    });
   },
 
   findUserById(id: number) {
-    return prisma.user.findUnique({ where: { id }, include: { team: true } });
+    return prisma.user.findUnique({
+      where: { id },
+      include: { team: true, ...REACH_INCLUDE },
+    });
   },
 
   createRefreshToken(data: {
@@ -25,7 +41,9 @@ export const authRepository = {
   findRefreshToken(tokenHash: string) {
     return prisma.refreshToken.findUnique({
       where: { tokenHash },
-      include: { user: { include: { team: true } } },
+      // Grants load here too: refresh re-mints the access token, so this is the
+      // moment a grant added or revoked since sign-in takes effect.
+      include: { user: { include: { team: true, ...REACH_INCLUDE } } },
     });
   },
 

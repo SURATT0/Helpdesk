@@ -5,6 +5,7 @@ import {
   updateProfileBody,
   updateUserBody,
   userIdParam,
+  setReachBody,
 } from "./user.validators";
 
 function currentUser(req: Request) {
@@ -32,6 +33,13 @@ export const userController = {
     const { id } = userIdParam.parse(req.params);
     const body = updateUserBody.parse(req.body);
     const user = await userService.update(id, body, currentUser(req));
+    res.json({ data: user });
+  },
+
+  async setReach(req: Request, res: Response) {
+    const { id } = userIdParam.parse(req.params);
+    const { customerIds } = setReachBody.parse(req.body);
+    const user = await userService.setReach(id, customerIds, currentUser(req));
     res.json({ data: user });
   },
 };

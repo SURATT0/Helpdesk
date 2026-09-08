@@ -110,10 +110,25 @@ export const emailRepository = {
     });
     if (!ticket) return null;
 
-    const sender = await prisma.user.findUnique({
+    // Grants come along because reach decides this the same way it decides the
+    // ticket list. Without them, an agent covering a second customer would have
+    // their mailed reply refused and silently opened as a NEW ticket — the
+    // thread splitting for no reason the sender can see.
+    const row = await prisma.user.findUnique({
       where: { id: senderId },
-      select: { id: true, role: true, customerId: true },
+      select: {
+        id: true,
+        role: true,
+        customerId: true,
+        reachGrants: { select: { customerId: true } },
+      },
     });
+    const sender = row && {
+      id: row.id,
+      role: row.role,
+      customerId: row.customerId,
+      customerIds: row.reachGrants.map((g) => g.customerId),
+    };
 
     return {
       id: ticket.id,

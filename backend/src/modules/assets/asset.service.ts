@@ -1,4 +1,4 @@
-import type { AuthUser } from "../../shared/auth";
+import { customerReach, isPlatformWide, type AuthUser } from "../../shared/auth";
 import { BadRequest, NotFound } from "../../shared/errors";
 import { assetRepository, type AssetDto } from "./asset.repository";
 import type { AssetStatus } from "./asset.types";
@@ -19,14 +19,27 @@ export const assetService = {
   },
 
   /**
-   * The tenant is taken from the actor, never from the request body — except for
-   * platform admins, who have no customer of their own and must name one.
+   * The tenant comes from the actor's REACH, never from the request body alone.
+   *
+   * Reaching exactly one customer settles it and any `customerId` sent is
+   * ignored, so a stale field cannot file an asset elsewhere. Reaching several —
+   * or being platform-wide — makes it a real choice, and the value is honoured
+   * only if it names a customer the actor actually reaches. Same rule and same
+   * shape as `resolveProjectCustomerId`.
    */
   async create(input: CreateAssetInput, actor: AuthUser): Promise<AssetDto> {
-    const customerId =
-      actor.customerId != null ? actor.customerId : (input.customerId ?? null);
+    const reach = customerReach(actor);
+    const customerId = isPlatformWide(actor)
+      ? (input.customerId ?? null)
+      : reach.length === 1
+        ? reach[0]
+        : input.customerId != null && reach.includes(input.customerId)
+          ? input.customerId
+          : null;
     if (customerId == null) {
-      throw BadRequest("customerId is required when creating as a platform admin");
+      throw BadRequest(
+        "customerId is required, and must be a customer you have access to",
+      );
     }
     return assetRepository.create(
       {

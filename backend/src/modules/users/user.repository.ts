@@ -1,7 +1,11 @@
 import { Prisma } from "@prisma/client";
 import type { Role } from "../../shared/domain";
 import type { Lang } from "../../shared/i18n";
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  type AuthUser,
+} from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { BadRequest } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
@@ -9,20 +13,44 @@ import { projectScopeWhere } from "../projects/project.scope";
 import { ACTIVE_STATUSES } from "../tickets/ticket.validators";
 
 /**
- * Row-level scope for the user directory (multi-tenant): admins see/manage
- * everyone across all customers; everyone else is limited to members of their
- * own customer (across all departments). Staff with no customer who are not
- * platform-wide match nothing (defensive).
+ * Row-level scope for the user directory (multi-tenant): a platform-wide
+ * principal sees/manages everyone across all customers; everyone else is limited
+ * to members of the customers they reach, across all departments. Staff who
+ * reach no customer and are not platform-wide match nothing (defensive).
+ *
+ * Note what this deliberately does NOT include: someone granted reach into a
+ * customer appears in that customer's directory only if they BELONG to it.
+ * Reach is permission to see a tenant's work, not membership of it, and listing
+ * outside staff as members would put them in the assignee picker and the
+ * workload report as though they were part of the desk.
  */
 function scopeWhere(actor: AuthUser): Prisma.UserWhereInput {
   if (isPlatformWide(actor)) return {};
-  if (actor.customerId == null) return { id: -1 };
-  return { customerId: actor.customerId };
+  const reach = customerReach(actor);
+  if (reach.length === 0) return { id: -1 };
+  return { customerId: { in: reach } };
+}
+
+/**
+ * The actor's reach as a list safe to put in an `IN (...)`, where an empty reach
+ * has to match nothing rather than everything. `[-1]` is the same positive-id
+ * sentinel the scope builders use; an empty array would also be safe in Prisma,
+ * but saying it once here keeps the intent visible at the call site.
+ */
+function reachOrNothing(actor: AuthUser): number[] {
+  const reach = customerReach(actor);
+  return reach.length > 0 ? reach : [-1];
 }
 
 const userInclude = {
   team: { select: { id: true, name: true } },
   project: { select: { id: true, name: true } },
+  // Named, not just counted: "covers Acme and Globex" is the whole content of
+  // the grant, and a number would send the screen back for the names anyway.
+  reachGrants: {
+    select: { customer: { select: { id: true, name: true } } },
+    orderBy: { customer: { name: "asc" } },
+  },
 } satisfies Prisma.UserInclude;
 
 type UserRow = Prisma.UserGetPayload<{ include: typeof userInclude }>;
@@ -45,6 +73,14 @@ export type UserDto = {
    * null is passed through rather than resolved here.
    */
   language: Lang | null;
+  /**
+   * Customers this person may work BEYOND the one they belong to.
+   *
+   * Only the granted extras, not the effective reach: their own customer is
+   * already on the row and repeating it here would make an ordinary account look
+   * like it had been given something. Empty for almost everyone.
+   */
+  reach: { id: number; name: string }[];
   createdAt: string;
 };
 
@@ -59,6 +95,11 @@ function toDto(row: UserRow): UserDto {
     availableForAssignment: row.availableForAssignment,
     isActive: row.isActive,
     language: row.language,
+    // A grant naming the user's own customer is stored happily but says nothing,
+    // so it is dropped here rather than shown as an extra the person does not have.
+    reach: row.reachGrants
+      .map((g) => g.customer)
+      .filter((c) => c.id !== row.customerId),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -131,7 +172,7 @@ export const userRepository = {
         status: { in: [...ACTIVE_STATUSES] },
         ...(isPlatformWide(actor)
           ? {}
-          : { customerId: actor.customerId ?? -1 }),
+          : { customerId: { in: reachOrNothing(actor) } }),
       },
     });
   },
@@ -230,5 +271,79 @@ export const userRepository = {
       );
       return toDto(updated);
     });
+  },
+
+  /**
+   * Replace the whole set of customers this user may reach beyond their own.
+   *
+   * A replace rather than add/remove endpoints, because reach is a statement
+   * about a person ("covers Acme and Globex"), not a log of adjustments: sending
+   * the intended set makes the request idempotent, leaves one audit row saying
+   * what the answer became, and removes the window where two concurrent edits
+   * each add half of what was meant.
+   *
+   * Unscoped by actor on purpose — the caller has already been checked by
+   * `mayGrantReach`, which is platform-wide only, so there is no narrower scope
+   * left to apply. The target still has to exist.
+   */
+  async setReach(
+    id: number,
+    customerIds: number[],
+    actor: AuthUser,
+  ): Promise<UserDto | null> {
+    return prisma.$transaction(async (tx) => {
+      const exists = await tx.user.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!exists) return null;
+
+      // Delete-then-insert rather than a diff: the set is small, this is the
+      // whole intent in two statements, and it cannot leave a stale row behind.
+      await tx.userCustomer.deleteMany({ where: { userId: id } });
+      if (customerIds.length > 0) {
+        await tx.userCustomer.createMany({
+          data: customerIds.map((customerId) => ({ userId: id, customerId })),
+        });
+      }
+
+      const updated = await tx.user.findUniqueOrThrow({
+        where: { id },
+        include: userInclude,
+      });
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "user.reach_set",
+          entity: "user",
+          entityId: id,
+          // The resulting set, not the delta. Reading the trail back should
+          // answer "what could they reach on that date" without replaying
+          // every earlier row.
+          meta: { customerIds },
+        },
+        tx,
+      );
+      return toDto(updated);
+    });
+  },
+
+  /** Which of these customer ids exist. Used to refuse a grant naming none. */
+  async existingCustomerIds(ids: number[]): Promise<number[]> {
+    if (ids.length === 0) return [];
+    const rows = await prisma.customer.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /** The target's role, for the staff-only rule on granting reach. */
+  async findRole(id: number): Promise<Role | null> {
+    const row = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+    return row?.role ?? null;
   },
 };

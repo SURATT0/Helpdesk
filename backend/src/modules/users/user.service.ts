@@ -5,7 +5,12 @@ import {
   LastAdmin,
   NotFound,
 } from "../../shared/errors";
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  mayGrantReach,
+  type AuthUser,
+} from "../../shared/auth";
 import type { Role } from "../../shared/domain";
 import type { Lang } from "../../shared/i18n";
 import { userRepository, type UserDto } from "./user.repository";
@@ -98,6 +103,61 @@ export const userService = {
   ): Promise<UserDto> {
     const user = await userRepository.updateProfile(actor.id, data, actor.id);
     if (!user) throw NotFound(`User #${actor.id} not found`);
+    return user;
+  },
+
+  /**
+   * Set which customers a member of staff may work beyond their own.
+   *
+   * Platform-wide only — see `mayGrantReach`. This is the one endpoint that
+   * moves someone across the tenant boundary, so anyone who could call it for
+   * themselves would be their own approver, and an admin who may create a
+   * customer must not also be able to walk into one.
+   *
+   * The rules, in the order a caller meets them:
+   *   not platform-wide      → 403, before anything is read
+   *   granting to yourself   → 403, even platform-wide; reach you award yourself
+   *                            is not reviewed by anyone
+   *   target is a requester  → 400; `ticketScopeWhere` gives role `user` their
+   *                            own tickets whatever their reach, so a grant here
+   *                            would be a setting that reads as effective and
+   *                            does nothing
+   *   unknown customer id    → 400 naming it, rather than storing a grant into a
+   *                            tenant that does not exist
+   *   unknown user           → 404
+   */
+  async setReach(
+    id: number,
+    customerIds: number[],
+    actor: AuthUser,
+  ): Promise<UserDto> {
+    if (!mayGrantReach(actor)) {
+      throw Forbidden(
+        "Only a platform super admin can give someone access to another customer",
+      );
+    }
+    if (id === actor.id) {
+      throw Forbidden("You cannot change your own customer access");
+    }
+
+    const wanted = [...new Set(customerIds)];
+    const role = await userRepository.findRole(id);
+    if (role == null) throw NotFound(`User #${id} not found`);
+    if (role === "user" && wanted.length > 0) {
+      throw BadRequest(
+        "Only staff can be given access to another customer — a requester always " +
+          "sees just their own tickets",
+      );
+    }
+
+    const known = new Set(await userRepository.existingCustomerIds(wanted));
+    const missing = wanted.filter((c) => !known.has(c));
+    if (missing.length > 0) {
+      throw BadRequest(`Unknown customer #${missing[0]}`);
+    }
+
+    const user = await userRepository.setReach(id, wanted, actor);
+    if (!user) throw NotFound(`User #${id} not found`);
     return user;
   },
 };

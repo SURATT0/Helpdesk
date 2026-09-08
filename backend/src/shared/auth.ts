@@ -14,12 +14,26 @@ export type AuthUser = {
   teamId: number | null;
   department: string | null;
   /**
-   * Tenant boundary for row-level scoping. A value pins the principal to that one
-   * customer; null means they have no tenant of their own, which grants
-   * platform-wide reach only in combination with the top role — see
-   * `isPlatformWide`.
+   * The customer this principal BELONGS to — their home tenant, and the one a
+   * ticket they raise is filed under. Null means they have no tenant of their
+   * own, which grants platform-wide reach only in combination with the top role
+   * — see `isPlatformWide`.
+   *
+   * This is ownership, not reach. Do not scope reads on it; use
+   * `customerReach` below, which is the same value for everyone who has not been
+   * granted more.
    */
   customerId: number | null;
+  /**
+   * Every customer this principal may SEE INTO: their own, plus any granted by
+   * a platform-wide super_admin (`user_customers`). Empty means none of their
+   * own — which is platform staff, and says nothing about whether they reach
+   * everything; only `isPlatformWide` answers that.
+   *
+   * Read it through `customerReach`, never directly, so a token minted before
+   * this field existed still behaves.
+   */
+  customerIds: number[];
   permissions: string[];
 };
 
@@ -41,6 +55,52 @@ export function isPlatformWide(user: {
   customerId: number | null;
 }): boolean {
   return user.role === "super_admin" && user.customerId == null;
+}
+
+/**
+ * Which customers this principal may see into — the list every row-level scope
+ * filters on.
+ *
+ * Companion to `isPlatformWide` and subordinate to it: this answers "which
+ * ones", and is only asked of someone who does not reach all of them. Callers
+ * check `isPlatformWide` first and use this for everyone else; an empty array
+ * means the principal reaches no customer at all, and each scope builder decides
+ * what that means for its own table (usually nothing, or your own rows).
+ *
+ * Reaching every customer that exists TODAY is not the same as being
+ * platform-wide, and the two must not be collapsed: a super_admin with no tenant
+ * also reaches the customer created tomorrow, while an admin granted all three
+ * does not. That is why this returns a list and `isPlatformWide` stays a
+ * separate question.
+ *
+ * The home tenant is always included, and a token minted before grants existed
+ * (no `customerIds`) yields exactly `[customerId]` — which is what every
+ * principal reached before this table existed, so nothing changes for anyone
+ * until somebody is explicitly granted more.
+ */
+export function customerReach(user: {
+  customerId: number | null;
+  customerIds?: number[] | null;
+}): number[] {
+  const reach = new Set<number>(user.customerIds ?? []);
+  if (user.customerId != null) reach.add(user.customerId);
+  return [...reach];
+}
+
+/**
+ * May this principal widen someone's reach across tenants?
+ *
+ * Platform-wide only, and deliberately stricter than the permission to create a
+ * customer. Granting reach is the act that lets a person out of their own
+ * tenant, so an admin who held it could grant it to themselves and be their own
+ * approver — the one shape of privilege escalation this table would otherwise
+ * introduce.
+ */
+export function mayGrantReach(user: {
+  role: Role;
+  customerId: number | null;
+}): boolean {
+  return isPlatformWide(user);
 }
 
 /**

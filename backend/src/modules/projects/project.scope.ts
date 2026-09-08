@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  type AuthUser,
+} from "../../shared/auth";
 
 /**
  * Row-level project visibility, mirroring `ticketScopeWhere` and the user
@@ -23,23 +27,47 @@ export function projectScopeWhere(actor: AuthUser): Prisma.ProjectWhereInput {
 /** Which projects this actor's reach covers, before the deleted-row filter. */
 function reachWhere(actor: AuthUser): Prisma.ProjectWhereInput {
   if (isPlatformWide(actor)) return {};
-  if (actor.customerId == null) return { id: -1 };
-  return { customerId: actor.customerId };
+  const reach = customerReach(actor);
+  if (reach.length === 0) return { id: -1 };
+  return { customerId: { in: reach } };
 }
 
 /**
  * Which customer a newly created project belongs to.
  *
- * A scoped actor always creates inside their own customer, and any `customerId`
- * they send is ignored rather than honoured — otherwise a manager could plant a
- * project, and therefore a routing target, inside another tenant. Only a platform
- * admin (who has no customer of their own) may name the customer, and must.
+ * The rule is reach, not identity: an actor may create inside any customer they
+ * reach and nowhere else, because a project is a routing target and planting one
+ * in another tenant would route that tenant's work.
+ *
+ *   reaches exactly one → that one, and `requested` is ignored rather than
+ *                         honoured, so a stale or hostile field cannot move it
+ *   reaches several     → they must name one, and it must be within reach
+ *   platform-wide       → must name one; any customer is within reach
+ *   reaches none        → null, and the caller refuses
+ *
+ * Out of reach returns null rather than the requested id, so the refusal happens
+ * in one place. `mayCreateProjectIn` below says whether that null was "you did
+ * not choose" or "you may not", which is the difference between a form the user
+ * can fix and one they cannot.
  */
 export function resolveProjectCustomerId(
   actor: AuthUser,
   requested: number | undefined,
 ): number | null {
-  if (actor.customerId != null) return actor.customerId;
-  if (isPlatformWide(actor) && requested != null) return requested;
+  const reach = customerReach(actor);
+  if (isPlatformWide(actor)) return requested ?? null;
+  if (reach.length === 1) return reach[0];
+  if (requested != null && reach.includes(requested)) return requested;
   return null;
+}
+
+/**
+ * Does this actor have to be ASKED which customer to create in?
+ *
+ * True only once reach is wider than one, which is the whole reason the question
+ * exists — with a single customer there is nothing to choose and the form should
+ * not pretend otherwise.
+ */
+export function mustChooseProjectCustomer(actor: AuthUser): boolean {
+  return isPlatformWide(actor) || customerReach(actor).length > 1;
 }

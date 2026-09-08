@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { isPlatformWide, type AuthUser } from "../../shared/auth";
+import {
+  customerReach,
+  isPlatformWide,
+  type AuthUser,
+} from "../../shared/auth";
 import type { Role } from "../../shared/domain";
 
 /**
@@ -10,10 +14,14 @@ import type { Role } from "../../shared/domain";
  *
  * Multi-tenant: the customer is the isolation boundary.
  *   platform-wide (super_admin with no customer) → every ticket, all customers;
- *   staff pinned to a customer → every ticket of that customer, all departments;
+ *   staff with reach → every ticket of every customer they reach, all departments;
  *   user → only their own tickets.
- * Staff without a customer see nothing but their own tickets (defensive — it
+ * Staff who reach no customer see nothing but their own tickets (defensive — it
  * shouldn't happen for seeded staff, and must not read as platform-wide).
+ *
+ * Reach is usually the one customer they belong to, and is wider only for
+ * someone granted it (`user_customers`) — which is why this asks
+ * `customerReach` rather than reading `customerId`.
  */
 export function ticketScopeWhere(user: AuthUser): Prisma.TicketWhereInput {
   // Deleted tickets are invisible to EVERYONE, platform-wide reach included —
@@ -28,9 +36,26 @@ export function ticketScopeWhere(user: AuthUser): Prisma.TicketWhereInput {
 function reachWhere(user: AuthUser): Prisma.TicketWhereInput {
   if (isPlatformWide(user)) return {};
   if (user.role === "user") return { requesterId: user.id };
-  // admin + a customer-bound super_admin: their whole customer, every department.
-  if (user.customerId == null) return { requesterId: user.id };
-  return { customerId: user.customerId };
+  // admin + a customer-bound super_admin: every department of every customer
+  // they reach — normally just their own.
+  const reach = customerReach(user);
+  if (reach.length === 0) return { requesterId: user.id };
+  return { customerId: { in: reach } };
+}
+
+/**
+ * Is that customer one this actor may act in?
+ *
+ * The read-side counterpart is `reachWhere` above; this is the same question
+ * asked about one row instead of a whole list, and the two decisions live
+ * together so they cannot answer differently. A candidate with no customer is
+ * outside everyone's reach but a platform-wide actor's — reaching "no customer"
+ * is not something a grant can express.
+ */
+function withinReach(actor: AuthUser, customerId: number | null): boolean {
+  if (isPlatformWide(actor)) return true;
+  if (customerId == null) return false;
+  return customerReach(actor).includes(customerId);
 }
 
 /** A prospective assignee, reduced to what the decision below needs. */
@@ -51,10 +76,10 @@ export type AssignmentCandidate = {
  *
  *   user candidate       → never; users raise tickets, they don't hold queues
  *   platform-wide actor  → any staff member, any customer
- *   customer-bound actor → only staff inside their own customer
+ *   actor with reach     → only staff inside a customer they reach
  *
- * A customer-less actor who is not platform-wide can grant nothing, mirroring how
- * `ticketScopeWhere` grants that same user nothing beyond their own tickets.
+ * An actor who reaches no customer and is not platform-wide can grant nothing,
+ * mirroring how `ticketScopeWhere` grants them nothing beyond their own tickets.
  */
 export function mayReceiveAssignment(
   actor: AuthUser,
@@ -66,9 +91,7 @@ export function mayReceiveAssignment(
   // "who may receive" is what makes it hold for a single ticket, a whole queue
   // handover, and owning a routing project alike.
   if (!candidate.isActive) return false;
-  if (isPlatformWide(actor)) return true;
-  if (actor.customerId == null) return false;
-  return candidate.customerId === actor.customerId;
+  return withinReach(actor, candidate.customerId);
 }
 
 /** A prospective requester for an imported row, reduced to what the decision needs. */
@@ -88,7 +111,7 @@ export type RequesterCandidate = {
  * ticket is now behind `ticketScopeWhere` for a customer they do not reach.
  *
  *   platform-wide actor  → any user, any customer
- *   customer-bound actor → only users inside their own customer
+ *   actor with reach     → only users inside a customer they reach
  *
  * Same shape as `mayReceiveAssignment` above, and for the same reason: which
  * tickets a caller may read is a where-clause, but who they may name is a
@@ -98,7 +121,5 @@ export function mayImportForRequester(
   actor: AuthUser,
   candidate: RequesterCandidate,
 ): boolean {
-  if (isPlatformWide(actor)) return true;
-  if (actor.customerId == null) return false;
-  return candidate.customerId === actor.customerId;
+  return withinReach(actor, candidate.customerId);
 }

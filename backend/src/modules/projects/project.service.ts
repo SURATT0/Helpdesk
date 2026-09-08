@@ -12,7 +12,10 @@ import {
   type ProjectDeletionImpact,
   type ProjectDto,
 } from "./project.repository";
-import { resolveProjectCustomerId } from "./project.scope";
+import {
+  mustChooseProjectCustomer,
+  resolveProjectCustomerId,
+} from "./project.scope";
 
 /**
  * The permission a project deletion needs.
@@ -112,8 +115,13 @@ export const projectService = {
   ): Promise<ProjectDto> {
     const customerId = resolveProjectCustomerId(actor, input.customerId);
     if (customerId == null) {
+      // Two different refusals, deliberately worded apart: one is a field the
+      // caller can fill in, the other is a customer they will never be allowed
+      // to name however they fill it.
       throw BadRequest(
-        "customerId is required: a platform admin must say which customer the project belongs to",
+        mustChooseProjectCustomer(actor)
+          ? "customerId is required, and must be a customer you have access to"
+          : "You have no customer to create a project in",
       );
     }
     await assertOwnersAssignable(actor, [input.ownerId, input.backupOwnerId]);
