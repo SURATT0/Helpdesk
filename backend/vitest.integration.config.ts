@@ -16,7 +16,12 @@ export default defineConfig({
       DATABASE_URL: testDbUrl,
       NODE_ENV: "production", // plain pino (no pretty-transport worker)
       LOG_LEVEL: "silent",
-      AUTH_RATE_LIMIT: "1000", // suite logs in many times; don't trip the limiter
+      // Headroom for the cases that deliberately submit wrong passwords. The
+      // suite's many SUCCESSFUL logins are free — the guard counts failures
+      // only — so this is no longer about volume; it is so a test spending a
+      // few failures on one account cannot surprise the next one. The ceiling
+      // itself is exercised with a small budget in login-rate-limit.integration.
+      AUTH_RATE_LIMIT: "1000",
       // Enable the email-to-ticket webhook (secret-gated) for its integration
       // tests; route new email tickets to a category that exists in the seed.
       EMAIL_WEBHOOK_SECRET: "test-webhook-secret",
