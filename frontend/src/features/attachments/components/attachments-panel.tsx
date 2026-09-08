@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
+import { ATTACHMENT_ACCEPT } from "../accept";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import {
@@ -435,7 +436,16 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
         )}
         {upload.isPending ? t("att.uploading") : t("att.upload")}
       </button>
-      <input ref={inputRef} type="file" className="hidden" onChange={onPick} />
+      {/* This one carried no `accept` at all, so the picker offered every file
+          on the device and the API refused whatever it did not recognise —
+          after the upload, which is the worst moment to find out. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ATTACHMENT_ACCEPT}
+        className="hidden"
+        onChange={onPick}
+      />
 
       {upload.isError ? (
         <span className="text-meta font-medium text-danger">
