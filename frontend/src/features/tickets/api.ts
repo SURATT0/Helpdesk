@@ -169,6 +169,15 @@ export type CreateTicketInput = {
   subject: string;
   description: string;
   categoryId: number;
+  /**
+   * Which project to file this under, or null for none.
+   *
+   * Optional the whole way down: the column is nullable, mail and CSV name no
+   * project, and a customer may run none. The server validates it against the
+   * REQUESTER's customer, so a stale id from another tenant comes back as a
+   * readable 400 rather than being filed anywhere.
+   */
+  projectId?: number | null;
   priority: Priority;
   /**
    * De-duplication key for this submission. Optional so other callers need not

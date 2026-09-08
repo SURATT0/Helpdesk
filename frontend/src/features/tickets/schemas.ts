@@ -173,6 +173,13 @@ export const categorySchema = z.object({
   id: z.number(),
   name: z.string(),
   defaultTeamId: z.number().nullable(),
+  /**
+   * Which tenant owns this category; null = shared with every customer.
+   *
+   * Defaulted, so a response from a server that predates scoped categories
+   * still parses — as shared, which is what every category was then.
+   */
+  customerId: z.number().nullable().default(null),
 });
 export const categoryListSchema = z.object({ data: z.array(categorySchema) });
 
