@@ -388,13 +388,17 @@ export function TicketDetailView({ id }: { id: number }) {
           </Link>
           <span>›</span>
           <span className="font-mono font-medium">#{ticket.id}</span>
-          {/* Beside the number the clock belongs to, rather than at the far end
-              of the title row below. The badge names its own state; "SLA" is
-              what says which clock that state belongs to, which the header has
-              no other label for.
+          {/* BELOW md only. On a phone the box sat a row and a half from the
+              number whose clock it describes, so here it goes right after it.
+              From `md` up the copy in the title row below takes over — the
+              desktop layout is the one it always had.
 
-              Position only — `SlaBadge` and its six states are untouched. */}
-          <span className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1 text-dense">
+              Rendered twice rather than moved, which is safe here and was not
+              for the notification bell: `SlaBadge` is presentational, holds no
+              state and opens no connection, so a second instance costs a span.
+              Moving one element instead is not possible — the two positions are
+              in different flex parents, and `order` cannot cross them. */}
+          <span className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1 text-dense md:hidden">
             <span className="text-caption font-semibold text-muted">SLA</span>
             <SlaBadge sla={assess(ticket)} />
           </span>
@@ -456,6 +460,14 @@ export function TicketDetailView({ id }: { id: number }) {
             {ticket.category} · {t("detail.opened")}{" "}
             {formatOpened(ticket.createdAt, lang)} {t("detail.by")}{" "}
             <strong className="text-ink">{ticket.requester}</strong>
+          </span>
+          {/* FROM md up — the position this box has always had on a desktop,
+              pushed to the far right of the title row. The mobile copy in the
+              breadcrumb above is hidden at this width, so exactly one is ever
+              on screen. */}
+          <span className="ml-auto hidden items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5 md:inline-flex">
+            <span className="text-caption font-semibold text-muted">SLA</span>
+            <SlaBadge sla={assess(ticket)} />
           </span>
         </div>
       </header>
