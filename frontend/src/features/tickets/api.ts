@@ -35,6 +35,14 @@ export type TicketFilter = {
    * queue. Omit to not filter by assignee — which is NOT the same as `"none"`.
    */
   assigneeId?: number | "none";
+  /**
+   * One project's tickets — what the project page lists.
+   *
+   * A filter, never a way around the tenant scope: the server ANDs it onto the
+   * caller's own, so naming another customer's project id returns nothing rather
+   * than that customer's tickets.
+   */
+  projectId?: number;
 };
 
 export async function fetchTickets(
@@ -46,6 +54,7 @@ export async function fetchTickets(
   // `!= null` on purpose: 0 is not a valid id, but "none" must survive, and a
   // truthiness check would be a trap if ids ever start at 0.
   if (filter.assigneeId != null) qs.set("assigneeId", String(filter.assigneeId));
+  if (filter.projectId != null) qs.set("projectId", String(filter.projectId));
   const suffix = qs.toString() ? `?${qs}` : "";
   const body = await apiRequest(`/tickets${suffix}`);
   const parsed = ticketListSchema.parse(body);

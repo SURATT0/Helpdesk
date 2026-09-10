@@ -16,6 +16,12 @@ export const projectOwnerSchema = z
 export const projectSchema = z.object({
   id: z.number(),
   name: z.string(),
+  /**
+   * What the project IS, in markdown — scope, contacts, the standing
+   * arrangement. Null when nobody has written one, which is every project that
+   * predates the field.
+   */
+  description: z.string().nullable().default(null),
   customerId: z.number(),
   owner: projectOwnerSchema,
   backupOwner: projectOwnerSchema,
@@ -59,6 +65,8 @@ export type ProjectOwner = z.infer<typeof projectOwnerSchema>;
 
 export type CreateProjectInput = {
   name: string;
+  /** Markdown, shown on the project page. Optional — a project may have none. */
+  description?: string | null;
   /** Platform admins only — scoped staff always create in their own customer. */
   customerId?: number;
   ownerId?: number | null;
@@ -71,6 +79,8 @@ export type CreateProjectInput = {
  */
 export type UpdateProjectInput = {
   name?: string;
+  /** Omitted leaves it; empty or null clears it. */
+  description?: string | null;
   ownerId?: number | null;
   backupOwnerId?: number | null;
 };

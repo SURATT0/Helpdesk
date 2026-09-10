@@ -167,6 +167,16 @@ export type TicketFilter = {
   priority?: Priority;
   /** A user id, or `"none"` for the unassigned queue. Absent = no filter. */
   assigneeId?: number | "none";
+  /**
+   * One project's tickets — what the project page lists.
+   *
+   * A filter on top of the caller's scope, never a way around it: it is ANDed
+   * with `ticketScopeWhere` like every other clause here, so naming another
+   * tenant's project id returns nothing rather than that tenant's tickets. The
+   * project page also 404s on the project itself first, so this is the second of
+   * two answers to the same question.
+   */
+  projectId?: number;
 };
 
 export type HistoryEntry = {
@@ -357,6 +367,7 @@ export const ticketRepository = {
                     filter.assigneeId === "none" ? null : filter.assigneeId,
                 }
               : {}),
+            ...(filter.projectId != null ? { projectId: filter.projectId } : {}),
           },
         ],
       },

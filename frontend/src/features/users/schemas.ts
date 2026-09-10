@@ -2,6 +2,14 @@ import { z } from "zod";
 
 export const userRoleSchema = z.enum(["super_admin", "admin", "user"]);
 
+/** Only `active` may hold a session. See User.status on the server. */
+export const userStatusSchema = z.enum([
+  "pending",
+  "active",
+  "suspended",
+  "rejected",
+]);
+
 export const userSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -30,6 +38,23 @@ export const userSchema = z.object({
    */
   isActive: z.boolean(),
   /**
+   * Where the account is in its life — a THIRD axis, and the one that decides
+   * whether it may sign in at all.
+   *
+   * Not a rename of `isActive` above and not derivable from it: `pending` has
+   * applied and nobody has decided, `rejected` was decided against, `suspended`
+   * was let in and then stopped, and `isActive: false` means the person has
+   * left. A directory that showed one of these in place of the other would tell
+   * an administrator the wrong thing about who is waiting on them.
+   */
+  status: userStatusSchema,
+  /**
+   * When the address was proven, or null if never. Shown in the queue, because
+   * approving somebody who has not confirmed their address is approving an
+   * address nobody has checked belongs to them.
+   */
+  emailVerifiedAt: z.string().nullable(),
+  /**
    * Customers this person may work BEYOND the one they belong to.
    *
    * Only the granted extras: their own customer is not repeated here, so an
@@ -45,4 +70,17 @@ export const userListSchema = z.object({ data: z.array(userSchema) });
 export const userEnvelopeSchema = z.object({ data: userSchema });
 
 export type UserRole = z.infer<typeof userRoleSchema>;
+export type UserStatus = z.infer<typeof userStatusSchema>;
 export type User = z.infer<typeof userSchema>;
+
+/**
+ * What the directory is narrowed by. Every field is optional and absent means
+ * "no filter" — the server ANDs these onto the caller's scope, so none of them
+ * can widen what comes back.
+ */
+export type UserFilters = {
+  q?: string;
+  role?: UserRole;
+  status?: UserStatus;
+  customerId?: number;
+};

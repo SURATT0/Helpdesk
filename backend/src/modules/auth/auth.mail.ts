@@ -137,6 +137,26 @@ export const authMail = {
     sendAndForget({ to, subject: t(lang, "account.exists.subject"), text, html });
   },
 
+  /**
+   * "Your account has been approved" — sent when an administrator lets somebody
+   * in, and the one piece of news the person cannot find out any other way.
+   *
+   * Carries no token: the account already has a password, chosen at
+   * registration, and what changed is only that it may now be used. A link
+   * would be a credential this mail has no reason to hold.
+   */
+  sendApproved(to: string, lang: Lang = DEFAULT_LANG) {
+    const { text, html } = render([
+      { kind: "text", value: t(lang, "account.approved.body") },
+      {
+        kind: "button",
+        label: t(lang, "account.approved.cta"),
+        href: new URL("/login", env.webOrigin).toString(),
+      },
+    ]);
+    sendAndForget({ to, subject: t(lang, "account.approved.subject"), text, html });
+  },
+
   /** "Reset your password" — the only mail carrying a password-reset token. */
   sendPasswordReset(to: string, token: string, lang: Lang = DEFAULT_LANG) {
     const minutes = Math.round(env.passwordResetTtlSec / 60);

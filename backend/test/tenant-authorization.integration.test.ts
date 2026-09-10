@@ -173,22 +173,20 @@ describe("a role cannot do what it may not", () => {
   });
 
   /**
-   * CONFLICT, pinned rather than resolved.
+   * Wider than the permission matrix this work was specified against, and
+   * deliberately so — asked and answered rather than assumed.
    *
-   * The permission matrix this work was specified against says an agent may not
-   * create a customer. The shipped rule says `admin` and above may — a decision
-   * taken earlier with its own reasoning (customer-crud.integration.test.ts:
-   * "safe because it confers none — an admin who creates a tenant cannot see
-   * into it and cannot grant themselves the reach to"), and archiving one is
-   * still refused to them.
+   * The matrix said an agent may not create a customer. The shipped rule allows
+   * `admin` and above, with its own reasoning (customer-crud.integration.test.ts:
+   * "safe because it confers none — an admin who creates a tenant cannot see into
+   * it and cannot grant themselves the reach to"), and archiving one is still
+   * refused to them. Raised as a conflict; the shipped rule was kept.
    *
-   * Narrowing it is a one-line change to `mayManage`, and it is not this suite's
-   * to make: it would flip behaviour that another test asserts on purpose. So
-   * this pins what the system ACTUALLY does, and the difference is reported
-   * rather than quietly absorbed — a test written to the spec would have failed,
-   * and a test deleted to make the suite green would have hidden it.
+   * So this is the intended behaviour, not a gap — and the second half of the
+   * case is the part that must never regress, because it is what makes the first
+   * half safe.
    */
-  it("lets an agent create a customer — the shipped rule, wider than the spec", async () => {
+  it("lets an agent create a customer, and grants them no reach into it", async () => {
     const res = await request(app)
       .post(`${API}/customers`)
       .set(bearer(acme.agent))

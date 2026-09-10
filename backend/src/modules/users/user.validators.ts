@@ -4,9 +4,44 @@ export const userIdParam = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+const role = z.enum(["super_admin", "admin", "user"]);
+
+/**
+ * Directory filters. Every one of them narrows the caller's SCOPE rather than
+ * replacing it — see `userRepository.findMany`. `customerId` in particular is a
+ * filter, never a way to look into a tenant you do not reach.
+ *
+ * The approval queue is `?status=pending`, not an endpoint of its own.
+ */
+export const listUsersQuery = z.object({
+  q: z.string().trim().max(120).optional(),
+  role: role.optional(),
+  status: z.enum(["pending", "active", "suspended", "rejected"]).optional(),
+  customerId: z.coerce.number().int().positive().optional(),
+});
+
+/**
+ * Approving a registration. Both fields are REQUIRED, and that is the design:
+ * approving is choosing which company somebody belongs to and what they may do,
+ * and defaulting either would make the most consequential click in the product
+ * the one nobody had to think about.
+ */
+export const approveUserBody = z.object({
+  customerId: z.number().int().positive(),
+  role,
+});
+
+export const rejectUserBody = z.object({
+  /**
+   * Why, for the audit trail only. Optional, and never mailed to the applicant —
+   * a rejection is news a person may want to deliver themselves.
+   */
+  reason: z.string().trim().max(500).optional(),
+});
+
 export const updateUserBody = z
   .object({
-    role: z.enum(["super_admin", "admin", "user"]).optional(),
+    role: role.optional(),
     teamId: z.number().int().positive().nullable().optional(),
     /**
      * Project this user's tickets route through; `null` detaches them. Routing
@@ -22,6 +57,16 @@ export const updateUserBody = z
      * one is the door.
      */
     isActive: z.boolean().optional(),
+    /**
+     * Suspend an account, or lift a suspension. ONLY those two values.
+     *
+     * `pending` and `rejected` are deliberately not reachable here: they are
+     * states the approval queue owns, and letting a general-purpose patch write
+     * them would mean an active account could be pushed back into a queue it has
+     * already been through — or marked rejected without the decision ever being
+     * made. The approve/reject endpoints are the only way in or out of those.
+     */
+    status: z.enum(["active", "suspended"]).optional(),
   })
   .refine(
     (d) =>
@@ -29,7 +74,8 @@ export const updateUserBody = z
       d.teamId !== undefined ||
       d.projectId !== undefined ||
       d.availableForAssignment !== undefined ||
-      d.isActive !== undefined,
+      d.isActive !== undefined ||
+      d.status !== undefined,
     { message: "Nothing to update" },
   );
 

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { Role } from "../../shared/domain";
+import type { Role, UserStatus } from "../../shared/domain";
 import type { Lang } from "../../shared/i18n";
 import {
   customerReach,
@@ -77,6 +77,18 @@ export type UserDto = {
   /** False = the account is closed: no sign-in, no new work. See User.isActive. */
   isActive: boolean;
   /**
+   * Where the account is in its life — see UserStatus. A THIRD axis, distinct
+   * from `isActive` beside it and from `role` above: `pending` has applied and
+   * nobody has decided, `suspended` was let in and then stopped, `isActive:
+   * false` means the person has left.
+   *
+   * On the DTO because the directory filters and groups by it — the approval
+   * queue is this list with `status=pending`, not a separate collection.
+   */
+  status: UserStatus;
+  /** When the address was proven, or null if never. Shown in the queue. */
+  emailVerifiedAt: string | null;
+  /**
    * The language this person has chosen, or null if they never have. Each
    * reader falls back differently (the app to English, mail to Thai), so the
    * null is passed through rather than resolved here.
@@ -104,6 +116,8 @@ function toDto(row: UserRow): UserDto {
     project: row.project,
     availableForAssignment: row.availableForAssignment,
     isActive: row.isActive,
+    status: row.status,
+    emailVerifiedAt: row.emailVerifiedAt?.toISOString() ?? null,
     language: row.language,
     // A grant naming the user's own customer is stored happily but says nothing,
     // so it is dropped here rather than shown as an extra the person does not have.
@@ -115,13 +129,70 @@ function toDto(row: UserRow): UserDto {
 }
 
 export const userRepository = {
-  async findMany(actor: AuthUser): Promise<UserDto[]> {
+  /**
+   * The directory, narrowed by whatever the caller asked for.
+   *
+   * Filters are ANDed onto the SCOPE, never instead of it — that is the whole
+   * shape of this method. A `customerId` filter in particular reads like it
+   * decides what comes back and must not: asking for a tenant outside your reach
+   * has to return nothing, not that tenant's staff. Hence the nesting, rather
+   * than spreading the filters over the scope clause where a key collision would
+   * silently replace it.
+   *
+   * The approval queue is this list with `status: "pending"`, deliberately — it
+   * is the same rows under the same scope, and a separate endpoint would be a
+   * second place for the tenant filter to be got wrong.
+   */
+  async findMany(
+    actor: AuthUser,
+    filters: {
+      q?: string;
+      role?: Role;
+      status?: UserStatus;
+      customerId?: number;
+    } = {},
+  ): Promise<UserDto[]> {
+    const q = filters.q?.trim();
     const rows = await prisma.user.findMany({
-      where: scopeWhere(actor),
+      where: {
+        AND: [
+          scopeWhere(actor),
+          filters.role ? { role: filters.role } : {},
+          filters.status ? { status: filters.status } : {},
+          filters.customerId != null ? { customerId: filters.customerId } : {},
+          // Name OR email, case-insensitively: a directory search is someone
+          // half-remembering one or the other, and making them choose which
+          // field they are searching is a worse question than searching both.
+          q
+            ? {
+                OR: [
+                  { name: { contains: q, mode: "insensitive" } },
+                  { email: { contains: q, mode: "insensitive" } },
+                ],
+              }
+            : {},
+        ],
+      },
       include: userInclude,
       orderBy: { name: "asc" },
     });
     return rows.map(toDto);
+  },
+
+  /**
+   * Does this customer exist? Used to refuse an approval that names a tenant
+   * that does not, rather than writing the person into nothing.
+   *
+   * Unscoped, deliberately: only a platform-wide principal reaches the approval
+   * path at all (`mayApproveRegistration`), and they reach every customer —
+   * including one created after their token was signed, which a reach list
+   * would not cover.
+   */
+  findCustomerById(id: number) {
+    return prisma.customer.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
   },
 
   async findById(id: number, actor: AuthUser): Promise<UserDto | null> {
@@ -227,6 +298,8 @@ export const userRepository = {
       projectId?: number | null;
       availableForAssignment?: boolean;
       isActive?: boolean;
+      /** `active` ⇄ `suspended` only — the approval decisions have their own path. */
+      status?: UserStatus;
     },
     actor: AuthUser,
   ): Promise<UserDto | null> {
@@ -275,7 +348,98 @@ export const userRepository = {
             // Retiring an account is the change most worth being able to point at
             // later, so it goes in the trail like every other field here.
             isActive: data.isActive,
+            status: data.status,
           },
+        },
+        tx,
+      );
+      return toDto(updated);
+    });
+  },
+
+  /**
+   * Approve a registration: give the account a tenant, a role, and the right to
+   * sign in — in one write, because they are one decision.
+   *
+   * Split from `update` rather than folded into it, and the reason is the
+   * `customerId` field. `update` deliberately cannot set it: moving an existing
+   * person between tenants would re-file every ticket they raise and orphan
+   * nothing that already points at them, so it is not an edit the directory
+   * offers. Here it is not a move — the account has no tenant yet, and choosing
+   * one is what approving MEANS. Keeping the two apart is what stops a
+   * general-purpose patch quietly gaining the power to move people.
+   *
+   * `usedStatus` is checked in the same transaction as the write: two
+   * administrators clicking Approve on the same row must not both succeed, and
+   * the second one should be told what happened rather than silently overwriting
+   * the first one's choice of customer.
+   */
+  async approveRegistration(
+    id: number,
+    data: { customerId: number; role: Role },
+    actor: AuthUser,
+  ): Promise<UserDto | "not_pending" | null> {
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findFirst({
+        where: { id, ...scopeWhere(actor) },
+        select: { status: true },
+      });
+      if (!existing) return null;
+      if (existing.status !== "pending") return "not_pending";
+
+      const updated = await tx.user.update({
+        where: { id },
+        data: { status: "active", customerId: data.customerId, role: data.role },
+        include: userInclude,
+      });
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "user.approve",
+          entity: "user",
+          entityId: id,
+          meta: { customerId: data.customerId, role: data.role },
+        },
+        tx,
+      );
+      return toDto(updated);
+    });
+  },
+
+  /**
+   * Turn a registration down.
+   *
+   * `rejected`, not deleted, and not `isActive: false`. Deleting is not on offer
+   * once the person has raised anything (`Ticket.requesterId` is RESTRICT) and
+   * would be wrong anyway — the row is the evidence that somebody applied and a
+   * person said no. `isActive: false` would say they left, which they never
+   * arrived to do.
+   */
+  async rejectRegistration(
+    id: number,
+    reason: string | undefined,
+    actor: AuthUser,
+  ): Promise<UserDto | "not_pending" | null> {
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findFirst({
+        where: { id, ...scopeWhere(actor) },
+        select: { status: true },
+      });
+      if (!existing) return null;
+      if (existing.status !== "pending") return "not_pending";
+
+      const updated = await tx.user.update({
+        where: { id },
+        data: { status: "rejected" },
+        include: userInclude,
+      });
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "user.reject",
+          entity: "user",
+          entityId: id,
+          meta: reason ? { reason } : {},
         },
         tx,
       );

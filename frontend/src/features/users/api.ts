@@ -3,12 +3,61 @@ import {
   userEnvelopeSchema,
   userListSchema,
   type User,
+  type UserFilters,
   type UserRole,
+  type UserStatus,
 } from "./schemas";
 
-export async function fetchUsers(): Promise<User[]> {
-  const body = await apiRequest("/users");
+export async function fetchUsers(filters: UserFilters = {}): Promise<User[]> {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.role) params.set("role", filters.role);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.customerId != null) {
+    params.set("customerId", String(filters.customerId));
+  }
+  const qs = params.toString();
+  const body = await apiRequest(`/users${qs ? `?${qs}` : ""}`);
   return userListSchema.parse(body).data;
+}
+
+/**
+ * Approve a registration: choose the customer it belongs to and the role it
+ * gets, in one act.
+ *
+ * Both are required by the server, and that is the point rather than an
+ * oversight — approving decides which company somebody is part of and what they
+ * may do, so neither may be defaulted into by a form that forgot to ask.
+ *
+ * Platform-wide staff only. A customer's own super admin cannot see the queue
+ * in the first place: an applicant belongs to no tenant yet, so the directory's
+ * scope filter excludes them.
+ */
+export async function approveUser(
+  id: number,
+  input: { customerId: number; role: UserRole },
+): Promise<User> {
+  const body = await apiRequest(`/users/${id}/approve`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return userEnvelopeSchema.parse(body).data;
+}
+
+/**
+ * Turn a registration down. The reason is for the audit trail only — the
+ * applicant is deliberately not mailed, because a rejection is news somebody may
+ * want to deliver in their own words.
+ */
+export async function rejectUser(
+  id: number,
+  reason?: string,
+): Promise<User> {
+  const body = await apiRequest(`/users/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify(reason?.trim() ? { reason: reason.trim() } : {}),
+  });
+  return userEnvelopeSchema.parse(body).data;
 }
 
 export type UpdateMyProfileInput = {
@@ -51,6 +100,13 @@ export type UpdateUserInput = {
    * that still holds unfinished tickets — hand the queue over first.
    */
   isActive?: boolean;
+  /**
+   * Suspend the account, or lift a suspension. ONLY those two values — the
+   * server refuses `pending` and `rejected` here, because those belong to the
+   * approval queue and an active account must not be pushable back into a queue
+   * it has already been through.
+   */
+  status?: Extract<UserStatus, "active" | "suspended">;
 };
 
 /**

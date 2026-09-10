@@ -61,6 +61,8 @@ function assertMayDelete(actor: AuthUser, projectId?: number): void {
 
 export type CreateProjectInput = {
   name: string;
+  /** Markdown, rendered on the project page. See Project.description. */
+  description?: string | null;
   customerId?: number;
   ownerId?: number | null;
   backupOwnerId?: number | null;
@@ -68,6 +70,8 @@ export type CreateProjectInput = {
 
 export type UpdateProjectInput = {
   name?: string;
+  /** Omitted leaves it as it is; explicit `null` (or empty) clears it. */
+  description?: string | null;
   ownerId?: number | null;
   backupOwnerId?: number | null;
 };
@@ -128,6 +132,7 @@ export const projectService = {
     return projectRepository.create(
       {
         name: input.name,
+        description: input.description,
         customerId,
         ownerId: input.ownerId,
         backupOwnerId: input.backupOwnerId,

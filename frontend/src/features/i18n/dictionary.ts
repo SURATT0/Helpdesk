@@ -686,6 +686,38 @@ const en: Dict = {
   "users.explainer":
     "A user's project decides who their new tickets are assigned to. Marking someone away sends their project's tickets to the backup caseworker instead — it does not change what they can see or work on.",
   "users.saveError": "Couldn't save that change",
+
+  // --- directory filters ---------------------------------------------------
+  "users.search": "Search",
+  "users.searchPlaceholder": "Name or email",
+  "users.role": "Role",
+  "users.anyRole": "Any role",
+  "users.status": "Status",
+  "users.anyStatus": "Any status",
+  "users.customer": "Customer",
+  "users.anyCustomer": "Any customer",
+  "users.clearFilters": "Clear",
+  "users.suspend": "Suspend",
+  "users.reinstate": "Reinstate",
+  "users.col.status": "STATUS",
+
+  "accountStatus.pending": "Awaiting approval",
+  "accountStatus.active": "Active",
+  "accountStatus.suspended": "Suspended",
+  "accountStatus.rejected": "Rejected",
+
+  // --- approval queue ------------------------------------------------------
+  "approvals.title": "{count} waiting to be approved",
+  "approvals.blurb":
+    "These people signed up themselves. Choose the customer they belong to and what they may do — until then they cannot sign in or see anything.",
+  "approvals.customer": "Customer",
+  "approvals.role": "Role",
+  "approvals.choose": "Choose…",
+  "approvals.approve": "Approve",
+  "approvals.reject": "Reject",
+  "approvals.unverified": "Has not confirmed their email address yet",
+  "approvals.error": "Couldn't complete that. Try again.",
+
   "settings.availability": "Availability",
   "settings.availabilityNote":
     "Turn this off while you're away. New tickets from your projects go to the backup caseworker instead. You keep full access to the tickets you already hold.",
@@ -742,6 +774,25 @@ const en: Dict = {
   "projects.saving": "Saving…",
   "projects.namePlaceholder": "Project name",
   "projects.createError": "Couldn't create — the name may already be in use",
+  "projects.customer": "Customer",
+  "projects.chooseCustomer": "Choose a customer…",
+  "projects.descriptionPlaceholder":
+    "What is this project? Scope, contacts, the standing arrangement… (optional)",
+  "projects.descriptionHint":
+    "Markdown-lite: “## ” for a heading, “- ” for a bullet, a blank line starts a new block.",
+  "projects.away": "away",
+  "projects.noOwner": "nobody yet",
+
+  // --- project detail ------------------------------------------------------
+  "projectDetail.back": "All projects",
+  "projectDetail.about": "About this project",
+  "projectDetail.noDescription": "No description has been written yet.",
+  "projectDetail.owner": "Owner",
+  "projectDetail.backup": "Backup",
+  "projectDetail.members": "{count} routing through it",
+  "projectDetail.tickets": "Tickets ({count})",
+  "projectDetail.noTickets": "No tickets have been filed under this project.",
+  "projectDetail.notFound": "That project doesn't exist, or isn't yours to see.",
   "projects.saveError": "Couldn't save that change",
   "project.delete.title": "Delete project",
   "project.delete.forProject": "Delete project {name}",
@@ -1508,6 +1559,38 @@ const th: Dict = {
   "users.explainer":
     "โปรเจกต์ของผู้ใช้กำหนดว่า Ticket ใหม่ของเขาจะถูก assign ให้ใคร การตั้งว่าไม่สะดวกจะทำให้ Ticket ของโปรเจกต์นั้นไปที่ผู้ดูแลสำรองแทน — ไม่ได้เปลี่ยนสิ่งที่เขามองเห็นหรือทำงานได้",
   "users.saveError": "บันทึกการเปลี่ยนแปลงไม่สำเร็จ",
+
+  // --- directory filters ---------------------------------------------------
+  "users.search": "ค้นหา",
+  "users.searchPlaceholder": "ชื่อหรืออีเมล",
+  "users.role": "บทบาท",
+  "users.anyRole": "ทุกบทบาท",
+  "users.status": "สถานะ",
+  "users.anyStatus": "ทุกสถานะ",
+  "users.customer": "ลูกค้า",
+  "users.anyCustomer": "ทุกลูกค้า",
+  "users.clearFilters": "ล้างตัวกรอง",
+  "users.suspend": "ระงับการใช้งาน",
+  "users.reinstate": "ยกเลิกการระงับ",
+  "users.col.status": "สถานะ",
+
+  "accountStatus.pending": "รออนุมัติ",
+  "accountStatus.active": "ใช้งานอยู่",
+  "accountStatus.suspended": "ถูกระงับ",
+  "accountStatus.rejected": "ถูกปฏิเสธ",
+
+  // --- approval queue ------------------------------------------------------
+  "approvals.title": "มีผู้รออนุมัติ {count} คน",
+  "approvals.blurb":
+    "คนเหล่านี้สมัครใช้งานเข้ามาเอง กรุณาเลือกว่าสังกัดลูกค้ารายใดและมีสิทธิ์ทำอะไรได้บ้าง ระหว่างนี้พวกเขายังเข้าสู่ระบบและมองเห็นข้อมูลใด ๆ ไม่ได้",
+  "approvals.customer": "ลูกค้าที่สังกัด",
+  "approvals.role": "บทบาท",
+  "approvals.choose": "เลือก…",
+  "approvals.approve": "อนุมัติ",
+  "approvals.reject": "ปฏิเสธ",
+  "approvals.unverified": "ยังไม่ได้ยืนยันอีเมล",
+  "approvals.error": "ดำเนินการไม่สำเร็จ กรุณาลองใหม่",
+
   "settings.availability": "สถานะการรับงาน",
   "settings.availabilityNote":
     "ปิดไว้ตอนที่คุณไม่สะดวก Ticket ใหม่จากโปรเจกต์ของคุณจะไปที่ผู้ดูแลสำรองแทน คุณยังเข้าถึง Ticket ที่ถืออยู่ได้เต็มที่",
@@ -1565,6 +1648,25 @@ const th: Dict = {
   "projects.saving": "กำลังบันทึก…",
   "projects.namePlaceholder": "ชื่อโปรเจกต์",
   "projects.createError": "สร้างไม่สำเร็จ — ชื่อนี้อาจถูกใช้แล้ว",
+  "projects.customer": "ลูกค้า",
+  "projects.chooseCustomer": "เลือกลูกค้า…",
+  "projects.descriptionPlaceholder":
+    "โปรเจกต์นี้คืออะไร ขอบเขตงาน ผู้ติดต่อ ข้อตกลงที่มีอยู่… (ไม่บังคับ)",
+  "projects.descriptionHint":
+    "รองรับ markdown อย่างง่าย: “## ” คือหัวข้อ, “- ” คือรายการ, บรรทัดว่างคือขึ้นย่อหน้าใหม่",
+  "projects.away": "ไม่สะดวก",
+  "projects.noOwner": "ยังไม่มีผู้ดูแล",
+
+  // --- project detail ------------------------------------------------------
+  "projectDetail.back": "โปรเจกต์ทั้งหมด",
+  "projectDetail.about": "เกี่ยวกับโปรเจกต์นี้",
+  "projectDetail.noDescription": "ยังไม่มีการเขียนรายละเอียดไว้",
+  "projectDetail.owner": "ผู้ดูแล",
+  "projectDetail.backup": "ผู้ดูแลสำรอง",
+  "projectDetail.members": "มีผู้ใช้ {count} คนส่งงานผ่านโปรเจกต์นี้",
+  "projectDetail.tickets": "Ticket ({count})",
+  "projectDetail.noTickets": "ยังไม่มี Ticket ที่อยู่ภายใต้โปรเจกต์นี้",
+  "projectDetail.notFound": "ไม่พบโปรเจกต์นี้ หรือคุณไม่มีสิทธิ์เข้าถึง",
   "projects.saveError": "บันทึกการเปลี่ยนแปลงไม่สำเร็จ",
   "project.delete.title": "ลบโปรเจกต์",
   "project.delete.forProject": "ลบโปรเจกต์ {name}",

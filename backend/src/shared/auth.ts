@@ -120,6 +120,30 @@ export function mayGrantReach(user: {
 }
 
 /**
+ * May this principal decide on somebody's registration — approve it into a
+ * customer, or turn it down?
+ *
+ * Platform-wide only, and for a reason that falls out of the data rather than
+ * being imposed: a self-registered account has NO customer yet, because nobody
+ * has decided which one it belongs to. `scopeWhere` in the user directory
+ * matches on `customerId IN (reach)`, so a customer-bound principal cannot see
+ * such a row in the first place — the queue is invisible to them whatever this
+ * predicate said.
+ *
+ * Stating it here anyway, rather than letting the scope filter be the whole
+ * story: approving is the act that CHOOSES the tenant, which makes it the same
+ * shape of decision as `mayGrantReach` above — it puts a person inside a
+ * customer — and a gate that exists only as a side effect of a where-clause is
+ * one a future refactor removes without noticing.
+ */
+export function mayApproveRegistration(user: {
+  role: Role;
+  customerId: number | null;
+}): boolean {
+  return isPlatformWide(user);
+}
+
+/**
  * May this principal see how much work OTHER people are carrying?
  *
  * The one place that decides it, for the same reason `isPlatformWide` is one
