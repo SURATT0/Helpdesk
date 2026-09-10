@@ -2057,7 +2057,7 @@ function idsIn(res: { body: { data: { id: number }[] } }): number[] {
 describe("tickets — customer isolation (unassigned ticket)", () => {
   it("shows an unassigned ticket to any agent in its customer, but not to other customers", async () => {
     const category = await prisma.category.create({
-      data: { name: "Uncategorized", defaultTeamId: null },
+      data: { name: "Uncategorized", code: "UNCATEGORIZED", defaultTeamId: null },
     });
     const acme = await prisma.customer.findUniqueOrThrow({
       where: { name: "Acme Corp" },

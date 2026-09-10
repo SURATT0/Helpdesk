@@ -145,7 +145,9 @@ describe("category names", () => {
       where: { customerId: null },
     });
     await expect(
-      prisma.category.create({ data: { name: shared.name, customerId: null } }),
+      prisma.category.create({
+        data: { name: shared.name, code: "PROBE_SHARED_DUP", customerId: null },
+      }),
     ).rejects.toThrow();
   });
 
@@ -155,7 +157,7 @@ describe("category names", () => {
       where: { customerId: null },
     });
     const own = await prisma.category.create({
-      data: { name: shared.name, customerId: a.id },
+      data: { name: shared.name, code: "PROBE_OWN_AFTER_SHARED", customerId: a.id },
     });
     expect(own.customerId).toBe(a.id);
     await prisma.category.delete({ where: { id: own.id } });
@@ -164,11 +166,22 @@ describe("category names", () => {
   it("refuses a second category of the same name within one customer", async () => {
     const a = await acme();
     const first = await prisma.category.create({
-      data: { name: "Constraint probe — category", customerId: a.id },
+      data: {
+        name: "Constraint probe — category",
+        code: "PROBE_CATEGORY_A",
+        customerId: a.id,
+      },
     });
     await expect(
       prisma.category.create({
-        data: { name: "Constraint probe — category", customerId: a.id },
+        // A DIFFERENT code, deliberately: what this asserts is that the NAME
+        // collides within one customer. Reusing the code would leave the test
+        // passing for whichever constraint fired first.
+        data: {
+          name: "Constraint probe — category",
+          code: "PROBE_CATEGORY_B",
+          customerId: a.id,
+        },
       }),
     ).rejects.toThrow();
     await prisma.category.delete({ where: { id: first.id } });
@@ -184,7 +197,11 @@ describe("deleting a customer cannot publish their categories", () => {
       data: { name: "Constraint probe — customer" },
     });
     const category = await prisma.category.create({
-      data: { name: "Constraint probe — private", customerId: victim.id },
+      data: {
+        name: "Constraint probe — private",
+        code: "PROBE_PRIVATE",
+        customerId: victim.id,
+      },
     });
 
     await expect(

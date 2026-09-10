@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
+import { categoryCode } from "../src/modules/categories/category.code";
 import { KB_ARTICLES } from "./kb-seed-data";
 
 // Every seeded user shares this demo password. Log in as e.g. dana.reyes@acme.com.
@@ -349,6 +350,14 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         customerId,
         passwordHash,
         availableForAssignment,
+        // Reset on RE-seed as well, unlike `isActive` just below it, and the
+        // difference is deliberate. The seed's job is to put the demo desk in a
+        // known-good state, and an account left `pending` from a registration
+        // someone was testing is not one — it cannot sign in, so every E2E spec
+        // that logs in as them fails looking like a broken login page rather
+        // than like stale data. `isActive` stays out because deactivation is a
+        // demo scenario the seed itself sets up; `status` is not.
+        status: "active",
       },
       create: {
         name: u.name,
@@ -358,6 +367,10 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         customerId,
         passwordHash,
         availableForAssignment,
+        // Seeded staff are accounts an administrator would have created and
+        // approved. Named explicitly because the column has no default — see the
+        // note on `User.status`.
+        status: "active",
       },
     });
     userIds.set(u.name, row.id);
@@ -445,10 +458,15 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     const row = existing
       ? await prisma.category.update({
           where: { id: existing.id },
-          data: { defaultTeamId },
+          data: { defaultTeamId, code: categoryCode(c.name) },
         })
       : await prisma.category.create({
-          data: { name: c.name, customerId: null, defaultTeamId },
+          data: {
+            name: c.name,
+            code: categoryCode(c.name),
+            customerId: null,
+            defaultTeamId,
+          },
         });
     categoryIds.set(c.name, row.id);
   }

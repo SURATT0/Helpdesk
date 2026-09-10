@@ -65,6 +65,21 @@ export const emailRepository = {
         role: "user",
         passwordHash: null,
         customerId,
+        // `active`, not `pending`, and the difference matters twice over.
+        //
+        // This row is a CORRESPONDENT, not an application: the desk has already
+        // accepted their mail and filed a ticket for them, and nobody asked to
+        // join anything. Routing them into the approval queue would fill it with
+        // every address that ever wrote in, and "approving" one would grant
+        // nothing, because what keeps them out of the app is the null password
+        // below, not their status.
+        //
+        // That null is load-bearing, so the password-reset path must refuse an
+        // account that has never had a password — otherwise anyone could mail the
+        // desk, get a row created, and then "reset" their way into the tenant.
+        // See `auth.service.requestPasswordReset`, which is where that is
+        // enforced.
+        status: "active",
       },
       select: { id: true },
     });
