@@ -34,6 +34,30 @@ export type Role = "super_admin" | "admin" | "user";
 /** Highest first. Index = rank, so a lower index outranks a higher one. */
 export const ROLE_ORDER: readonly Role[] = ["super_admin", "admin", "user"];
 
+/**
+ * Where an account is in its life — a third axis, separate from both the role
+ * (what it may do) and the reach (which tenants it sees).
+ *
+ * Only `active` may hold a session. The other three are all "no", kept apart
+ * because they are answers to different questions and the person is told a
+ * different thing by each: `pending` has applied and nobody has decided yet,
+ * `rejected` was decided against, `suspended` was let in and then stopped.
+ */
+export type UserStatus = "pending" | "active" | "suspended" | "rejected";
+
+/**
+ * May an account in this state hold a session?
+ *
+ * The single source of truth, deliberately one function rather than
+ * `status === "active"` written at each gate. There are four of those — sign-in,
+ * token refresh, `GET /me` and the bearer-token middleware — and a fifth will be
+ * added by whoever adds the next entry point. One of five copies drifting is a
+ * way in.
+ */
+export function maySignIn(status: UserStatus): boolean {
+  return status === "active";
+}
+
 /** Does `role` sit at or above `minimum` in the hierarchy? */
 export function roleAtLeast(role: Role, minimum: Role): boolean {
   return ROLE_ORDER.indexOf(role) <= ROLE_ORDER.indexOf(minimum);

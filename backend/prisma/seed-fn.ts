@@ -358,6 +358,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         // than like stale data. `isActive` stays out because deactivation is a
         // demo scenario the seed itself sets up; `status` is not.
         status: "active",
+        emailVerifiedAt: new Date(),
       },
       create: {
         name: u.name,
@@ -371,6 +372,13 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         // approved. Named explicitly because the column has no default — see the
         // note on `User.status`.
         status: "active",
+        // And their addresses count as proven, for the same reason the migration
+        // stamped the accounts that predated the column: an administrator made
+        // them, knowing whose they were. Missing this is not a subtle bug — the
+        // sign-in gate refuses an unverified account, so a seed without it makes
+        // EVERY seeded user unable to log in, which is how the integration suite
+        // found it.
+        emailVerifiedAt: new Date(),
       },
     });
     userIds.set(u.name, row.id);

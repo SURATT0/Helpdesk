@@ -23,6 +23,11 @@ const TABLES = [
   "user_customers",
   "ticket_status_history",
   "refresh_tokens",
+  // Single-use reset / confirmation tokens. Named here for the same reason as
+  // `user_customers` above: a live token left behind by the previous case is the
+  // kind of leftover that makes the next one pass for the wrong reason — a
+  // single-use test in particular would find a second usable row waiting.
+  "user_tokens",
   "tickets",
   "categories",
   "users",

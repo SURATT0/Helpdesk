@@ -48,5 +48,34 @@ export const sessionSchema = z.object({
 export const sessionEnvelope = z.object({ data: sessionSchema });
 export const userEnvelope = z.object({ data: authUserSchema });
 
+/**
+ * Where an account stands. Only `active` may sign in.
+ *
+ * The web app reads this in exactly one place — the confirmation page, to say
+ * what is still outstanding after an address is proven. It is deliberately NOT
+ * on `authUserSchema`: a session only ever exists for an `active` account, so a
+ * status field there could only ever hold one value and would invite code that
+ * branches on a state it can never be in.
+ */
+export const userStatusSchema = z.enum([
+  "pending",
+  "active",
+  "suspended",
+  "rejected",
+]);
+
+/**
+ * The shape the self-service endpoints answer with: one sentence, written by the
+ * server. See the note in api.ts for why the copy lives there and not here.
+ */
+export const messageEnvelope = z.object({
+  data: z.object({ message: z.string() }),
+});
+
+export const verifyEmailEnvelope = z.object({
+  data: z.object({ status: userStatusSchema }),
+});
+
 export type Role = z.infer<typeof roleSchema>;
+export type UserStatus = z.infer<typeof userStatusSchema>;
 export type AuthUser = z.infer<typeof authUserSchema>;

@@ -82,6 +82,29 @@ export const env = {
   // Max login attempts per IP per 15-min window (brute-force guard). Raised in
   // the integration-test config so the suite's many logins don't trip it.
   authRateLimit: Number(process.env.AUTH_RATE_LIMIT ?? 20),
+  // Registration attempts per ADDRESS per 15-min window, and password-reset
+  // requests per address per 15-min window.
+  //
+  // Keyed on the address for the same reason logins are (see auth.rate-limit.ts):
+  // behind the web app's proxy there is no caller address to count. What that
+  // buys here is narrower than it is for login, and worth stating plainly — it
+  // stops one address being mail-bombed with reset links, and stops one address
+  // being probed, but it cannot stop a script registering a thousand DIFFERENT
+  // addresses, because each of those is its own budget. The defence against that
+  // is the approval queue: none of them can see anything until a person says so.
+  registerRateLimit: Number(process.env.REGISTER_RATE_LIMIT ?? 5),
+  passwordResetRateLimit: Number(process.env.PASSWORD_RESET_RATE_LIMIT ?? 5),
+  // How long a password-reset link works. One hour, and deliberately short: the
+  // link is a bearer credential sitting in an inbox, and the cost of it expiring
+  // is one more click on "forgot password".
+  passwordResetTtlSec: Number(process.env.PASSWORD_RESET_TTL_SEC ?? 60 * 60),
+  // How long an email-confirmation link works. Longer than a reset, because it
+  // is not a way in — an account that confirms its address is still `pending`
+  // and still sees nothing until a person approves it — and because the person
+  // clicking it may not read that mailbox daily.
+  emailVerificationTtlSec: Number(
+    process.env.EMAIL_VERIFICATION_TTL_SEC ?? 24 * 60 * 60,
+  ),
   // Background sweep that closes tickets left resolved > 72h. Set AUTO_CLOSE=false to disable.
   autoClose: process.env.AUTO_CLOSE !== "false",
   // Background sweep that notifies staff about SLA clocks nearing or past their

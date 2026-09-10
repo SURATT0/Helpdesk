@@ -776,7 +776,6 @@ const en: Dict = {
   "login.email": "Work email",
   "login.password": "Password",
   "login.forgot": "Forgot?",
-  "login.forgotHint": "Contact your administrator to reset your password.",
   "login.showPassword": "Show password",
   "login.hidePassword": "Hide password",
   "login.submitting": "Signing in…",
@@ -786,6 +785,69 @@ const en: Dict = {
   "login.tagline": "Every ticket, handled with care.",
   "login.blurb":
     "The internal help desk for Acme Corp. Raise requests, track progress, get answers.",
+  "login.noAccount": "Don't have an account?",
+  "login.register": "Sign up",
+
+  // --- register ------------------------------------------------------------
+  "register.title": "Create an account",
+  "register.subtitle": "Sign up and an administrator will review your request.",
+  "register.name": "Full name",
+  "register.email": "Work email",
+  "register.password": "Password",
+  "register.passwordHint": "At least 10 characters. A passphrase is fine.",
+  "register.confirmPassword": "Confirm password",
+  "register.mismatch": "The two passwords do not match.",
+  // Shown BEFORE submitting, on purpose. Somebody who signs up expecting to be
+  // let straight in and is then told to wait has been misled by the form.
+  "register.approvalNotice":
+    "New accounts are not active straight away. You will confirm your email, then an administrator approves the account before you can sign in.",
+  "register.submit": "Create account",
+  "register.submitting": "Creating…",
+  "register.sentTitle": "Check your email",
+  "register.error": "Couldn't create the account. Try again.",
+  "register.haveAccount": "Already have an account?",
+  "register.signIn": "Sign in",
+  "register.backToSignIn": "Back to sign in",
+
+  // --- forgot password -----------------------------------------------------
+  "forgot.title": "Reset your password",
+  "forgot.subtitle":
+    "Enter your email address and we will send you a link to choose a new password.",
+  "forgot.submit": "Send reset link",
+  "forgot.submitting": "Sending…",
+  "forgot.sentTitle": "Check your email",
+  "forgot.checkSpam":
+    "The message can take a minute to arrive. Check your spam folder if you do not see it.",
+  "forgot.error": "Couldn't send the link. Try again.",
+
+  // --- reset password ------------------------------------------------------
+  "reset.title": "Choose a new password",
+  "reset.subtitle": "Pick something you have not used on this account before.",
+  "reset.newPassword": "New password",
+  "reset.signOutNotice":
+    "Setting a new password signs this account out on every other device.",
+  "reset.submit": "Save new password",
+  "reset.submitting": "Saving…",
+  "reset.doneTitle": "Password changed",
+  "reset.invalidTitle": "This link cannot be used",
+  "reset.noToken":
+    "This address is missing its reset code. Open the link from your email, or request a new one.",
+  "reset.requestNew": "Request a new link",
+  "reset.error": "Couldn't change the password. Try again.",
+
+  // --- confirm email -------------------------------------------------------
+  "verify.working": "Confirming your address…",
+  "verify.doneTitle": "Email confirmed",
+  "verify.confirmed": "Your email address has been confirmed.",
+  "verify.stillPending":
+    "One step left, and it is not yours: an administrator has to approve the account. You will be emailed when that happens.",
+  "verify.readyToSignIn": "Your account is approved — you can sign in now.",
+  "verify.failedTitle": "This link cannot be used",
+  "verify.noToken":
+    "This address is missing its confirmation code. Open the link from your email.",
+  "verify.failedHint":
+    "Confirmation links expire and can only be used once. If yours has expired, sign up again or ask an administrator.",
+  "verify.error": "Couldn't confirm the address.",
 };
 
 const th: Dict = {
@@ -1535,7 +1597,6 @@ const th: Dict = {
   "login.email": "อีเมลที่ทำงาน",
   "login.password": "รหัสผ่าน",
   "login.forgot": "ลืมรหัส?",
-  "login.forgotHint": "ติดต่อผู้ดูแลระบบเพื่อรีเซ็ตรหัสผ่านของคุณ",
   "login.showPassword": "แสดงรหัสผ่าน",
   "login.hidePassword": "ซ่อนรหัสผ่าน",
   "login.submitting": "กำลังเข้าสู่ระบบ…",
@@ -1545,6 +1606,65 @@ const th: Dict = {
   "login.tagline": "ทุก Ticket ดูแลอย่างใส่ใจ",
   "login.blurb":
     "ระบบ help desk ภายในของ Acme Corp แจ้งเรื่อง ติดตามความคืบหน้า และรับคำตอบ",
+  "login.noAccount": "ยังไม่มีบัญชี?",
+  "login.register": "สมัครใช้งาน",
+
+  // --- register ------------------------------------------------------------
+  "register.title": "สมัครใช้งาน",
+  "register.subtitle": "สมัครเข้ามาแล้วผู้ดูแลระบบจะพิจารณาคำขอของคุณ",
+  "register.name": "ชื่อ-นามสกุล",
+  "register.email": "อีเมลที่ทำงาน",
+  "register.password": "รหัสผ่าน",
+  "register.passwordHint": "อย่างน้อย 10 ตัวอักษร ใช้เป็นวลียาว ๆ ก็ได้",
+  "register.confirmPassword": "ยืนยันรหัสผ่าน",
+  "register.mismatch": "รหัสผ่านทั้งสองช่องไม่ตรงกัน",
+  "register.approvalNotice":
+    "บัญชีใหม่ยังใช้งานไม่ได้ทันที คุณต้องยืนยันอีเมลก่อน จากนั้นผู้ดูแลระบบจะอนุมัติบัญชี แล้วจึงเข้าสู่ระบบได้",
+  "register.submit": "สร้างบัญชี",
+  "register.submitting": "กำลังสร้างบัญชี…",
+  "register.sentTitle": "กรุณาตรวจสอบอีเมล",
+  "register.error": "สร้างบัญชีไม่สำเร็จ ลองอีกครั้ง",
+  "register.haveAccount": "มีบัญชีอยู่แล้ว?",
+  "register.signIn": "เข้าสู่ระบบ",
+  "register.backToSignIn": "กลับไปหน้าเข้าสู่ระบบ",
+
+  // --- forgot password -----------------------------------------------------
+  "forgot.title": "ตั้งรหัสผ่านใหม่",
+  "forgot.subtitle": "กรอกอีเมลของคุณ ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปให้",
+  "forgot.submit": "ส่งลิงก์ตั้งรหัสผ่าน",
+  "forgot.submitting": "กำลังส่ง…",
+  "forgot.sentTitle": "กรุณาตรวจสอบอีเมล",
+  "forgot.checkSpam":
+    "อีเมลอาจใช้เวลาสักครู่ หากไม่พบกรุณาตรวจสอบในโฟลเดอร์อีเมลขยะ",
+  "forgot.error": "ส่งลิงก์ไม่สำเร็จ ลองอีกครั้ง",
+
+  // --- reset password ------------------------------------------------------
+  "reset.title": "ตั้งรหัสผ่านใหม่",
+  "reset.subtitle": "เลือกรหัสผ่านที่ไม่เคยใช้กับบัญชีนี้มาก่อน",
+  "reset.newPassword": "รหัสผ่านใหม่",
+  "reset.signOutNotice":
+    "เมื่อตั้งรหัสผ่านใหม่ ระบบจะออกจากการใช้งานบัญชีนี้ในอุปกรณ์อื่นทั้งหมด",
+  "reset.submit": "บันทึกรหัสผ่านใหม่",
+  "reset.submitting": "กำลังบันทึก…",
+  "reset.doneTitle": "เปลี่ยนรหัสผ่านแล้ว",
+  "reset.invalidTitle": "ลิงก์นี้ใช้งานไม่ได้",
+  "reset.noToken":
+    "ที่อยู่นี้ไม่มีรหัสสำหรับตั้งรหัสผ่าน กรุณาเปิดลิงก์จากอีเมล หรือขอลิงก์ใหม่",
+  "reset.requestNew": "ขอลิงก์ใหม่",
+  "reset.error": "เปลี่ยนรหัสผ่านไม่สำเร็จ ลองอีกครั้ง",
+
+  // --- confirm email -------------------------------------------------------
+  "verify.working": "กำลังยืนยันอีเมล…",
+  "verify.doneTitle": "ยืนยันอีเมลแล้ว",
+  "verify.confirmed": "ยืนยันอีเมลของคุณเรียบร้อยแล้ว",
+  "verify.stillPending":
+    "เหลืออีกหนึ่งขั้นตอนซึ่งไม่ได้อยู่ที่คุณ ผู้ดูแลระบบต้องอนุมัติบัญชีก่อน ระบบจะแจ้งกลับทางอีเมลเมื่ออนุมัติแล้ว",
+  "verify.readyToSignIn": "บัญชีของคุณได้รับการอนุมัติแล้ว เข้าสู่ระบบได้เลย",
+  "verify.failedTitle": "ลิงก์นี้ใช้งานไม่ได้",
+  "verify.noToken": "ที่อยู่นี้ไม่มีรหัสยืนยัน กรุณาเปิดลิงก์จากอีเมล",
+  "verify.failedHint":
+    "ลิงก์ยืนยันมีวันหมดอายุและใช้ได้ครั้งเดียว หากลิงก์หมดอายุแล้ว กรุณาสมัครใหม่หรือติดต่อผู้ดูแลระบบ",
+  "verify.error": "ยืนยันอีเมลไม่สำเร็จ",
 };
 
 export const dictionaries: Record<Lang, Dict> = { en, th };

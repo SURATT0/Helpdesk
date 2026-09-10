@@ -111,6 +111,49 @@ const en: Dict = {
   "footer.replyHint": "Reply to this email and your message is added to the ticket.",
   "footer.internalWarning":
     "This note is internal to the support desk. Do not forward it to the requester.",
+
+  // --- account mail --------------------------------------------------------
+  //
+  // Addressed to somebody who is not signed in and may never have been, so
+  // nothing here may reference a ticket, and the footer above does not apply.
+  "account.verify.subject": "Confirm your email address",
+  "account.verify.greeting": "Hello {name},",
+  "account.verify.body":
+    "An account was created for this address on the Deskly help desk. Confirm the address to finish signing up.",
+  "account.verify.cta": "Confirm this address",
+  "account.verify.expiry": "This link works for {hours} hours.",
+  "account.verify.pending":
+    "Confirming your address is not the last step: an administrator still has to approve the account before you can sign in. You will be emailed when that happens.",
+  "account.verify.ignore":
+    "If you did not create this account, you can ignore this email — nothing was activated and no one can sign in with it.",
+
+  // Sent to an address that ALREADY has an account when somebody tries to
+  // register it again. The reply to the person registering is the same either
+  // way, so this mail is the only place the difference is visible — and it goes
+  // to the address's real owner, who is the one entitled to know.
+  "account.exists.subject": "Someone tried to register your email address",
+  "account.exists.body":
+    "Somebody submitted the sign-up form using this address on the Deskly help desk. You already have an account, so nothing was created and nothing has changed.",
+  "account.exists.action":
+    "If that was you, sign in as usual — or use \"Forgot password\" if you cannot remember your password.",
+  "account.exists.ignore":
+    "If it was not you, no action is needed. Whoever submitted the form was not told whether this address has an account.",
+
+  "account.reset.subject": "Reset your password",
+  "account.reset.body":
+    "A password reset was requested for this account on the Deskly help desk.",
+  "account.reset.cta": "Choose a new password",
+  "account.reset.expiry":
+    "This link works for {minutes} minutes and can be used once.",
+  "account.reset.signout":
+    "Setting a new password signs the account out everywhere else.",
+  "account.reset.ignore":
+    "If you did not ask for this, you can ignore this email — your current password still works and nothing has changed.",
+
+  "account.approved.subject": "Your account has been approved",
+  "account.approved.body":
+    "An administrator has approved your account. You can now sign in.",
+  "account.approved.cta": "Sign in",
 };
 
 const th: Dict = {
@@ -189,6 +232,40 @@ const th: Dict = {
   "footer.replyHint": "ตอบกลับอีเมลนี้เพื่อเพิ่มข้อความเข้าเรื่องได้เลย",
   "footer.internalWarning":
     "บันทึกนี้เป็นข้อมูลภายในของทีมผู้ดูแล ห้ามส่งต่อให้ผู้แจ้ง",
+
+  // --- account mail --------------------------------------------------------
+  "account.verify.subject": "ยืนยันอีเมลของคุณ",
+  "account.verify.greeting": "สวัสดีคุณ{name}",
+  "account.verify.body":
+    "มีการสมัครใช้งานระบบ Deskly ด้วยอีเมลนี้ กรุณายืนยันอีเมลเพื่อสมัครให้เสร็จสมบูรณ์",
+  "account.verify.cta": "ยืนยันอีเมลนี้",
+  "account.verify.expiry": "ลิงก์นี้ใช้ได้ภายใน {hours} ชั่วโมง",
+  "account.verify.pending":
+    "การยืนยันอีเมลยังไม่ใช่ขั้นตอนสุดท้าย ผู้ดูแลระบบต้องอนุมัติบัญชีของคุณก่อนจึงจะเข้าใช้งานได้ ระบบจะแจ้งกลับทางอีเมลเมื่อได้รับการอนุมัติ",
+  "account.verify.ignore":
+    "หากคุณไม่ได้สมัครใช้งาน ไม่ต้องดำเนินการใด ๆ บัญชียังไม่ถูกเปิดใช้และไม่มีใครเข้าใช้งานด้วยอีเมลนี้ได้",
+
+  "account.exists.subject": "มีผู้พยายามสมัครใช้งานด้วยอีเมลของคุณ",
+  "account.exists.body":
+    "มีผู้กรอกแบบฟอร์มสมัครใช้งานระบบ Deskly ด้วยอีเมลนี้ เนื่องจากอีเมลนี้มีบัญชีอยู่แล้ว ระบบจึงไม่ได้สร้างบัญชีใหม่และไม่มีอะไรเปลี่ยนแปลง",
+  "account.exists.action":
+    "หากเป็นคุณเอง กรุณาเข้าสู่ระบบตามปกติ หรือใช้ \"ลืมรหัสผ่าน\" หากจำรหัสผ่านไม่ได้",
+  "account.exists.ignore":
+    "หากไม่ใช่คุณ ไม่ต้องดำเนินการใด ๆ ผู้ที่กรอกแบบฟอร์มไม่ได้รับแจ้งว่าอีเมลนี้มีบัญชีอยู่หรือไม่",
+
+  "account.reset.subject": "ตั้งรหัสผ่านใหม่",
+  "account.reset.body": "มีการขอตั้งรหัสผ่านใหม่สำหรับบัญชีนี้ในระบบ Deskly",
+  "account.reset.cta": "ตั้งรหัสผ่านใหม่",
+  "account.reset.expiry": "ลิงก์นี้ใช้ได้ภายใน {minutes} นาที และใช้ได้เพียงครั้งเดียว",
+  "account.reset.signout":
+    "เมื่อตั้งรหัสผ่านใหม่สำเร็จ ระบบจะออกจากการใช้งานบัญชีนี้ในทุกอุปกรณ์",
+  "account.reset.ignore":
+    "หากคุณไม่ได้เป็นผู้ขอ ไม่ต้องดำเนินการใด ๆ รหัสผ่านเดิมยังใช้ได้และไม่มีอะไรเปลี่ยนแปลง",
+
+  "account.approved.subject": "บัญชีของคุณได้รับการอนุมัติแล้ว",
+  "account.approved.body":
+    "ผู้ดูแลระบบอนุมัติบัญชีของคุณแล้ว คุณสามารถเข้าสู่ระบบได้ทันที",
+  "account.approved.cta": "เข้าสู่ระบบ",
 };
 
 const dictionaries: Record<Lang, Dict> = { en, th };

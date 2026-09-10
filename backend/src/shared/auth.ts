@@ -1,4 +1,4 @@
-import type { Role } from "./domain";
+import type { Role, UserStatus } from "./domain";
 
 /**
  * The authenticated principal carried on the access-token JWT and attached to
@@ -10,6 +10,22 @@ export type AuthUser = {
   name: string;
   email: string;
   role: Role;
+  /**
+   * Where the account stood when this token was minted. Only `active` may act —
+   * `requireAuth` refuses everything else, so an approval revoked mid-session
+   * takes effect within the access token's 15 minutes rather than at the next
+   * sign-in.
+   *
+   * Carried on the token rather than read from the database per request, exactly
+   * like the role and the reach beside it: the middleware stays a signature
+   * check with no query behind it. The same 15-minute lag applies, and the same
+   * thing closes it — `refresh` re-reads the row and refuses to rotate.
+   *
+   * Optional on the TYPE only, for tokens minted before this claim existed;
+   * `verifyAccessToken` defaults those to `active`, which is what every account
+   * that held one was.
+   */
+  status: UserStatus;
   /** Team + department are retained for routing/display. */
   teamId: number | null;
   department: string | null;

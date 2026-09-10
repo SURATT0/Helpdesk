@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
@@ -29,7 +30,6 @@ export default function LoginPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
-  const [showForgot, setShowForgot] = React.useState(false);
   // Empty. The demo account belongs behind the "demo login" button below, not
   // prefilled into the field a real deployment's users type into.
   const [email, setEmail] = React.useState("");
@@ -126,20 +126,20 @@ export default function LoginPage() {
             <div>
               <div className="flex items-baseline justify-between">
                 <Label htmlFor="password">{t("login.password")}</Label>
-                <button
-                  type="button"
-                  onClick={() => setShowForgot((v) => !v)}
-                  aria-expanded={showForgot}
+                {/*
+                  A real link now, where this used to be a disclosure that said
+                  "contact your administrator" — there was nothing to send people
+                  to. It goes to the page rather than opening a field inline so
+                  that the address they type is submitted by the form that knows
+                  the answer is always the same sentence.
+                */}
+                <Link
+                  href="/forgot-password"
                   className="mb-1.5 text-dense font-medium text-brand hover:text-brand-hover hover:underline"
                 >
                   {t("login.forgot")}
-                </button>
+                </Link>
               </div>
-              {showForgot ? (
-                <div className="mb-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-dense leading-relaxed text-[#166534]">
-                  {t("login.forgotHint")}
-                </div>
-              ) : null}
               <div className="relative">
                 <Lock
                   size={16}
@@ -190,6 +190,16 @@ export default function LoginPage() {
               {t("login.demoLogin")}
             </button>
           </form>
+
+          <div className="mt-5 border-t border-line pt-5 text-center text-control text-muted">
+            {t("login.noAccount")}{" "}
+            <Link
+              href="/register"
+              className="font-semibold text-brand hover:text-brand-hover hover:underline"
+            >
+              {t("login.register")}
+            </Link>
+          </div>
         </div>
 
         <div className="mt-5 text-center text-caption leading-relaxed text-faint">

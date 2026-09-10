@@ -18,6 +18,10 @@ const user = (
   name: "Test",
   email: "test@acme.com",
   role,
+  // Every predicate under test here is about role and reach, never about status —
+  // an inactive account never reaches them, because `requireAuth` refuses it
+  // first. `active` is simply the state in which these questions get asked.
+  status: "active",
   teamId: null,
   department: null,
   customerId,

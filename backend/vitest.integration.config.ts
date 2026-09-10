@@ -22,6 +22,16 @@ export default defineConfig({
       // few failures on one account cannot surprise the next one. The ceiling
       // itself is exercised with a small budget in login-rate-limit.integration.
       AUTH_RATE_LIMIT: "1000",
+      // The same headroom for the two anonymous endpoints, and they need it MORE
+      // than login does. Their guards cannot skip successful requests — both
+      // answer 200 whether or not they did anything, which is what stops them
+      // being enumeration oracles — so every call a test makes spends budget,
+      // including the ones asserting that the uniform answer IS uniform. At the
+      // real default of 5, a test that asks twice about the same address is
+      // already halfway through the window. Their ceilings are exercised
+      // deliberately with a small budget, the same way login's is.
+      REGISTER_RATE_LIMIT: "1000",
+      PASSWORD_RESET_RATE_LIMIT: "1000",
       // Enable the email-to-ticket webhook (secret-gated) for its integration
       // tests; route new email tickets to a category that exists in the seed.
       EMAIL_WEBHOOK_SECRET: "test-webhook-secret",
