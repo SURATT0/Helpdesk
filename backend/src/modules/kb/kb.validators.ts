@@ -26,7 +26,24 @@ const articleFields = {
   title: z.string().trim().min(3).max(200),
   excerpt: z.string().trim().min(10).max(500),
   body: z.string().trim().min(20),
-  categoryId: z.number().int().positive(),
+  /**
+   * The subject, as a category CODE rather than a category id.
+   *
+   * An id names one tenant's row, and an article belongs to no tenant — so an id
+   * here would have quietly attached the shared library to whichever customer
+   * owned the row. The editor sends the code off the category it picked.
+   *
+   * Shaped like a code rather than left free: upper-case, digits and
+   * underscores, which is what `categoryCode()` produces. Validating the shape
+   * keeps a typed-in name ("Network") from being stored as a code that matches
+   * nothing — the existence check in the repository catches the rest.
+   */
+  categoryCode: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Z0-9]+(_[A-Z0-9]+)*$/, "Not a category code"),
   tags,
   // Reading time is the author's own estimate. Capped at an hour because past
   // that it is a manual, not an article.

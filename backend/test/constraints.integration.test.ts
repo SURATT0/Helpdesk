@@ -136,31 +136,61 @@ describe("project names are unique per customer among LIVE projects", () => {
   });
 });
 
-describe("category names", () => {
-  it("refuses a second SHARED category with the same name", async () => {
-    // `@@unique([customerId, name])` cannot do this on its own: Postgres treats
-    // NULLs as distinct, so without the partial index both rows are allowed and
-    // every tenant sees two identical entries in the picker.
-    const shared = await prisma.category.findFirstOrThrow({
-      where: { customerId: null },
+describe("category names and codes", () => {
+  /**
+   * The SHARED-category cases that used to sit here are gone, with the partial
+   * index they asserted (`categories_shared_name_key`). They tested that two
+   * rows with a NULL owner could not share a name — a rule about a state that no
+   * longer exists, since `customer_id` is required and every category belongs to
+   * one tenant. `@@unique([customerId, name])` now covers the whole question on
+   * its own, with no NULLs left for Postgres to treat as distinct.
+   *
+   * What replaced them is the pair below: the same name IS allowed across
+   * tenants, and the code is what must stay unique within one.
+   */
+  it("lets two customers each keep a category of the same name", async () => {
+    const [a, g] = [await acme(), await globex()];
+    // Both tenants get "Network" from the starter set, which is the shape the
+    // shared row used to serve — one subject, one row per customer.
+    const both = await prisma.category.findMany({
+      where: { name: "Network", customerId: { in: [a.id, g.id] } },
+      select: { id: true, customerId: true, code: true },
+    });
+    expect(both).toHaveLength(2);
+    // Same subject, different rows: which is exactly why a report cannot group
+    // by id and has to group by code.
+    expect(new Set(both.map((c) => c.code))).toEqual(new Set(["NETWORK"]));
+    expect(both[0].id).not.toBe(both[1].id);
+  });
+
+  it("refuses a second category with the same CODE within one customer", async () => {
+    // The constraint that makes the code usable as a grouping key: two rows
+    // sharing a code under one tenant would double-count that tenant in every
+    // report that groups by it.
+    const a = await acme();
+    const existing = await prisma.category.findFirstOrThrow({
+      where: { customerId: a.id, code: "NETWORK" },
     });
     await expect(
       prisma.category.create({
-        data: { name: shared.name, code: "PROBE_SHARED_DUP", customerId: null },
+        // A different NAME, deliberately — otherwise the name constraint could
+        // be the one that fires and this would pass without testing anything.
+        data: { name: "Constraint probe — networking", code: existing.code, customerId: a.id },
       }),
     ).rejects.toThrow();
   });
 
-  it("lets a customer name their own category after a shared one", async () => {
-    const a = await acme();
-    const shared = await prisma.category.findFirstOrThrow({
-      where: { customerId: null },
-    });
+  it("lets the same code exist under a DIFFERENT customer", async () => {
+    const g = await globex();
     const own = await prisma.category.create({
-      data: { name: shared.name, code: "PROBE_OWN_AFTER_SHARED", customerId: a.id },
+      data: { name: "Constraint probe — own code", code: "PROBE_CODE", customerId: g.id },
     });
-    expect(own.customerId).toBe(a.id);
-    await prisma.category.delete({ where: { id: own.id } });
+    const a = await acme();
+    const other = await prisma.category.create({
+      data: { name: "Constraint probe — own code", code: "PROBE_CODE", customerId: a.id },
+    });
+    expect(other.id).not.toBe(own.id);
+    await prisma.category.deleteMany({ where: { id: { in: [own.id, other.id] } } });
   });
 
   it("refuses a second category of the same name within one customer", async () => {
@@ -188,11 +218,14 @@ describe("category names", () => {
   });
 });
 
-describe("deleting a customer cannot publish their categories", () => {
-  it("refuses the delete rather than turning private categories shared", async () => {
-    // The failure mode of a nullable tenant column: on Prisma's default SET
-    // NULL, deleting a customer would flip `customer_id` to NULL, which here
-    // means "shared with everyone". RESTRICT instead — the delete fails.
+describe("deleting a customer cannot strand their categories", () => {
+  it("refuses the delete rather than orphaning the rows", async () => {
+    // RESTRICT, not Prisma's default. The original reason was sharper — on SET
+    // NULL a delete turned that tenant's private categories into SHARED ones and
+    // published them to everybody — and while the shared state is gone, the
+    // constraint is not, because SET NULL is not even possible now: the column
+    // is NOT NULL, so the alternative to refusing is failing mid-delete with the
+    // customer already half removed.
     const victim = await prisma.customer.create({
       data: { name: "Constraint probe — customer" },
     });
@@ -215,5 +248,47 @@ describe("deleting a customer cannot publish their categories", () => {
 
     await prisma.category.delete({ where: { id: category.id } });
     await prisma.customer.delete({ where: { id: victim.id } });
+  });
+
+  it("gives a brand-new customer the starter set, so its ticket form works", async () => {
+    // Without this a new tenant opens the create-ticket form to an empty
+    // dropdown and cannot file at all: `categoryId` is required and every
+    // category belongs to a tenant, so a customer with none is unusable.
+    const fresh = await prisma.customer.create({
+      data: { name: "Constraint probe — starter set" },
+    });
+    // Created through the repository, which is where the starter set is written
+    // in the same transaction as the customer.
+    const { customerRepository } = await import(
+      "../src/modules/customers/customer.repository"
+    );
+    await prisma.customer.delete({ where: { id: fresh.id } });
+
+    const made = await customerRepository.create(
+      "Constraint probe — starter set",
+      {
+        id: 1,
+        name: "probe",
+        email: "probe@example.com",
+        role: "super_admin",
+        status: "active",
+        teamId: null,
+        department: null,
+        customerId: null,
+        customerIds: [],
+        permissions: ["*"],
+      },
+    );
+
+    const categories = await prisma.category.findMany({
+      where: { customerId: made.id },
+      select: { code: true },
+    });
+    expect(categories.length).toBeGreaterThan(0);
+    expect(categories.map((c) => c.code)).toContain("NETWORK");
+
+    await prisma.category.deleteMany({ where: { customerId: made.id } });
+    await prisma.auditLog.deleteMany({ where: { entityId: made.id, entity: "customer" } });
+    await prisma.customer.delete({ where: { id: made.id } });
   });
 });

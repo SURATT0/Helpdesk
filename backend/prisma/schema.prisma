@@ -153,7 +153,8 @@ model Customer {
   problems    Problem[]
   projects    Project[]
   settings    NotificationSettings?
-  /// Categories private to this customer. Shared ones have a null customerId.
+  /// This customer's categories. Every category belongs to one tenant now —
+  /// there are no shared rows left; what crosses tenants is `Category.code`.
   categories  Category[]
   /// Staff granted reach INTO this customer without belonging to it.
   reachGrants UserCustomer[]
@@ -496,7 +497,7 @@ model UserToken {
 /// meaning, and a customer's own categories sit alongside it rather than
 /// replacing it. A picker shows the shared ones plus that customer's.
 model Category {
-  id            Int         @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   name          String
   /// The stable identity behind the name, shared across tenants.
   ///
@@ -513,26 +514,38 @@ model Category {
   /// Required. Existing rows were backfilled from their own names, which is
   /// exactly right for the six the desk started with: they ARE the canonical
   /// set, so their names are the canonical codes.
-  ///
-  /// Uniqueness is not stated here yet. Its final shape is unique per customer,
-  /// and `customerId` below is still nullable — see the migration that makes
-  /// that column required, where the constraint can be said once and correctly.
   code          String
-  /// Null = shared with every customer. A value confines it to that tenant.
-  customerId    Int?        @map("customer_id")
-  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  defaultTeamId Int?        @map("default_team_id") // auto-assignment target
-  defaultTeam   Team?       @relation(fields: [defaultTeamId], references: [id])
+  /// The tenant this category belongs to. Every category belongs to exactly one.
+  ///
+  /// It used to be nullable, where null meant SHARED WITH EVERYONE, and that
+  /// state is gone: it made "which customer does this row belong to" unanswerable
+  /// for the row a ticket points at, so the database could not prove that a
+  /// ticket's category and its project name the same tenant. It can now — see the
+  /// composite key below.
+  ///
+  /// What replaced the shared row is `code`: the six categories the desk started
+  /// with became one copy per customer carrying the same code, so a report still
+  /// groups them into one line while each tenant owns, renames and routes its own.
+  customerId    Int      @map("customer_id")
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  defaultTeamId Int?     @map("default_team_id") // auto-assignment target
+  defaultTeam   Team?    @relation(fields: [defaultTeamId], references: [id])
   tickets       Ticket[]
-  kbArticles    KbArticle[]
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  // Unique per owner. NOT the whole story: Postgres treats NULLs as distinct,
-  // so this constraint alone would let two SHARED categories both be called
-  // "Hardware". The migration adds a partial unique index over `name WHERE
-  // customer_id IS NULL` to close that half — see the migration's own note.
+  // Unique per owner, and now the whole story: with `customerId` required there
+  // are no NULLs left for Postgres to treat as distinct, so the partial index
+  // that used to cover the shared rows is dropped by the same migration.
   @@unique([customerId, name])
+  // One row per code per tenant. This is what makes the code a usable grouping
+  // key: two rows with the same code under one customer would double-count that
+  // customer in every report that groups by it.
+  @@unique([customerId, code])
+  // The key the composite foreign key on `tickets` references. Redundant on its
+  // own — `id` is already the primary key — and that is exactly its job, the
+  // same way `projects` carries one.
+  @@unique([id, customerId])
   @@index([customerId])
   @@map("categories")
 }
@@ -548,7 +561,21 @@ model Ticket {
   assigneeId     Int?                  @map("assignee_id")
   assignee       User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
   categoryId     Int                   @map("category_id")
-  category       Category              @relation(fields: [categoryId], references: [id])
+  /// The tenant match is enforced by the database, exactly as it is for
+  /// `project` below: a composite foreign key on (category_id, customer_id), so
+  /// a ticket can never point at another customer's category.
+  ///
+  /// This became both possible and necessary in the same change. Possible,
+  /// because `categories.customer_id` stopped being nullable — a shared category
+  /// belonged to no customer, so there was nothing to match against. Necessary,
+  /// because the service-layer rule "a ticket's project and category must name
+  /// the same tenant" is otherwise one forgotten check away from being false,
+  /// and it costs nothing on read.
+  ///
+  /// Declared HERE rather than as raw SQL in the migration, unlike the partial
+  /// indexes: `prisma migrate diff` reports a foreign key it does not know about
+  /// as drift and proposes dropping it. See backend/CLAUDE.md.
+  category       Category              @relation(fields: [categoryId, customerId], references: [id, customerId], onDelete: Restrict)
   /// Which project this ticket belongs to, if any.
   ///
   /// Nullable and staying that way. Not a column waiting to be tightened: mail
@@ -889,35 +916,45 @@ enum KbStatus {
  * replaces behaved.
  */
 model KbArticle {
-  id         String   @id
-  title      String
+  id           String   @id
+  title        String
   /**
    * One-paragraph summary, shown in the browse list without loading the body.
    */
-  excerpt    String
+  excerpt      String
   /**
    * Markdown-lite: "## " headings, "- " bullets, blank line = new block.
    */
-  body       String
-  categoryId Int      @map("category_id")
-  category   Category @relation(fields: [categoryId], references: [id])
-  tags       String[]
+  body         String
+  /// What this article is ABOUT, as a cross-tenant code rather than a pointer at
+  /// one customer's category row.
+  ///
+  /// It was `categoryId` until categories became per-customer. That change would
+  /// have made the knowledge base tenant-scoped by accident: every article would
+  /// have ended up owned by whichever customer inherited the shared row it
+  /// pointed at, and one article about resetting a password serves every tenant —
+  /// which is also why `KbArticle` has no `customerId` of its own and never did.
+  ///
+  /// So the article names the SUBJECT, and each tenant's own category carries the
+  /// same code. Nothing here belongs to anybody, which is the point.
+  categoryCode String   @map("category_code")
+  tags         String[]
   /**
    * Rough reading time in minutes, written by the author rather than computed.
    */
-  readMin    Int      @map("read_min")
-  status     KbStatus @default(published)
+  readMin      Int      @map("read_min")
+  status       KbStatus @default(published)
   /**
    * Who wrote it. Nullable because the articles that seeded this table predate
    * the notion of an author, and `SetNull` because retiring the person who wrote
    * an article must not take the article with them.
    */
-  authorId   Int?     @map("author_id")
-  author     User?    @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  authorId     Int?     @map("author_id")
+  author       User?    @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  @@index([categoryId])
+  @@index([categoryCode])
   @@index([status])
   @@map("kb_articles")
 }

@@ -176,7 +176,18 @@ describe("an agent granted a second customer", () => {
     const requester = await prisma.user.findFirstOrThrow({
       where: { role: "user" },
     });
-    const category = await prisma.category.findFirstOrThrow();
+    // The new tenant's OWN category, created here because this fixture makes the
+    // customer with a bare `prisma.customer.create` — the starter set is written
+    // by `customerRepository.create`, which this deliberately bypasses.
+    //
+    // An unfiltered `findFirstOrThrow()` used to work here and no longer can:
+    // a ticket may only carry a category of its own customer, and the composite
+    // foreign key refuses the insert rather than letting the row exist. Which is
+    // the point — this test is ABOUT a tenant boundary, and it was quietly
+    // reaching across one to build its own fixture.
+    const category = await prisma.category.create({
+      data: { name: "Network", code: "NETWORK", customerId: later.id },
+    });
     const stranger = await prisma.ticket.create({
       data: {
         subject: "Raised in a customer created after the grant",

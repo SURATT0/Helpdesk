@@ -9,10 +9,18 @@ import {
   type KbSummary,
 } from "./schemas";
 
+/**
+ * `category` is a category CODE, not a printed name — one of the values the
+ * server handed back in `categories`. Filtering on a name would break the moment
+ * a tenant renamed their copy of a category the library also writes about.
+ */
 export async function fetchArticles(
   q: string,
   category: string | null,
-): Promise<{ articles: KbSummary[]; categories: string[] }> {
+): Promise<{
+  articles: KbSummary[];
+  categories: { code: string; label: string }[];
+}> {
   const params = new URLSearchParams();
   if (q.trim()) params.set("q", q.trim());
   if (category) params.set("category", category);

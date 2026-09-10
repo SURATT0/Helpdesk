@@ -183,14 +183,17 @@ export type ReassignInput = {
 export const categorySchema = z.object({
   id: z.number(),
   name: z.string(),
-  defaultTeamId: z.number().nullable(),
   /**
-   * Which tenant owns this category; null = shared with every customer.
+   * The cross-tenant identity behind the name.
    *
-   * Defaulted, so a response from a server that predates scoped categories
-   * still parses — as shared, which is what every category was then.
+   * Two customers' "Network" are two rows with two ids; both carry `NETWORK`.
+   * This is what the knowledge base stores instead of an id, so one article
+   * lines up with every tenant's copy without belonging to any of them.
    */
-  customerId: z.number().nullable().default(null),
+  code: z.string(),
+  defaultTeamId: z.number().nullable(),
+  /** Which tenant owns this category. Every category belongs to exactly one. */
+  customerId: z.number(),
 });
 export const categoryListSchema = z.object({ data: z.array(categorySchema) });
 

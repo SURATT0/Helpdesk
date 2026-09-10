@@ -59,8 +59,11 @@ export function KbEditorModal({
   const [title, setTitle] = React.useState(article?.title ?? "");
   const [excerpt, setExcerpt] = React.useState(article?.excerpt ?? "");
   const [body, setBody] = React.useState(article?.body ?? "");
-  const [categoryId, setCategoryId] = React.useState<number | null>(
-    article?.categoryId ?? null,
+  // The CODE, not the row id. An article names a subject that every tenant
+  // shares; an id names one tenant's row, and storing one here is what would
+  // have quietly made the shared library that customer's property.
+  const [categoryCode, setCategoryCode] = React.useState<string | null>(
+    article?.categoryCode ?? null,
   );
   // Held as the raw comma-separated string the author is typing, so a trailing
   // comma mid-word does not make a tag appear and vanish under the cursor.
@@ -71,10 +74,10 @@ export function KbEditorModal({
   // First category as the default, once they have loaded — a picker that starts
   // on nothing makes an author choose something they have no opinion about.
   React.useEffect(() => {
-    if (categoryId == null && categories.length > 0) {
-      setCategoryId(categories[0].id);
+    if (categoryCode == null && categories.length > 0) {
+      setCategoryCode(categories[0].code);
     }
-  }, [categories, categoryId]);
+  }, [categories, categoryCode]);
 
   const tags = React.useMemo(
     () => [
@@ -94,20 +97,20 @@ export function KbEditorModal({
     title.trim().length < 3 ||
     excerpt.trim().length < 10 ||
     body.trim().length < 20 ||
-    categoryId == null ||
+    categoryCode == null ||
     tags.length > LIMITS.tags ||
     !Number.isInteger(minutes) ||
     minutes < 1 ||
     minutes > LIMITS.readMin;
 
   function save(status: "draft" | "published") {
-    if (categoryId == null) return;
+    if (categoryCode == null) return;
     setError(null);
     const input: KbArticleInput = {
       title: title.trim(),
       excerpt: excerpt.trim(),
       body: body.trim(),
-      categoryId,
+      categoryCode,
       tags,
       readMin: minutes,
       status,
@@ -189,12 +192,17 @@ export function KbEditorModal({
               </label>
               <select
                 id="kb-category"
-                value={categoryId ?? ""}
-                onChange={(e) => setCategoryId(Number(e.target.value))}
+                value={categoryCode ?? ""}
+                onChange={(e) => setCategoryCode(e.target.value)}
                 className={cn(FIELD, "px-2.5")}
               >
+                {/*
+                  Keyed by row id but VALUED by code: the author picks one of
+                  their own categories, and what gets stored is the subject that
+                  row stands for, not the row.
+                */}
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
+                  <option key={c.id} value={c.code}>
                     {c.name}
                   </option>
                 ))}

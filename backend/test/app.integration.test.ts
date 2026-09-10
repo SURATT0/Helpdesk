@@ -33,12 +33,18 @@ function refreshCookie(res: { headers: Record<string, unknown> }): string {
   return raw.split(";")[0];
 }
 
-async function categoryId(name: string): Promise<number> {
-  // The seed's categories are the SHARED ones. `name` is no longer a Prisma
-  // unique — a customer may have their own of the same name — so the lookup
-  // has to say which it means.
+/**
+ * A category by name, belonging to the tenant these cases work in.
+ *
+ * There are no shared categories any more — every customer has its own copy of
+ * the starter set — so a name alone names several rows, one per tenant. Picking
+ * Acme's deliberately: nearly every case in this file acts as an Acme user, and
+ * a ticket may only carry a category of its own customer, so the lookup has to
+ * say which tenant it means or the writes fail on the composite foreign key.
+ */
+async function categoryId(name: string, customer = "Acme Corp"): Promise<number> {
   const c = await prisma.category.findFirstOrThrow({
-    where: { name, customerId: null },
+    where: { name, customer: { name: customer } },
   });
   return c.id;
 }
@@ -658,9 +664,15 @@ describe("tickets — list ordering", () => {
     // tickets of the same priority created in the same instant — a CSV import, a
     // burst of self-service tickets — share one to the millisecond. Without a
     // tiebreaker their order is whatever the query plan produces.
-    const category = await prisma.category.findFirstOrThrow();
     const requester = await prisma.user.findUniqueOrThrow({
       where: { email: "marcus.chen@acme.com" },
+    });
+    // The REQUESTER's own tenant's category. An unfiltered `findFirstOrThrow()`
+    // returns Acme's today only because Acme happens to own the lowest ids —
+    // which is luck, not a rule, and the composite foreign key would refuse the
+    // insert the moment that stopped being true.
+    const category = await prisma.category.findFirstOrThrow({
+      where: { customerId: requester.customerId },
     });
     const dueAt = new Date(Date.now() + 3 * 60 * 60 * 1000);
     const ids = [9101, 9102, 9103];
@@ -907,9 +919,12 @@ describe("reports — what the resolution clock measures", () => {
     marcusId: number,
     times: { raised: Date; openedAt: Date | null; closedAt: Date | null },
   ) {
-    const category = await prisma.category.findFirstOrThrow();
     const marcus = await prisma.user.findUniqueOrThrow({
       where: { id: marcusId },
+    });
+    // His own tenant's category — see the note on the tied-target fixture above.
+    const category = await prisma.category.findFirstOrThrow({
+      where: { customerId: marcus.customerId },
     });
     const ticket = await prisma.ticket.create({
       data: {
@@ -2056,11 +2071,21 @@ function idsIn(res: { body: { data: { id: number }[] } }): number[] {
 
 describe("tickets — customer isolation (unassigned ticket)", () => {
   it("shows an unassigned ticket to any agent in its customer, but not to other customers", async () => {
-    const category = await prisma.category.create({
-      data: { name: "Uncategorized", code: "UNCATEGORIZED", defaultTeamId: null },
-    });
     const acme = await prisma.customer.findUniqueOrThrow({
       where: { name: "Acme Corp" },
+    });
+    // Owned by Acme. A category with no customer is no longer expressible —
+    // `customer_id` is required — and one belonging to anybody else would be
+    // refused by the composite foreign key on the ticket below. What this
+    // fixture is actually for is a category with no default TEAM, which is
+    // still what makes the ticket land unassigned.
+    const category = await prisma.category.create({
+      data: {
+        name: "Uncategorized",
+        code: "UNCATEGORIZED",
+        customerId: acme.id,
+        defaultTeamId: null,
+      },
     });
     const requester = await prisma.user.findUniqueOrThrow({
       where: { email: "t.alvarez@acme.com" }, // Acme requester
@@ -4607,6 +4632,23 @@ describe("notifications — the bell and the mail queue", () => {
       .expect(201);
   }
 
+  /**
+   * Sweep as if a moment had passed.
+   *
+   * `email_outbox.next_attempt_at` defaults to `now()` — the DATABASE's clock —
+   * while `sweep()` compares it against a `new Date()` taken in Node. Production
+   * never notices: the sweep runs every 60 seconds, so a few milliseconds of
+   * skew between the app host and Postgres costs one cycle. A test that queues a
+   * mail and sweeps in the same breath sits exactly on that boundary, and on a
+   * machine whose database clock runs slightly ahead — a container on a VM, say —
+   * the row is not due yet and the sweep correctly reports nothing sent.
+   *
+   * One second forward removes the race without changing what is being tested:
+   * these cases are about delivery being exactly-once and audited, not about the
+   * scheduler's precision.
+   */
+  const sweepNow = () => emailOutboxService.sweep(new Date(Date.now() + 1000));
+
   it("writes the bell entry and the queued mail together", async () => {
     await makeNotification();
 
@@ -4634,7 +4676,7 @@ describe("notifications — the bell and the mail queue", () => {
 
   it("leaves the in-app feed unaffected by mail delivery", async () => {
     await makeNotification();
-    await emailOutboxService.sweep();
+    await sweepNow();
 
     // Delivering mail must not mark anything read — those are independent states.
     const marcus = await login("marcus.chen@acme.com");
@@ -4648,12 +4690,12 @@ describe("notifications — the bell and the mail queue", () => {
 
   it("delivers each queued mail exactly once across repeated sweeps", async () => {
     await makeNotification();
-    const first = await emailOutboxService.sweep();
+    const first = await sweepNow();
     expect(first.sent).toBeGreaterThan(0);
 
     // Nothing is pending any more, so a second pass is a no-op — the property
     // the old `emailed_at` stamp existed to provide.
-    const second = await emailOutboxService.sweep();
+    const second = await sweepNow();
     expect(second.sent).toBe(0);
     expect(
       await prisma.emailOutbox.count({ where: { status: "pending" } }),
@@ -4662,7 +4704,7 @@ describe("notifications — the bell and the mail queue", () => {
 
   it("records a delivery in the audit log the Activity view reads", async () => {
     await makeNotification();
-    await emailOutboxService.sweep();
+    await sweepNow();
     const rows = await prisma.auditLog.findMany({
       where: { action: "email.sent", entityId: 1042 },
     });
@@ -4680,7 +4722,10 @@ describe("knowledge base — authoring", () => {
     excerpt:
       "The spooler service wedges after a driver update and the queue stops moving.",
     body: "## Symptoms\n\n- Jobs pile up and never print\n\n## Fix\n\nRestart the spooler service, then clear the queue directory.",
-    categoryId: 0, // replaced per-test with a real id
+    // A code, not an id: an article names a subject every tenant shares. No
+    // per-test substitution needed any more — the code is the same string for
+    // every customer, which is the whole point of it.
+    categoryCode: "HARDWARE",
     tags: ["printer", "spooler"],
     readMin: 3,
     ...over,
@@ -4697,9 +4742,7 @@ describe("knowledge base — authoring", () => {
   }
 
   async function post(token: string, over: Record<string, unknown> = {}) {
-    const body = draft(over);
-    if (body.categoryId === 0) body.categoryId = await categoryId("Hardware");
-    return request(app).post(`${API}/kb`).set(bearer(token)).send(body);
+    return request(app).post(`${API}/kb`).set(bearer(token)).send(draft(over));
   }
 
   it("assigns the next id in the KB-nnn series", async () => {
@@ -4761,11 +4804,10 @@ describe("knowledge base — authoring", () => {
 
   it("refuses a reader trying to write or delete their way in", async () => {
     const reader = await login(READER);
-    const cat = await categoryId("Hardware");
     const create = await request(app)
       .post(`${API}/kb`)
       .set(bearer(reader))
-      .send(draft({ categoryId: cat }));
+      .send(draft());
     expect(create.status).toBe(403);
 
     const patch = await request(app)
@@ -4793,9 +4835,20 @@ describe("knowledge base — authoring", () => {
     expect(created.body.data.tags).toEqual(["printer", "spooler"]);
   });
 
-  it("rejects a category that does not exist", async () => {
+  it("rejects a category code no category carries", async () => {
     const token = await login(AUTHOR);
-    const res = await post(token, { categoryId: 99_999 });
+    // Shaped like a code, so the validator passes it and the EXISTENCE check is
+    // what refuses — otherwise this would pass on the regex alone and prove
+    // nothing about the lookup.
+    const res = await post(token, { categoryCode: "NO_SUCH_SUBJECT" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a category NAME sent where a code belongs", async () => {
+    const token = await login(AUTHOR);
+    // The mistake the shape check exists for: an editor that sent the display
+    // name would store a code matching nothing and silently orphan the article.
+    const res = await post(token, { categoryCode: "Hardware" });
     expect(res.status).toBe(400);
   });
 
@@ -4836,13 +4889,19 @@ describe("knowledge base — authoring", () => {
   it("lists only categories that have something in them", async () => {
     const reader = await login(READER);
     const res = await request(app).get(`${API}/kb`).set(bearer(reader));
-    const categories: string[] = res.body.meta.categories;
+    const categories: { code: string; label: string }[] = res.body.meta.categories;
     expect(categories.length).toBeGreaterThan(0);
-    // Every category offered as a filter returns something — an empty filter
-    // would be a dead end in the browse UI.
-    for (const name of categories) {
+    // Each subject appears ONCE, however many customers have a category for it.
+    // Reading this list off the category table instead would return it once per
+    // tenant, and the browse bar would show six identical "Hardware" chips.
+    expect(new Set(categories.map((c) => c.code)).size).toBe(categories.length);
+
+    // Every chip offered as a filter returns something — an empty filter would
+    // be a dead end in the browse UI. Filtered by CODE, which is what the chip
+    // sends back; the label is only what it prints.
+    for (const { code } of categories) {
       const filtered = await request(app)
-        .get(`${API}/kb?category=${encodeURIComponent(name)}`)
+        .get(`${API}/kb?category=${encodeURIComponent(code)}`)
         .set(bearer(reader));
       expect(filtered.body.data.length).toBeGreaterThan(0);
     }

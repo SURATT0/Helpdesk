@@ -24,7 +24,7 @@ export const kbService = {
     return kbRepository.findMany({ ...opts, includeDrafts: seesDrafts(actor) });
   },
 
-  categories(actor: AuthUser): Promise<string[]> {
+  categories(actor: AuthUser): Promise<{ code: string; label: string }[]> {
     return kbRepository.categories(seesDrafts(actor));
   },
 
