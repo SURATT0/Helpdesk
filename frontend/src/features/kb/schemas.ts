@@ -7,7 +7,7 @@ export const kbSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
   category: z.string(),
-  categoryId: z.number(),
+  categoryCode: z.string(),
   tags: z.array(z.string()),
   readMin: z.number(),
   updatedAt: z.string(),
@@ -20,7 +20,9 @@ export const kbArticleSchema = kbSummarySchema.extend({ body: z.string() });
 
 export const kbListSchema = z.object({
   data: z.array(kbSummarySchema),
-  meta: z.object({ categories: z.array(z.string()) }),
+  meta: z.object({
+    categories: z.array(z.object({ code: z.string(), label: z.string() })),
+  }),
 });
 
 export const kbArticleEnvelope = z.object({ data: kbArticleSchema });
@@ -49,7 +51,15 @@ export type KbArticleInput = {
   title: string;
   excerpt: string;
   body: string;
-  categoryId: number;
+  /**
+   * The SUBJECT, as a cross-tenant category code — not a category id.
+   *
+   * An article belongs to no customer (one page on resetting a password serves
+   * every tenant), and every category row now belongs to one. Sending an id
+   * would attach the shared library to whichever tenant owned the row. The
+   * editor picks from its own categories and sends that row's `code`.
+   */
+  categoryCode: string;
   tags: string[];
   readMin: number;
   status: KbStatus;

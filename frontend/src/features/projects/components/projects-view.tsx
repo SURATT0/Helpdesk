@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { Info, ShieldAlert, Trash2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
@@ -212,9 +213,16 @@ export function ProjectsView() {
                     )}
                   >
                     <span className="pr-3">
-                      <span className="block truncate font-medium text-ink">
+                      {/* The name is the way in to the project's own page —
+                          what it is for, and the tickets filed under it. The
+                          rest of the row stays inline controls, so the link is
+                          only on the text rather than the whole row. */}
+                      <Link
+                        href={`/projects/${p.id}`}
+                        className="block truncate font-medium text-ink hover:text-brand hover:underline"
+                      >
                         {p.name}
-                      </span>
+                      </Link>
                       {/* The whole point of the feature, stated per row: who the
                           next ticket actually lands on. */}
                       <span className="mt-0.5 block truncate text-caption text-faint">

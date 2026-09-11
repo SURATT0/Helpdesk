@@ -67,3 +67,41 @@ export function createLoginLimiter(limit: number) {
     },
   });
 }
+
+/**
+ * Guard on the two other endpoints that take an address from an anonymous
+ * caller: registration and the password-reset request.
+ *
+ * Same key as login — the address in the body, via `loginRateKey` — and for the
+ * same unavoidable reason: behind the web app's proxy there is no caller address
+ * to count, so the account is the only bucket available.
+ *
+ * `skipSuccessfulRequests` is deliberately NOT set here, and that is the
+ * difference from login. Both of these endpoints answer 200 whether or not they
+ * did anything — that uniformity is what stops them being enumeration oracles —
+ * so "successful" carries no information, and skipping successes would mean
+ * skipping every request and limiting nothing at all. Here the budget is spent
+ * by ASKING, which is also the right shape for what these need to prevent:
+ * somebody hammering one person's inbox with reset links, each of which is a
+ * perfectly successful request.
+ *
+ * What it does not stop, said plainly: a script registering a thousand different
+ * addresses, since each address is its own budget. The approval queue is the
+ * defence against that — none of those accounts sees anything until a person
+ * says so.
+ */
+export function createAccountRequestLimiter(limit: number) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: loginRateKey,
+    message: {
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many attempts, try again later",
+      },
+    },
+  });
+}

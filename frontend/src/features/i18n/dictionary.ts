@@ -686,6 +686,38 @@ const en: Dict = {
   "users.explainer":
     "A user's project decides who their new tickets are assigned to. Marking someone away sends their project's tickets to the backup caseworker instead — it does not change what they can see or work on.",
   "users.saveError": "Couldn't save that change",
+
+  // --- directory filters ---------------------------------------------------
+  "users.search": "Search",
+  "users.searchPlaceholder": "Name or email",
+  "users.role": "Role",
+  "users.anyRole": "Any role",
+  "users.status": "Status",
+  "users.anyStatus": "Any status",
+  "users.customer": "Customer",
+  "users.anyCustomer": "Any customer",
+  "users.clearFilters": "Clear",
+  "users.suspend": "Suspend",
+  "users.reinstate": "Reinstate",
+  "users.col.status": "STATUS",
+
+  "accountStatus.pending": "Awaiting approval",
+  "accountStatus.active": "Active",
+  "accountStatus.suspended": "Suspended",
+  "accountStatus.rejected": "Rejected",
+
+  // --- approval queue ------------------------------------------------------
+  "approvals.title": "{count} waiting to be approved",
+  "approvals.blurb":
+    "These people signed up themselves. Choose the customer they belong to and what they may do — until then they cannot sign in or see anything.",
+  "approvals.customer": "Customer",
+  "approvals.role": "Role",
+  "approvals.choose": "Choose…",
+  "approvals.approve": "Approve",
+  "approvals.reject": "Reject",
+  "approvals.unverified": "Has not confirmed their email address yet",
+  "approvals.error": "Couldn't complete that. Try again.",
+
   "settings.availability": "Availability",
   "settings.availabilityNote":
     "Turn this off while you're away. New tickets from your projects go to the backup caseworker instead. You keep full access to the tickets you already hold.",
@@ -742,6 +774,25 @@ const en: Dict = {
   "projects.saving": "Saving…",
   "projects.namePlaceholder": "Project name",
   "projects.createError": "Couldn't create — the name may already be in use",
+  "projects.customer": "Customer",
+  "projects.chooseCustomer": "Choose a customer…",
+  "projects.descriptionPlaceholder":
+    "What is this project? Scope, contacts, the standing arrangement… (optional)",
+  "projects.descriptionHint":
+    "Markdown-lite: “## ” for a heading, “- ” for a bullet, a blank line starts a new block.",
+  "projects.away": "away",
+  "projects.noOwner": "nobody yet",
+
+  // --- project detail ------------------------------------------------------
+  "projectDetail.back": "All projects",
+  "projectDetail.about": "About this project",
+  "projectDetail.noDescription": "No description has been written yet.",
+  "projectDetail.owner": "Owner",
+  "projectDetail.backup": "Backup",
+  "projectDetail.members": "{count} routing through it",
+  "projectDetail.tickets": "Tickets ({count})",
+  "projectDetail.noTickets": "No tickets have been filed under this project.",
+  "projectDetail.notFound": "That project doesn't exist, or isn't yours to see.",
   "projects.saveError": "Couldn't save that change",
   "project.delete.title": "Delete project",
   "project.delete.forProject": "Delete project {name}",
@@ -776,7 +827,6 @@ const en: Dict = {
   "login.email": "Work email",
   "login.password": "Password",
   "login.forgot": "Forgot?",
-  "login.forgotHint": "Contact your administrator to reset your password.",
   "login.showPassword": "Show password",
   "login.hidePassword": "Hide password",
   "login.submitting": "Signing in…",
@@ -786,6 +836,69 @@ const en: Dict = {
   "login.tagline": "Every ticket, handled with care.",
   "login.blurb":
     "The internal help desk for Acme Corp. Raise requests, track progress, get answers.",
+  "login.noAccount": "Don't have an account?",
+  "login.register": "Sign up",
+
+  // --- register ------------------------------------------------------------
+  "register.title": "Create an account",
+  "register.subtitle": "Sign up and an administrator will review your request.",
+  "register.name": "Full name",
+  "register.email": "Work email",
+  "register.password": "Password",
+  "register.passwordHint": "At least 10 characters. A passphrase is fine.",
+  "register.confirmPassword": "Confirm password",
+  "register.mismatch": "The two passwords do not match.",
+  // Shown BEFORE submitting, on purpose. Somebody who signs up expecting to be
+  // let straight in and is then told to wait has been misled by the form.
+  "register.approvalNotice":
+    "New accounts are not active straight away. You will confirm your email, then an administrator approves the account before you can sign in.",
+  "register.submit": "Create account",
+  "register.submitting": "Creating…",
+  "register.sentTitle": "Check your email",
+  "register.error": "Couldn't create the account. Try again.",
+  "register.haveAccount": "Already have an account?",
+  "register.signIn": "Sign in",
+  "register.backToSignIn": "Back to sign in",
+
+  // --- forgot password -----------------------------------------------------
+  "forgot.title": "Reset your password",
+  "forgot.subtitle":
+    "Enter your email address and we will send you a link to choose a new password.",
+  "forgot.submit": "Send reset link",
+  "forgot.submitting": "Sending…",
+  "forgot.sentTitle": "Check your email",
+  "forgot.checkSpam":
+    "The message can take a minute to arrive. Check your spam folder if you do not see it.",
+  "forgot.error": "Couldn't send the link. Try again.",
+
+  // --- reset password ------------------------------------------------------
+  "reset.title": "Choose a new password",
+  "reset.subtitle": "Pick something you have not used on this account before.",
+  "reset.newPassword": "New password",
+  "reset.signOutNotice":
+    "Setting a new password signs this account out on every other device.",
+  "reset.submit": "Save new password",
+  "reset.submitting": "Saving…",
+  "reset.doneTitle": "Password changed",
+  "reset.invalidTitle": "This link cannot be used",
+  "reset.noToken":
+    "This address is missing its reset code. Open the link from your email, or request a new one.",
+  "reset.requestNew": "Request a new link",
+  "reset.error": "Couldn't change the password. Try again.",
+
+  // --- confirm email -------------------------------------------------------
+  "verify.working": "Confirming your address…",
+  "verify.doneTitle": "Email confirmed",
+  "verify.confirmed": "Your email address has been confirmed.",
+  "verify.stillPending":
+    "One step left, and it is not yours: an administrator has to approve the account. You will be emailed when that happens.",
+  "verify.readyToSignIn": "Your account is approved — you can sign in now.",
+  "verify.failedTitle": "This link cannot be used",
+  "verify.noToken":
+    "This address is missing its confirmation code. Open the link from your email.",
+  "verify.failedHint":
+    "Confirmation links expire and can only be used once. If yours has expired, sign up again or ask an administrator.",
+  "verify.error": "Couldn't confirm the address.",
 };
 
 const th: Dict = {
@@ -1446,6 +1559,38 @@ const th: Dict = {
   "users.explainer":
     "โปรเจกต์ของผู้ใช้กำหนดว่า Ticket ใหม่ของเขาจะถูก assign ให้ใคร การตั้งว่าไม่สะดวกจะทำให้ Ticket ของโปรเจกต์นั้นไปที่ผู้ดูแลสำรองแทน — ไม่ได้เปลี่ยนสิ่งที่เขามองเห็นหรือทำงานได้",
   "users.saveError": "บันทึกการเปลี่ยนแปลงไม่สำเร็จ",
+
+  // --- directory filters ---------------------------------------------------
+  "users.search": "ค้นหา",
+  "users.searchPlaceholder": "ชื่อหรืออีเมล",
+  "users.role": "บทบาท",
+  "users.anyRole": "ทุกบทบาท",
+  "users.status": "สถานะ",
+  "users.anyStatus": "ทุกสถานะ",
+  "users.customer": "ลูกค้า",
+  "users.anyCustomer": "ทุกลูกค้า",
+  "users.clearFilters": "ล้างตัวกรอง",
+  "users.suspend": "ระงับการใช้งาน",
+  "users.reinstate": "ยกเลิกการระงับ",
+  "users.col.status": "สถานะ",
+
+  "accountStatus.pending": "รออนุมัติ",
+  "accountStatus.active": "ใช้งานอยู่",
+  "accountStatus.suspended": "ถูกระงับ",
+  "accountStatus.rejected": "ถูกปฏิเสธ",
+
+  // --- approval queue ------------------------------------------------------
+  "approvals.title": "มีผู้รออนุมัติ {count} คน",
+  "approvals.blurb":
+    "คนเหล่านี้สมัครใช้งานเข้ามาเอง กรุณาเลือกว่าสังกัดลูกค้ารายใดและมีสิทธิ์ทำอะไรได้บ้าง ระหว่างนี้พวกเขายังเข้าสู่ระบบและมองเห็นข้อมูลใด ๆ ไม่ได้",
+  "approvals.customer": "ลูกค้าที่สังกัด",
+  "approvals.role": "บทบาท",
+  "approvals.choose": "เลือก…",
+  "approvals.approve": "อนุมัติ",
+  "approvals.reject": "ปฏิเสธ",
+  "approvals.unverified": "ยังไม่ได้ยืนยันอีเมล",
+  "approvals.error": "ดำเนินการไม่สำเร็จ กรุณาลองใหม่",
+
   "settings.availability": "สถานะการรับงาน",
   "settings.availabilityNote":
     "ปิดไว้ตอนที่คุณไม่สะดวก Ticket ใหม่จากโปรเจกต์ของคุณจะไปที่ผู้ดูแลสำรองแทน คุณยังเข้าถึง Ticket ที่ถืออยู่ได้เต็มที่",
@@ -1503,6 +1648,25 @@ const th: Dict = {
   "projects.saving": "กำลังบันทึก…",
   "projects.namePlaceholder": "ชื่อโปรเจกต์",
   "projects.createError": "สร้างไม่สำเร็จ — ชื่อนี้อาจถูกใช้แล้ว",
+  "projects.customer": "ลูกค้า",
+  "projects.chooseCustomer": "เลือกลูกค้า…",
+  "projects.descriptionPlaceholder":
+    "โปรเจกต์นี้คืออะไร ขอบเขตงาน ผู้ติดต่อ ข้อตกลงที่มีอยู่… (ไม่บังคับ)",
+  "projects.descriptionHint":
+    "รองรับ markdown อย่างง่าย: “## ” คือหัวข้อ, “- ” คือรายการ, บรรทัดว่างคือขึ้นย่อหน้าใหม่",
+  "projects.away": "ไม่สะดวก",
+  "projects.noOwner": "ยังไม่มีผู้ดูแล",
+
+  // --- project detail ------------------------------------------------------
+  "projectDetail.back": "โปรเจกต์ทั้งหมด",
+  "projectDetail.about": "เกี่ยวกับโปรเจกต์นี้",
+  "projectDetail.noDescription": "ยังไม่มีการเขียนรายละเอียดไว้",
+  "projectDetail.owner": "ผู้ดูแล",
+  "projectDetail.backup": "ผู้ดูแลสำรอง",
+  "projectDetail.members": "มีผู้ใช้ {count} คนส่งงานผ่านโปรเจกต์นี้",
+  "projectDetail.tickets": "Ticket ({count})",
+  "projectDetail.noTickets": "ยังไม่มี Ticket ที่อยู่ภายใต้โปรเจกต์นี้",
+  "projectDetail.notFound": "ไม่พบโปรเจกต์นี้ หรือคุณไม่มีสิทธิ์เข้าถึง",
   "projects.saveError": "บันทึกการเปลี่ยนแปลงไม่สำเร็จ",
   "project.delete.title": "ลบโปรเจกต์",
   "project.delete.forProject": "ลบโปรเจกต์ {name}",
@@ -1535,7 +1699,6 @@ const th: Dict = {
   "login.email": "อีเมลที่ทำงาน",
   "login.password": "รหัสผ่าน",
   "login.forgot": "ลืมรหัส?",
-  "login.forgotHint": "ติดต่อผู้ดูแลระบบเพื่อรีเซ็ตรหัสผ่านของคุณ",
   "login.showPassword": "แสดงรหัสผ่าน",
   "login.hidePassword": "ซ่อนรหัสผ่าน",
   "login.submitting": "กำลังเข้าสู่ระบบ…",
@@ -1545,6 +1708,65 @@ const th: Dict = {
   "login.tagline": "ทุก Ticket ดูแลอย่างใส่ใจ",
   "login.blurb":
     "ระบบ help desk ภายในของ Acme Corp แจ้งเรื่อง ติดตามความคืบหน้า และรับคำตอบ",
+  "login.noAccount": "ยังไม่มีบัญชี?",
+  "login.register": "สมัครใช้งาน",
+
+  // --- register ------------------------------------------------------------
+  "register.title": "สมัครใช้งาน",
+  "register.subtitle": "สมัครเข้ามาแล้วผู้ดูแลระบบจะพิจารณาคำขอของคุณ",
+  "register.name": "ชื่อ-นามสกุล",
+  "register.email": "อีเมลที่ทำงาน",
+  "register.password": "รหัสผ่าน",
+  "register.passwordHint": "อย่างน้อย 10 ตัวอักษร ใช้เป็นวลียาว ๆ ก็ได้",
+  "register.confirmPassword": "ยืนยันรหัสผ่าน",
+  "register.mismatch": "รหัสผ่านทั้งสองช่องไม่ตรงกัน",
+  "register.approvalNotice":
+    "บัญชีใหม่ยังใช้งานไม่ได้ทันที คุณต้องยืนยันอีเมลก่อน จากนั้นผู้ดูแลระบบจะอนุมัติบัญชี แล้วจึงเข้าสู่ระบบได้",
+  "register.submit": "สร้างบัญชี",
+  "register.submitting": "กำลังสร้างบัญชี…",
+  "register.sentTitle": "กรุณาตรวจสอบอีเมล",
+  "register.error": "สร้างบัญชีไม่สำเร็จ ลองอีกครั้ง",
+  "register.haveAccount": "มีบัญชีอยู่แล้ว?",
+  "register.signIn": "เข้าสู่ระบบ",
+  "register.backToSignIn": "กลับไปหน้าเข้าสู่ระบบ",
+
+  // --- forgot password -----------------------------------------------------
+  "forgot.title": "ตั้งรหัสผ่านใหม่",
+  "forgot.subtitle": "กรอกอีเมลของคุณ ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปให้",
+  "forgot.submit": "ส่งลิงก์ตั้งรหัสผ่าน",
+  "forgot.submitting": "กำลังส่ง…",
+  "forgot.sentTitle": "กรุณาตรวจสอบอีเมล",
+  "forgot.checkSpam":
+    "อีเมลอาจใช้เวลาสักครู่ หากไม่พบกรุณาตรวจสอบในโฟลเดอร์อีเมลขยะ",
+  "forgot.error": "ส่งลิงก์ไม่สำเร็จ ลองอีกครั้ง",
+
+  // --- reset password ------------------------------------------------------
+  "reset.title": "ตั้งรหัสผ่านใหม่",
+  "reset.subtitle": "เลือกรหัสผ่านที่ไม่เคยใช้กับบัญชีนี้มาก่อน",
+  "reset.newPassword": "รหัสผ่านใหม่",
+  "reset.signOutNotice":
+    "เมื่อตั้งรหัสผ่านใหม่ ระบบจะออกจากการใช้งานบัญชีนี้ในอุปกรณ์อื่นทั้งหมด",
+  "reset.submit": "บันทึกรหัสผ่านใหม่",
+  "reset.submitting": "กำลังบันทึก…",
+  "reset.doneTitle": "เปลี่ยนรหัสผ่านแล้ว",
+  "reset.invalidTitle": "ลิงก์นี้ใช้งานไม่ได้",
+  "reset.noToken":
+    "ที่อยู่นี้ไม่มีรหัสสำหรับตั้งรหัสผ่าน กรุณาเปิดลิงก์จากอีเมล หรือขอลิงก์ใหม่",
+  "reset.requestNew": "ขอลิงก์ใหม่",
+  "reset.error": "เปลี่ยนรหัสผ่านไม่สำเร็จ ลองอีกครั้ง",
+
+  // --- confirm email -------------------------------------------------------
+  "verify.working": "กำลังยืนยันอีเมล…",
+  "verify.doneTitle": "ยืนยันอีเมลแล้ว",
+  "verify.confirmed": "ยืนยันอีเมลของคุณเรียบร้อยแล้ว",
+  "verify.stillPending":
+    "เหลืออีกหนึ่งขั้นตอนซึ่งไม่ได้อยู่ที่คุณ ผู้ดูแลระบบต้องอนุมัติบัญชีก่อน ระบบจะแจ้งกลับทางอีเมลเมื่ออนุมัติแล้ว",
+  "verify.readyToSignIn": "บัญชีของคุณได้รับการอนุมัติแล้ว เข้าสู่ระบบได้เลย",
+  "verify.failedTitle": "ลิงก์นี้ใช้งานไม่ได้",
+  "verify.noToken": "ที่อยู่นี้ไม่มีรหัสยืนยัน กรุณาเปิดลิงก์จากอีเมล",
+  "verify.failedHint":
+    "ลิงก์ยืนยันมีวันหมดอายุและใช้ได้ครั้งเดียว หากลิงก์หมดอายุแล้ว กรุณาสมัครใหม่หรือติดต่อผู้ดูแลระบบ",
+  "verify.error": "ยืนยันอีเมลไม่สำเร็จ",
 };
 
 export const dictionaries: Record<Lang, Dict> = { en, th };

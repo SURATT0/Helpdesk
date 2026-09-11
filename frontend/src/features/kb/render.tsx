@@ -1,57 +1,14 @@
-import * as React from "react";
+import { MarkdownLite } from "@/components/ui/markdown-lite";
 
-/** Render the markdown-lite article body ("## " headings, "- " bullets, blank = block). */
+/**
+ * The article body.
+ *
+ * A thin wrapper now: the "## headings, - bullets, blank line = block" dialect
+ * moved to `components/ui/markdown-lite` when project descriptions started using
+ * it too. Kept as a named component rather than replacing the call sites,
+ * because "the KB body" is the thing the article view is rendering — the
+ * dialect it happens to be written in is an implementation detail.
+ */
 export function KbBody({ body }: { body: string }) {
-  const blocks: React.ReactNode[] = [];
-  let bullets: string[] = [];
-  let key = 0;
-
-  const flushBullets = () => {
-    if (bullets.length === 0) return;
-    const items = bullets;
-    bullets = [];
-    blocks.push(
-      <ul
-        key={key++}
-        className="list-disc space-y-1 pl-5 text-lead leading-relaxed text-strong"
-      >
-        {items.map((b, i) => (
-          <li key={i}>{b}</li>
-        ))}
-      </ul>,
-    );
-  };
-
-  for (const raw of body.split("\n")) {
-    const line = raw.trim();
-    if (line === "") {
-      flushBullets();
-      continue;
-    }
-    if (line.startsWith("## ")) {
-      flushBullets();
-      blocks.push(
-        <h3 key={key++} className="text-section font-semibold text-ink">
-          {line.slice(3)}
-        </h3>,
-      );
-      continue;
-    }
-    if (line.startsWith("- ")) {
-      bullets.push(line.slice(2));
-      continue;
-    }
-    flushBullets();
-    blocks.push(
-      <p
-        key={key++}
-        className="text-lead leading-relaxed text-strong"
-      >
-        {line}
-      </p>,
-    );
-  }
-  flushBullets();
-
-  return <div className="flex flex-col gap-3">{blocks}</div>;
+  return <MarkdownLite text={body} />;
 }

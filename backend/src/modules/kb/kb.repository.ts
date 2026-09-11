@@ -2,20 +2,26 @@ import { Prisma, type KbStatus } from "@prisma/client";
 import { prisma } from "../../shared/db";
 import { BadRequest } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
+import { categoryLabel } from "../categories/category.code";
 
 /**
  * An article as the API returns it.
  *
- * `category` stays a plain name rather than a nested object because that is what
- * it has always been on the wire and what the browse filter matches on;
- * `categoryId` rides alongside for the editor, which has to pre-select a row in
- * the category picker.
+ * `category` stays a plain display string, as it always was on the wire. What
+ * changed underneath is where it comes from: an article used to point at a
+ * category ROW and print that row's name, and rows now belong to tenants — so an
+ * article would have printed one customer's name for a subject to every other
+ * customer, and would have been owned by that customer besides.
+ *
+ * It carries the code instead, and `category` is the neutral label derived from
+ * it. `categoryCode` rides alongside for the editor and the browse filter, which
+ * need the stable value rather than the printable one.
  */
 export type KbArticleDto = {
   id: string;
-  title: string;
   category: string;
-  categoryId: number;
+  categoryCode: string;
+  title: string;
   tags: string[];
   readMin: number;
   /** Full ISO timestamp — the client formats it in the reader's locale. */
@@ -30,7 +36,6 @@ export type KbArticleDto = {
 export type KbSummary = Omit<KbArticleDto, "body">;
 
 const articleInclude = {
-  category: { select: { id: true, name: true } },
   author: { select: { id: true, name: true } },
 } satisfies Prisma.KbArticleInclude;
 
@@ -40,8 +45,8 @@ function toDto(row: ArticleRow): KbArticleDto {
   return {
     id: row.id,
     title: row.title,
-    category: row.category.name,
-    categoryId: row.categoryId,
+    category: categoryLabel(row.categoryCode),
+    categoryCode: row.categoryCode,
     tags: row.tags,
     readMin: row.readMin,
     updatedAt: row.updatedAt.toISOString(),
@@ -94,7 +99,8 @@ export type WriteArticleInput = {
   title: string;
   excerpt: string;
   body: string;
-  categoryId: number;
+  /** The subject, as a cross-tenant code. See KbArticle.categoryCode. */
+  categoryCode: string;
   tags: string[];
   readMin: number;
   status: KbStatus;
@@ -111,7 +117,11 @@ export const kbRepository = {
       where: {
         AND: [
           visibilityWhere(opts.includeDrafts),
-          opts.category ? { category: { name: opts.category } } : {},
+          // Filtered on the CODE, not on a printed name. The client sends back
+          // one of the values `categories()` below handed it, so the two cannot
+          // disagree — where matching on a name would break the moment a tenant
+          // renamed their copy of a category the library also writes about.
+          opts.category ? { categoryCode: opts.category } : {},
           q ? searchWhere(q) : {},
         ],
       },
@@ -121,14 +131,32 @@ export const kbRepository = {
     return rows.map((r) => toSummary(toDto(r)));
   },
 
-  /** Category names that actually have articles — an empty filter is no filter. */
-  async categories(includeDrafts: boolean): Promise<string[]> {
-    const rows = await prisma.category.findMany({
-      where: { kbArticles: { some: visibilityWhere(includeDrafts) } },
-      select: { name: true },
-      orderBy: { name: "asc" },
+  /**
+   * The subjects that actually have articles — an empty filter is no filter.
+   *
+   * Read off the ARTICLES now, not off the category table. It used to ask which
+   * categories had articles attached, which no longer means anything: every
+   * tenant has its own row per code, so that question would return the same
+   * subject once per customer and the browse bar would show six "Network" chips
+   * on a platform with six customers.
+   *
+   * Both halves are returned because the client needs both and must not derive
+   * one from the other: `code` is what it sends back to filter, `label` is what
+   * it prints.
+   */
+  async categories(
+    includeDrafts: boolean,
+  ): Promise<{ code: string; label: string }[]> {
+    const rows = await prisma.kbArticle.findMany({
+      where: visibilityWhere(includeDrafts),
+      distinct: ["categoryCode"],
+      select: { categoryCode: true },
+      orderBy: { categoryCode: "asc" },
     });
-    return rows.map((r) => r.name);
+    return rows.map((r) => ({
+      code: r.categoryCode,
+      label: categoryLabel(r.categoryCode),
+    }));
   },
 
   async findById(
@@ -160,10 +188,13 @@ export const kbRepository = {
     if (wanted.length === 0) return new Map();
     const rows = await prisma.kbArticle.findMany({
       where: { id: { in: wanted } },
-      select: { id: true, title: true, category: { select: { name: true } } },
+      select: { id: true, title: true, categoryCode: true },
     });
     return new Map(
-      rows.map((r) => [r.id, { id: r.id, title: r.title, category: r.category.name }]),
+      rows.map((r) => [
+        r.id,
+        { id: r.id, title: r.title, category: categoryLabel(r.categoryCode) },
+      ]),
     );
   },
 
@@ -236,7 +267,7 @@ export const kbRepository = {
     authorId: number,
   ): Promise<KbArticleDto> {
     return prisma.$transaction(async (tx) => {
-      await assertCategoryExists(tx, data.categoryId);
+      await assertCategoryCodeExists(tx, data.categoryCode);
       // Ids are the human-readable codes support staff quote at each other
       // ("see KB-042"), so a new one continues the series rather than being a
       // surrogate key. Zero-padded to keep them the same width.
@@ -275,8 +306,8 @@ export const kbRepository = {
         select: { status: true },
       });
       if (!before) return null;
-      if (data.categoryId != null) {
-        await assertCategoryExists(tx, data.categoryId);
+      if (data.categoryCode != null) {
+        await assertCategoryCodeExists(tx, data.categoryCode);
       }
       const updated = await tx.kbArticle.update({
         where: { id },
@@ -346,13 +377,26 @@ export const kbRepository = {
   },
 };
 
-async function assertCategoryExists(
+/**
+ * Refuse a code no category anywhere carries.
+ *
+ * Deliberately NOT scoped to the author's reach, unlike every other lookup in
+ * this codebase, and the exception is the point: an article belongs to no tenant,
+ * so its subject cannot be validated against one. A code is a shared vocabulary
+ * word, and what this checks is that the word is in use somewhere — which catches
+ * the typo the editor is actually at risk of, without asserting an ownership the
+ * article does not have.
+ *
+ * Reading which codes EXIST is not a tenant leak: it says a category with that
+ * code is in use on the platform, and never which customer has one.
+ */
+async function assertCategoryCodeExists(
   tx: Prisma.TransactionClient,
-  categoryId: number,
+  code: string,
 ): Promise<void> {
-  const category = await tx.category.findUnique({
-    where: { id: categoryId },
+  const category = await tx.category.findFirst({
+    where: { code },
     select: { id: true },
   });
-  if (!category) throw BadRequest(`Unknown category #${categoryId}`);
+  if (!category) throw BadRequest(`Unknown category code "${code}"`);
 }

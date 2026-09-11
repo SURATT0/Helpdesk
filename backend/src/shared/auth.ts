@@ -1,4 +1,4 @@
-import type { Role } from "./domain";
+import type { Role, UserStatus } from "./domain";
 
 /**
  * The authenticated principal carried on the access-token JWT and attached to
@@ -10,6 +10,22 @@ export type AuthUser = {
   name: string;
   email: string;
   role: Role;
+  /**
+   * Where the account stood when this token was minted. Only `active` may act —
+   * `requireAuth` refuses everything else, so an approval revoked mid-session
+   * takes effect within the access token's 15 minutes rather than at the next
+   * sign-in.
+   *
+   * Carried on the token rather than read from the database per request, exactly
+   * like the role and the reach beside it: the middleware stays a signature
+   * check with no query behind it. The same 15-minute lag applies, and the same
+   * thing closes it — `refresh` re-reads the row and refuses to rotate.
+   *
+   * Optional on the TYPE only, for tokens minted before this claim existed;
+   * `verifyAccessToken` defaults those to `active`, which is what every account
+   * that held one was.
+   */
+  status: UserStatus;
   /** Team + department are retained for routing/display. */
   teamId: number | null;
   department: string | null;
@@ -97,6 +113,30 @@ export function customerReach(user: {
  * introduce.
  */
 export function mayGrantReach(user: {
+  role: Role;
+  customerId: number | null;
+}): boolean {
+  return isPlatformWide(user);
+}
+
+/**
+ * May this principal decide on somebody's registration — approve it into a
+ * customer, or turn it down?
+ *
+ * Platform-wide only, and for a reason that falls out of the data rather than
+ * being imposed: a self-registered account has NO customer yet, because nobody
+ * has decided which one it belongs to. `scopeWhere` in the user directory
+ * matches on `customerId IN (reach)`, so a customer-bound principal cannot see
+ * such a row in the first place — the queue is invisible to them whatever this
+ * predicate said.
+ *
+ * Stating it here anyway, rather than letting the scope filter be the whole
+ * story: approving is the act that CHOOSES the tenant, which makes it the same
+ * shape of decision as `mayGrantReach` above — it puts a person inside a
+ * customer — and a gate that exists only as a side effect of a where-clause is
+ * one a future refactor removes without noticing.
+ */
+export function mayApproveRegistration(user: {
   role: Role;
   customerId: number | null;
 }): boolean {

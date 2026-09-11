@@ -84,12 +84,19 @@ export function KbBrowser() {
           active={category === null}
           onClick={() => setCategory(null)}
         />
+        {/*
+          The chip PRINTS the label and FILTERS on the code. They are two
+          different strings on purpose: a code is stable across tenants and is
+          what the article carries, while the label is only how it reads. Using
+          the printed text as the filter value is what would break the moment a
+          customer renamed their copy of a category the library writes about.
+        */}
         {categories.map((c) => (
           <CategoryChip
-            key={c}
-            label={c}
-            active={category === c}
-            onClick={() => setCategory(c)}
+            key={c.code}
+            label={c.label}
+            active={category === c.code}
+            onClick={() => setCategory(c.code)}
           />
         ))}
       </div>

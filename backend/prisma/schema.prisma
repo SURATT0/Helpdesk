@@ -60,6 +60,27 @@ enum Role {
   user
 }
 
+/// Where an account is in its life, which is a different question from what it
+/// may do (`Role`) and from whether it is still employed (`User.isActive`).
+///
+/// Deliberately NOT folded into `isActive`. That flag already means one specific
+/// thing — the person has left — and it is what routing, assignment and the
+/// session sweep read. An account waiting to be approved has never been used,
+/// which is not the same fact, and a report that cannot tell "gone" from "not
+/// yet let in" is a report that miscounts the desk twice over.
+///
+/// `pending` is the state self-registration lands in, and it sees NOTHING: the
+/// gate is in `requireAuth`, so every route is covered at once rather than each
+/// one remembering. `rejected` is kept rather than deleted because the row is
+/// evidence somebody applied and a person said no; `Ticket.requesterId` is
+/// RESTRICT anyway, so deleting is not on offer once they have raised anything.
+enum UserStatus {
+  pending
+  active
+  suspended
+  rejected
+}
+
 // Configuration-item kinds for the asset registry. Deliberately coarse — this is
 // a help-desk asset list, not a full CMDB.
 enum AssetKind {
@@ -132,7 +153,8 @@ model Customer {
   problems    Problem[]
   projects    Project[]
   settings    NotificationSettings?
-  /// Categories private to this customer. Shared ones have a null customerId.
+  /// This customer's categories. Every category belongs to one tenant now —
+  /// there are no shared rows left; what crosses tenants is `Category.code`.
   categories  Category[]
   /// Staff granted reach INTO this customer without belonging to it.
   reachGrants UserCustomer[]
@@ -147,11 +169,11 @@ model Customer {
   ///
   /// Filtered out by `customerScopeWhere`, so an archived tenant leaves every
   /// picker at once, the way `projectScopeWhere` handles a deleted project.
-  deletedAt   DateTime?             @map("deleted_at")
+  deletedAt   DateTime? @map("deleted_at")
   /// Who archived it. Nullable because it is only set then, and named so it
   /// cannot be confused with the membership relation above.
-  deletedById Int?                  @map("deleted_by_id")
-  deletedBy   User?                 @relation("CustomerDeletedBy", fields: [deletedById], references: [id])
+  deletedById Int?      @map("deleted_by_id")
+  deletedBy   User?     @relation("CustomerDeletedBy", fields: [deletedById], references: [id])
 
   // Names stay unique across ARCHIVED rows too, unlike projects. A tenant name
   // is what appears on an invoice and in an audit trail; letting a new customer
@@ -251,6 +273,16 @@ model NotificationSettings {
 model Project {
   id            Int       @id @default(autoincrement())
   name          String
+  /// What this project IS, in the words of whoever set it up — scope, contacts,
+  /// the standing arrangement with the customer. Markdown, rendered on the
+  /// project's own page.
+  ///
+  /// Nullable and staying that way: the 30 projects that already exist were
+  /// created as routing targets and have no description anybody could invent for
+  /// them, and a project is still a valid routing target with nothing written
+  /// about it. Requiring it here would make the column a lie for every row
+  /// predating it.
+  description   String?
   customerId    Int       @map("customer_id")
   customer      Customer  @relation(fields: [customerId], references: [id])
   ownerId       Int?      @map("owner_id")
@@ -309,6 +341,23 @@ model User {
   name                   String
   email                  String                @unique
   role                   Role
+  /// Where this account is in its life — see UserStatus.
+  ///
+  /// Required, and deliberately WITHOUT a default. A default of `active` would
+  /// mean a create path that forgets to name a status mints a working account,
+  /// which is the one mistake self-registration must never make; with none, the
+  /// compiler asks every caller. Rows that predate the column were backfilled to
+  /// `active`, which is what all 16 of them already were.
+  status                 UserStatus
+  /// When this address was proven to belong to whoever is using it. Null = never.
+  ///
+  /// A timestamp rather than a boolean, for the same reason `resolvedAt` is one:
+  /// "when" answers "whether" as well, and support asking "did they ever confirm,
+  /// and when" is a question a boolean throws away. Accounts that predate
+  /// self-registration are stamped at migration time — they were created by a
+  /// person who already knew who they were, so demanding they re-prove it would
+  /// lock out the entire existing desk to enforce a rule none of them broke.
+  emailVerifiedAt        DateTime?             @map("email_verified_at")
   teamId                 Int?                  @map("team_id")
   team                   Team?                 @relation(fields: [teamId], references: [id])
   // The customer this person BELONGS to — their home tenant. Null = platform
@@ -354,6 +403,9 @@ model User {
   deletedProjects        Project[]             @relation("ProjectDeletedBy")
   archivedCustomers      Customer[]            @relation("CustomerDeletedBy")
   passwordHash           String?               @map("password_hash") // filled by the auth milestone
+  /// Single-use tokens mailed to this person — password resets and address
+  /// verifications. See UserToken.
+  userTokens             UserToken[]
   requestedTickets       Ticket[]              @relation("TicketRequester")
   assignedTickets        Ticket[]              @relation("TicketAssignee")
   statusChanges          TicketStatusHistory[]
@@ -393,6 +445,48 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+/// What a one-shot token mailed to a person is FOR.
+///
+/// One table for both, rather than two nearly identical ones, because the shape
+/// is genuinely the same — a hashed secret, an expiry, and a single use — and
+/// the only thing that differs is the TTL, which is policy and lives in config,
+/// not structure. Splitting them would duplicate the sweep, the hashing and the
+/// single-use guard three times over to express one enum value.
+enum UserTokenPurpose {
+  password_reset
+  email_verification
+}
+
+/// A single-use secret mailed to a person: "reset your password", "confirm this
+/// address".
+///
+/// Stores the SHA-256 HASH, never the token — the same rule `RefreshToken`
+/// follows, and for the same reason: a leaked database must not hand over
+/// working reset links for every account in it. The raw value exists only in the
+/// email and in the request that redeems it.
+///
+/// `usedAt` rather than deleting the row on redemption. A consumed token is the
+/// evidence that a reset actually happened and when, which is exactly what
+/// someone investigating a compromised account needs; deleting it would leave
+/// the successful reset as the only unlogged step in the chain.
+model UserToken {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   UserTokenPurpose
+  tokenHash String           @unique @map("token_hash")
+  expiresAt DateTime         @map("expires_at")
+  /// When it was redeemed. Null = still live. Checked on every redemption, so a
+  /// token works exactly once however fast the second attempt arrives.
+  usedAt    DateTime?        @map("used_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // "Every live token this person holds" — read when issuing a new one (the
+  // previous ones are invalidated) and when a reset succeeds.
+  @@index([userId, purpose])
+  @@map("user_tokens")
+}
+
 /// What a ticket is about. Either the platform's own, or one customer's.
 ///
 /// `customerId` is nullable and null means SHARED — available to every tenant.
@@ -403,23 +497,55 @@ model RefreshToken {
 /// meaning, and a customer's own categories sit alongside it rather than
 /// replacing it. A picker shows the shared ones plus that customer's.
 model Category {
-  id            Int         @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   name          String
-  /// Null = shared with every customer. A value confines it to that tenant.
-  customerId    Int?        @map("customer_id")
-  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  defaultTeamId Int?        @map("default_team_id") // auto-assignment target
-  defaultTeam   Team?       @relation(fields: [defaultTeamId], references: [id])
+  /// The stable identity behind the name, shared across tenants.
+  ///
+  /// Once every customer owns their own categories, Acme's "Network" and
+  /// Globex's "Network" are two different rows, and any report that groups by
+  /// category id gets two lines where the desk means one. This is what such a
+  /// report groups by instead: both rows carry `NETWORK`, so the grouping
+  /// survives the split that made the rows separate in the first place.
+  ///
+  /// A code, not the name, deliberately — a customer may rename their copy to
+  /// "Networking" or translate it into Thai without silently splitting a report
+  /// line in two. Renaming is a display decision; this is not.
+  ///
+  /// Required. Existing rows were backfilled from their own names, which is
+  /// exactly right for the six the desk started with: they ARE the canonical
+  /// set, so their names are the canonical codes.
+  code          String
+  /// The tenant this category belongs to. Every category belongs to exactly one.
+  ///
+  /// It used to be nullable, where null meant SHARED WITH EVERYONE, and that
+  /// state is gone: it made "which customer does this row belong to" unanswerable
+  /// for the row a ticket points at, so the database could not prove that a
+  /// ticket's category and its project name the same tenant. It can now — see the
+  /// composite key below.
+  ///
+  /// What replaced the shared row is `code`: the six categories the desk started
+  /// with became one copy per customer carrying the same code, so a report still
+  /// groups them into one line while each tenant owns, renames and routes its own.
+  customerId    Int      @map("customer_id")
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  defaultTeamId Int?     @map("default_team_id") // auto-assignment target
+  defaultTeam   Team?    @relation(fields: [defaultTeamId], references: [id])
   tickets       Ticket[]
-  kbArticles    KbArticle[]
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  // Unique per owner. NOT the whole story: Postgres treats NULLs as distinct,
-  // so this constraint alone would let two SHARED categories both be called
-  // "Hardware". The migration adds a partial unique index over `name WHERE
-  // customer_id IS NULL` to close that half — see the migration's own note.
+  // Unique per owner, and now the whole story: with `customerId` required there
+  // are no NULLs left for Postgres to treat as distinct, so the partial index
+  // that used to cover the shared rows is dropped by the same migration.
   @@unique([customerId, name])
+  // One row per code per tenant. This is what makes the code a usable grouping
+  // key: two rows with the same code under one customer would double-count that
+  // customer in every report that groups by it.
+  @@unique([customerId, code])
+  // The key the composite foreign key on `tickets` references. Redundant on its
+  // own — `id` is already the primary key — and that is exactly its job, the
+  // same way `projects` carries one.
+  @@unique([id, customerId])
   @@index([customerId])
   @@map("categories")
 }
@@ -435,7 +561,21 @@ model Ticket {
   assigneeId     Int?                  @map("assignee_id")
   assignee       User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
   categoryId     Int                   @map("category_id")
-  category       Category              @relation(fields: [categoryId], references: [id])
+  /// The tenant match is enforced by the database, exactly as it is for
+  /// `project` below: a composite foreign key on (category_id, customer_id), so
+  /// a ticket can never point at another customer's category.
+  ///
+  /// This became both possible and necessary in the same change. Possible,
+  /// because `categories.customer_id` stopped being nullable — a shared category
+  /// belonged to no customer, so there was nothing to match against. Necessary,
+  /// because the service-layer rule "a ticket's project and category must name
+  /// the same tenant" is otherwise one forgotten check away from being false,
+  /// and it costs nothing on read.
+  ///
+  /// Declared HERE rather than as raw SQL in the migration, unlike the partial
+  /// indexes: `prisma migrate diff` reports a foreign key it does not know about
+  /// as drift and proposes dropping it. See backend/CLAUDE.md.
+  category       Category              @relation(fields: [categoryId, customerId], references: [id, customerId], onDelete: Restrict)
   /// Which project this ticket belongs to, if any.
   ///
   /// Nullable and staying that way. Not a column waiting to be tightened: mail
@@ -776,35 +916,45 @@ enum KbStatus {
  * replaces behaved.
  */
 model KbArticle {
-  id         String   @id
-  title      String
+  id           String   @id
+  title        String
   /**
    * One-paragraph summary, shown in the browse list without loading the body.
    */
-  excerpt    String
+  excerpt      String
   /**
    * Markdown-lite: "## " headings, "- " bullets, blank line = new block.
    */
-  body       String
-  categoryId Int      @map("category_id")
-  category   Category @relation(fields: [categoryId], references: [id])
-  tags       String[]
+  body         String
+  /// What this article is ABOUT, as a cross-tenant code rather than a pointer at
+  /// one customer's category row.
+  ///
+  /// It was `categoryId` until categories became per-customer. That change would
+  /// have made the knowledge base tenant-scoped by accident: every article would
+  /// have ended up owned by whichever customer inherited the shared row it
+  /// pointed at, and one article about resetting a password serves every tenant —
+  /// which is also why `KbArticle` has no `customerId` of its own and never did.
+  ///
+  /// So the article names the SUBJECT, and each tenant's own category carries the
+  /// same code. Nothing here belongs to anybody, which is the point.
+  categoryCode String   @map("category_code")
+  tags         String[]
   /**
    * Rough reading time in minutes, written by the author rather than computed.
    */
-  readMin    Int      @map("read_min")
-  status     KbStatus @default(published)
+  readMin      Int      @map("read_min")
+  status       KbStatus @default(published)
   /**
    * Who wrote it. Nullable because the articles that seeded this table predate
    * the notion of an author, and `SetNull` because retiring the person who wrote
    * an article must not take the article with them.
    */
-  authorId   Int?     @map("author_id")
-  author     User?    @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  authorId     Int?     @map("author_id")
+  author       User?    @relation("KbAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  @@index([categoryId])
+  @@index([categoryCode])
   @@index([status])
   @@map("kb_articles")
 }

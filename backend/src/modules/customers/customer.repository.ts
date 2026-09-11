@@ -6,6 +6,10 @@ import {
 } from "../../shared/auth";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
+import {
+  categoryCode,
+  STARTER_CATEGORY_NAMES,
+} from "../categories/category.code";
 
 /**
  * Row-level customer visibility, the same shape as every other scope builder:
@@ -157,6 +161,23 @@ export const customerRepository = {
   async create(name: string, actor: AuthUser): Promise<CustomerDto> {
     return prisma.$transaction(async (tx) => {
       const created = await tx.customer.create({ data: { name } });
+
+      // The starter category set, in the SAME transaction as the customer.
+      //
+      // Not a nicety. `tickets.category_id` is required and every category now
+      // belongs to a tenant, so a customer with none has a create-ticket form
+      // whose dropdown is empty and whose submit can never succeed. Creating the
+      // tenant and the rows that make it usable is one act, and a customer that
+      // existed for a moment without them would be a broken tenant somebody
+      // could be filing against.
+      await tx.category.createMany({
+        data: STARTER_CATEGORY_NAMES.map((categoryName) => ({
+          name: categoryName,
+          code: categoryCode(categoryName),
+          customerId: created.id,
+        })),
+      });
+
       await auditRepository.record(
         {
           userId: actor.id,

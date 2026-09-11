@@ -42,6 +42,8 @@ export type ProjectDeletionImpact = {
 export type ProjectDto = {
   id: number;
   name: string;
+  /** Markdown. Null = nobody has written one; see Project.description. */
+  description: string | null;
   customerId: number;
   owner: ProjectOwnerDto;
   backupOwner: ProjectOwnerDto;
@@ -61,6 +63,7 @@ function toDto(row: ProjectRow): ProjectDto {
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
     customerId: row.customerId,
     owner: toOwnerDto(row.owner),
     backupOwner: toOwnerDto(row.backupOwner),
@@ -201,6 +204,7 @@ export const projectRepository = {
   async create(
     data: {
       name: string;
+      description?: string | null;
       customerId: number;
       ownerId?: number | null;
       backupOwnerId?: number | null;
@@ -211,6 +215,10 @@ export const projectRepository = {
       const created = await tx.project.create({
         data: {
           name: data.name,
+          // Empty string and "not written" are the same fact here, so an empty
+          // textarea stores null rather than a row that renders as a blank
+          // description section.
+          description: data.description?.trim() || null,
           customerId: data.customerId,
           ownerId: data.ownerId ?? null,
           backupOwnerId: data.backupOwnerId ?? null,
@@ -240,6 +248,7 @@ export const projectRepository = {
     id: number,
     data: {
       name?: string;
+      description?: string | null;
       ownerId?: number | null;
       backupOwnerId?: number | null;
     },
@@ -256,7 +265,16 @@ export const projectRepository = {
 
       const updated = await tx.project.update({
         where: { id },
-        data,
+        data: {
+          ...data,
+          // Same normalisation as on create: clearing the textarea means "no
+          // description", not "a description that is empty". `undefined` still
+          // means "leave it alone", which is why this only reaches for the key
+          // when it was actually sent.
+          ...(data.description !== undefined
+            ? { description: data.description?.trim() || null }
+            : {}),
+        },
         include: projectInclude,
       });
       await auditRepository.record(
@@ -267,6 +285,10 @@ export const projectRepository = {
           entityId: id,
           meta: {
             name: data.name,
+            // Whether it was rewritten, not what it now says: a project
+            // description can be pages long, and the audit trail is a log of
+            // decisions rather than a copy of the document.
+            descriptionChanged: data.description !== undefined,
             ownerId: data.ownerId,
             backupOwnerId: data.backupOwnerId,
           },

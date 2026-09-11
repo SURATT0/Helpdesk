@@ -8,16 +8,95 @@ import {
 import {
   customerReach,
   isPlatformWide,
+  mayApproveRegistration,
   mayGrantReach,
   type AuthUser,
 } from "../../shared/auth";
-import type { Role } from "../../shared/domain";
+import type { Role, UserStatus } from "../../shared/domain";
 import type { Lang } from "../../shared/i18n";
+import { authMail } from "../auth/auth.mail";
 import { userRepository, type UserDto } from "./user.repository";
 
 export const userService = {
-  list(actor: AuthUser): Promise<UserDto[]> {
-    return userRepository.findMany(actor);
+  list(
+    actor: AuthUser,
+    filters: {
+      q?: string;
+      role?: Role;
+      status?: UserStatus;
+      customerId?: number;
+    } = {},
+  ): Promise<UserDto[]> {
+    return userRepository.findMany(actor, filters);
+  },
+
+  /**
+   * Approve a registration into a customer, with a role.
+   *
+   * Three gates, in the order a caller meets them, each answering the most
+   * specific thing wrong with the request:
+   *
+   *   not platform-wide     → 403 before anything is read. Approving CHOOSES the
+   *                           tenant, which is the same shape of act as granting
+   *                           reach (see `mayApproveRegistration`).
+   *   granting super_admin  → 403 unless platform-wide. Redundant today, since
+   *                           the gate above already requires it — stated anyway
+   *                           so that loosening one does not silently loosen the
+   *                           other, which is exactly how the top role leaks.
+   *   unknown customer      → 400 naming it, rather than writing a person into a
+   *                           tenant that does not exist.
+   *
+   * The account is mailed that it is through. Fire-and-forget for the same
+   * reason the auth mail is: an approval must not fail because a mail server
+   * did, and the person can be told again by any administrator.
+   */
+  async approve(
+    id: number,
+    data: { customerId: number; role: Role },
+    actor: AuthUser,
+  ): Promise<UserDto> {
+    if (!mayApproveRegistration(actor)) {
+      throw Forbidden("Only a platform super admin can approve a registration");
+    }
+    if (data.role === "super_admin" && !isPlatformWide(actor)) {
+      throw Forbidden("Only a platform super admin can grant the super admin role");
+    }
+    const customer = await userRepository.findCustomerById(data.customerId);
+    if (!customer) throw BadRequest(`Unknown customer #${data.customerId}`);
+
+    const result = await userRepository.approveRegistration(id, data, actor);
+    if (result === null) throw NotFound(`User #${id} not found`);
+    if (result === "not_pending") {
+      // Named rather than a bare 409: two administrators working the queue at
+      // once is the ordinary case, and "somebody already dealt with it" is what
+      // the second one needs to read.
+      throw BadRequest(
+        "That registration has already been decided — reload the queue",
+      );
+    }
+    authMail.sendApproved(result.email, result.language ?? undefined);
+    return result;
+  },
+
+  async reject(
+    id: number,
+    reason: string | undefined,
+    actor: AuthUser,
+  ): Promise<UserDto> {
+    if (!mayApproveRegistration(actor)) {
+      throw Forbidden("Only a platform super admin can decide a registration");
+    }
+    const result = await userRepository.rejectRegistration(id, reason, actor);
+    if (result === null) throw NotFound(`User #${id} not found`);
+    if (result === "not_pending") {
+      throw BadRequest(
+        "That registration has already been decided — reload the queue",
+      );
+    }
+    // Deliberately NOT mailed. A rejection is a decision somebody may want to
+    // deliver themselves, in their own words, and an automatic "you were turned
+    // down" from a help desk is the wrong way for a person to find out.
+    return result;
   },
 
   async get(id: number, actor: AuthUser): Promise<UserDto> {

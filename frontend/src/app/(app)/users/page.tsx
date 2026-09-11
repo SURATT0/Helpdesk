@@ -11,12 +11,20 @@ import { useAuth } from "@/features/auth/context";
 import { useProjects } from "@/features/projects/queries";
 import { useUpdateUser, useUsers } from "@/features/users/queries";
 import { AccountToggle } from "@/features/users/components/account-toggle";
+import { ApprovalQueue } from "@/features/users/components/approval-queue";
 import { CustomerAccess } from "@/features/users/components/customer-access";
+import { UserFiltersBar } from "@/features/users/components/user-filters";
 import { AvailabilityToggle } from "@/features/users/components/availability-toggle";
 import { HandoverQueueModal } from "@/features/users/components/handover-queue-modal";
 import { ProjectSelect } from "@/features/users/components/project-select";
+import { SuspensionToggle } from "@/features/users/components/suspension-toggle";
 import { useI18n } from "@/features/i18n/context";
-import type { User, UserRole } from "@/features/users/schemas";
+import type {
+  User,
+  UserFilters,
+  UserRole,
+  UserStatus,
+} from "@/features/users/schemas";
 import { BADGE, type ColourPair } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +48,34 @@ const COLS =
  */
 const MIN_WIDTH = 1110;
 
+/**
+ * The account's state, shown beside the name — and ONLY when it is not the
+ * ordinary one.
+ *
+ * Not a tenth column, for the same reason cross-tenant reach is not one: the
+ * table already carries nine and scrolls sideways on a phone, and `active` is
+ * almost every row. A column would spend width on every reader to print the word
+ * "Active" over and over, while the rows that actually need saying something —
+ * somebody suspended, somebody still waiting — are the rare ones a badge makes
+ * jump out.
+ */
+function AccountStatusBadge({ status }: { status: UserStatus }) {
+  const { t } = useI18n();
+  if (status === "active") return null;
+  // Amber for the one that is waiting on somebody, rose for the two that are a
+  // refusal — the same distinction the palette already draws between "in hand"
+  // and "a fault".
+  const tone = status === "pending" ? BADGE.amber : BADGE.rose;
+  return (
+    <span
+      className="inline-flex flex-none items-center rounded-full px-2 py-[2px] text-caption font-semibold"
+      style={{ color: tone.fg, background: tone.bg }}
+    >
+      {t(`accountStatus.${status}`)}
+    </span>
+  );
+}
+
 const formatDate = (iso: string, lang: string) =>
   new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-US", {
     month: "short",
@@ -50,7 +86,8 @@ const formatDate = (iso: string, lang: string) =>
 export default function UsersPage() {
   const { t, lang } = useI18n();
   const { user: me } = useAuth();
-  const { data: users = [], isLoading, isError, refetch } = useUsers();
+  const [filters, setFilters] = React.useState<UserFilters>({});
+  const { data: users = [], isLoading, isError, refetch } = useUsers({ filters });
   const update = useUpdateUser();
 
   // Mirrors the server's user:write grant. The API is the real gate; this only
@@ -94,6 +131,20 @@ export default function UsersPage() {
               : t("users.updateError")}
           </div>
         ) : null}
+
+        {/* Above the directory, and only when somebody is actually waiting —
+            see ApprovalQueue. It is the one list here where a person is blocked
+            until an administrator acts. */}
+        <ApprovalQueue canDecide={canGrantReach} />
+
+        <UserFiltersBar
+          filters={filters}
+          onChange={setFilters}
+          // The customer filter is worth offering only to a viewer who reaches
+          // more than one: for everybody else the column holds the same name on
+          // every row.
+          showCustomer={canGrantReach}
+        />
 
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
           <TableScroll minWidth={MIN_WIDTH}>
@@ -140,7 +191,10 @@ export default function UsersPage() {
                       tenth column would cost every reader width on a table that
                       already scrolls sideways on a phone. */}
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{u.name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate">{u.name}</span>
+                      <AccountStatusBadge status={u.status} />
+                    </span>
                     <CustomerAccess user={u} canGrant={canGrantReach} />
                   </span>
                 </span>
@@ -192,7 +246,7 @@ export default function UsersPage() {
                   />
                 </span>
 
-                <span>
+                <span className="flex flex-col items-start">
                   <AccountToggle
                     active={u.isActive}
                     canEdit={canEdit}
@@ -203,6 +257,18 @@ export default function UsersPage() {
                     ariaLabel={`${t("users.col.account")} — ${u.name}`}
                     onChange={(isActive) =>
                       update.mutate({ id: u.id, input: { isActive } })
+                    }
+                  />
+                  {/* Under the door switch rather than beside it: the two are
+                      easy to confuse, and only one of them says the person has
+                      left. See SuspensionToggle for why both exist. */}
+                  <SuspensionToggle
+                    status={u.status}
+                    canEdit={canEdit}
+                    isSelf={u.id === me?.id}
+                    pending={pendingId === u.id}
+                    onChange={(status) =>
+                      update.mutate({ id: u.id, input: { status } })
                     }
                   />
                 </span>

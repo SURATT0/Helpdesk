@@ -1,24 +1,77 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  approveUser,
   fetchUsers,
+  rejectUser,
   setUserReach,
   updateMyProfile,
   updateUser,
   type UpdateMyProfileInput,
   type UpdateUserInput,
 } from "./api";
+import type { UserFilters, UserRole } from "./schemas";
 
-export const userKeys = { all: ["users"] as const };
+export const userKeys = {
+  all: ["users"] as const,
+  /**
+   * One filtered view of the directory.
+   *
+   * The filters are in the key so switching them refetches rather than showing
+   * the previous filter's rows — and so `invalidateQueries({ queryKey: all })`
+   * still catches every one of them, including the approval queue, which is just
+   * this list with `status: "pending"`.
+   */
+  list: (filters: UserFilters) => ["users", "list", filters] as const,
+};
 
 /**
  * The user directory. `enabled: false` for callers who can't read it — the
  * endpoint requires `user:read`, so fetching it as a requester would just 403.
  */
-export function useUsers(opts: { enabled?: boolean } = {}) {
+export function useUsers(
+  opts: { enabled?: boolean; filters?: UserFilters } = {},
+) {
+  const filters = opts.filters ?? {};
   return useQuery({
-    queryKey: userKeys.all,
-    queryFn: fetchUsers,
+    queryKey: userKeys.list(filters),
+    queryFn: () => fetchUsers(filters),
     enabled: opts.enabled ?? true,
+    // Keep the previous rows on screen while a new filter loads, so typing in
+    // the search box does not blank the table on every keystroke.
+    placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * Decide a registration — approve it into a customer with a role, or turn it
+ * down.
+ *
+ * Invalidates the whole `users` key rather than one filtered list: an approval
+ * moves a row OUT of the pending queue and INTO the customer's directory, so
+ * both lists are stale and neither knows about the other.
+ */
+export function useApproveUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      customerId,
+      role,
+    }: {
+      id: number;
+      customerId: number;
+      role: UserRole;
+    }) => approveUser(id, { customerId, role }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  });
+}
+
+export function useRejectUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
+      rejectUser(id, reason),
+    onSuccess: () => qc.invalidateQueries({ queryKey: userKeys.all }),
   });
 }
 

@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
+import { categoryCode } from "../src/modules/categories/category.code";
 import { KB_ARTICLES } from "./kb-seed-data";
 
 // Every seeded user shares this demo password. Log in as e.g. dana.reyes@acme.com.
@@ -349,6 +350,15 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         customerId,
         passwordHash,
         availableForAssignment,
+        // Reset on RE-seed as well, unlike `isActive` just below it, and the
+        // difference is deliberate. The seed's job is to put the demo desk in a
+        // known-good state, and an account left `pending` from a registration
+        // someone was testing is not one — it cannot sign in, so every E2E spec
+        // that logs in as them fails looking like a broken login page rather
+        // than like stale data. `isActive` stays out because deactivation is a
+        // demo scenario the seed itself sets up; `status` is not.
+        status: "active",
+        emailVerifiedAt: new Date(),
       },
       create: {
         name: u.name,
@@ -358,6 +368,17 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         customerId,
         passwordHash,
         availableForAssignment,
+        // Seeded staff are accounts an administrator would have created and
+        // approved. Named explicitly because the column has no default — see the
+        // note on `User.status`.
+        status: "active",
+        // And their addresses count as proven, for the same reason the migration
+        // stamped the accounts that predated the column: an administrator made
+        // them, knowing whose they were. Missing this is not a subtle bug — the
+        // sign-in gate refuses an unverified account, so a seed without it makes
+        // EVERY seeded user unable to log in, which is how the integration suite
+        // found it.
+        emailVerifiedAt: new Date(),
       },
     });
     userIds.set(u.name, row.id);
@@ -429,28 +450,41 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
     }
   }
 
+  /**
+   * Every customer gets the whole starter set, keyed by tenant AND name.
+   *
+   * There is no shared category any more, so "the Network category" is not a
+   * thing the seed can hold one id for — each tenant has its own row, and a
+   * ticket has to be given the one belonging to ITS customer or the composite
+   * foreign key refuses the insert. Hence the compound key: reading this map
+   * without naming a customer is now a type error rather than a ticket filed
+   * against somebody else's label.
+   */
   const categoryIds = new Map<string, number>();
-  for (const c of CATEGORIES) {
-    const defaultTeamId = teamIds.get(c.team);
-    // The seed's categories are the SHARED ones — customerId null, available to
-    // every tenant. `name` is no longer globally unique (a customer may name
-    // their own category anything), so the key is the pair, and null on the
-    // customer side is matched explicitly rather than upserted on: Prisma's
-    // compound-unique key cannot carry a null, and Postgres would not match it
-    // if it could.
-    const existing = await prisma.category.findFirst({
-      where: { name: c.name, customerId: null },
-      select: { id: true },
-    });
-    const row = existing
-      ? await prisma.category.update({
-          where: { id: existing.id },
-          data: { defaultTeamId },
-        })
-      : await prisma.category.create({
-          data: { name: c.name, customerId: null, defaultTeamId },
-        });
-    categoryIds.set(c.name, row.id);
+  const categoryKey = (customer: string, name: string) => `${customer}|${name}`;
+  for (const customer of CUSTOMERS) {
+    const customerId = customerIds.get(customer);
+    if (customerId == null) continue;
+    for (const c of CATEGORIES) {
+      // A default routing team only if THIS customer has one under that name.
+      // `teamIds` is keyed by name alone and team names are globally unique, so
+      // looking one up without checking its owner is how a Globex category ends
+      // up routing to an Acme team — which is the cross-tenant routing the
+      // shared categories were doing before they were split.
+      const team = TEAMS.find((t) => t.name === c.team && t.customer === customer);
+      const defaultTeamId = team ? (teamIds.get(team.name) ?? null) : null;
+      const row = await prisma.category.upsert({
+        where: { customerId_name: { customerId, name: c.name } },
+        update: { defaultTeamId, code: categoryCode(c.name) },
+        create: {
+          name: c.name,
+          code: categoryCode(c.name),
+          customerId,
+          defaultTeamId,
+        },
+      });
+      categoryIds.set(categoryKey(customer, c.name), row.id);
+    }
   }
 
   // The knowledge base. `KB_ARTICLES` used to BE the knowledge base — served
@@ -463,13 +497,15 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   // it to one customer's staff would misrepresent who it belongs to.
   const kbAuthorId = userIds.get("Sam Rivera") ?? null;
   for (const a of KB_ARTICLES) {
-    const categoryId = categoryIds.get(a.category);
-    if (categoryId == null) continue;
+    // The article names its SUBJECT, not a row. Deriving the code from the same
+    // name the categories were built from is what lines an article up with every
+    // tenant's copy at once — which is the whole reason the knowledge base did
+    // not become one customer's when categories were split.
     const fields = {
       title: a.title,
       excerpt: a.excerpt,
       body: a.body,
-      categoryId,
+      categoryCode: categoryCode(a.category),
       tags: a.tags,
       readMin: a.readMin,
       status: "published" as const,
@@ -490,7 +526,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   for (const t of TICKETS) {
     const requesterId = userIds.get(t.requester)!;
     const assigneeId = t.assignee ? userIds.get(t.assignee)! : null;
-    const categoryId = categoryIds.get(t.category)!;
+    const categoryId = categoryIds.get(categoryKey(t.customer, t.category))!;
     const customerId = customerIds.get(t.customer) ?? null;
     const createdAt =
       t.raisedHoursAgo != null
@@ -539,7 +575,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   for (const t of CLOSED_HISTORY) {
     const requesterId = userIds.get(t.requester)!;
     const assigneeId = userIds.get(t.assignee)!;
-    const categoryId = categoryIds.get(t.category)!;
+    const categoryId = categoryIds.get(categoryKey(t.customer, t.category))!;
     const customerId = customerIds.get(t.customer) ?? null;
     const closedAt = closureAt(now, t.closure);
     const createdAt = new Date(closedAt.getTime() - t.openHours * HOUR_MS);

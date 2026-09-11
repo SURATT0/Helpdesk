@@ -8,19 +8,59 @@ export const emailRepository = {
    * (case-insensitive) if it exists, else the first category by id. Null only
    * if the instance has no categories at all.
    */
-  async resolveCategoryId(preferredName?: string): Promise<number | null> {
+  /**
+   * A category to file an emailed ticket under, WITHIN the requester's own
+   * customer.
+   *
+   * The tenant argument is required and there is no unscoped path, which is the
+   * fix for a real break: this used to search every category on the platform and
+   * fall back to the lowest id anywhere. That was harmless while categories were
+   * shared and belonged to nobody. Once each tenant owns its own, it resolved a
+   * Globex sender's mail to an Acme row — and the ticket writer would then refuse
+   * it, so mail from every customer but the lowest-numbered one stopped becoming
+   * tickets at all.
+   *
+   * The fallback stays, and stays inside the tenant: any category of THEIRS is a
+   * reasonable place to put a mail that named none, where no ticket at all is
+   * not. Ordered by id so the choice is at least stable between calls.
+   */
+  async resolveCategoryId(
+    customerId: number,
+    preferredName?: string,
+  ): Promise<number | null> {
     if (preferredName) {
       const byName = await prisma.category.findFirst({
-        where: { name: { equals: preferredName.trim(), mode: "insensitive" } },
+        where: {
+          customerId,
+          name: { equals: preferredName.trim(), mode: "insensitive" },
+        },
         select: { id: true },
       });
       if (byName) return byName.id;
     }
     const first = await prisma.category.findFirst({
+      where: { customerId },
       orderBy: { id: "asc" },
       select: { id: true },
     });
     return first?.id ?? null;
+  },
+
+  /**
+   * Which customer a requester belongs to — the tenant their emailed ticket is
+   * filed under, and the one its category has to come from.
+   *
+   * Read from the USER rather than from `EMAIL_DEFAULT_CUSTOMER`, because the two
+   * differ for the case that matters: a KNOWN sender is filed under their own
+   * customer whatever the default says, and the default only ever decides where
+   * a stranger lands.
+   */
+  async findCustomerIdOfUser(userId: number): Promise<number | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { customerId: true },
+    });
+    return user?.customerId ?? null;
   },
 
   /**
@@ -65,6 +105,21 @@ export const emailRepository = {
         role: "user",
         passwordHash: null,
         customerId,
+        // `active`, not `pending`, and the difference matters twice over.
+        //
+        // This row is a CORRESPONDENT, not an application: the desk has already
+        // accepted their mail and filed a ticket for them, and nobody asked to
+        // join anything. Routing them into the approval queue would fill it with
+        // every address that ever wrote in, and "approving" one would grant
+        // nothing, because what keeps them out of the app is the null password
+        // below, not their status.
+        //
+        // That null is load-bearing, so the password-reset path must refuse an
+        // account that has never had a password — otherwise anyone could mail the
+        // desk, get a row created, and then "reset" their way into the tenant.
+        // See `auth.service.requestPasswordReset`, which is where that is
+        // enforced.
+        status: "active",
       },
       select: { id: true },
     });

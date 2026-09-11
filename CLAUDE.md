@@ -82,6 +82,18 @@ These are load-bearing invariants — get them right in whatever layer you touch
 - **Both report clocks start at the desk's first public reply** — not at a status change, which
   stopped marking the pickup once In Progress became derived. First response = raise → that reply;
   handling time = that reply → `closed`. An internal note is not a response.
+- **A category belongs to one customer; a `code` is what crosses them.** `categories.customer_id`
+  is required — there is no "shared with everyone" row any more. Each tenant owns its own copy of
+  the starter set (written with the customer, in the same transaction, or its ticket form opens to
+  an empty required dropdown), and `categories.code` is the identity those copies share: Acme's
+  "Network" and Globex's "Network" are two rows carrying `NETWORK`, so a report groups by the code
+  and never by the id. Renaming a copy is a display decision and must not change its code.
+  **A ticket's project and category must name the ticket's own customer**, and that is not a rule
+  the service remembers — it is two composite foreign keys, `(project_id, customer_id)` and
+  `(category_id, customer_id)`. The service still checks, so the caller gets a readable
+  400 instead of a constraint violation; the database is what makes it true from every code path.
+  **A KB article names a `categoryCode`, never a category id** — one article serves every tenant,
+  so pointing it at a row would hand the whole library to whichever customer owned that row.
 - **Priority enum:** `low | medium | high | critical`. `due_at` is computed from the SLA policy for
   the priority at creation time.
 - **Auto-assignment:** two mechanisms, composed. If the requester belongs to a project, the ticket is

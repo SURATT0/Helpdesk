@@ -142,8 +142,11 @@ describe("archiving a customer", () => {
     const made = await create(platform, "CRUD probe — Finished");
     const id = made.body.data.id as number;
     const requester = await prisma.user.findFirstOrThrow({ where: { role: "user" } });
+    // The new tenant's OWN category — created with it, which is the starter set
+    // this same suite relies on elsewhere. A category from any other customer
+    // would be refused by the composite foreign key rather than counted.
     const category = await prisma.category.findFirstOrThrow({
-      where: { customerId: null },
+      where: { customerId: id },
     });
     await prisma.ticket.create({
       data: {

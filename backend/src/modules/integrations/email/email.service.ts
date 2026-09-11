@@ -123,11 +123,27 @@ export const emailService = {
     }
 
     // --- new-ticket path ---
+    //
+    // The category has to come from the REQUESTER's tenant, not from the
+    // platform. Every category belongs to a customer now, and a ticket may only
+    // carry one of its own — so resolving `EMAIL_DEFAULT_CATEGORY` globally would
+    // hand a Globex sender an Acme row and the write would be refused.
+    const requesterCustomerId = await emailRepository.findCustomerIdOfUser(
+      requesterId,
+    );
+    if (requesterCustomerId == null) {
+      throw BadRequest(
+        `Sender ${mail.from} belongs to no customer, so there is no tenant to file the mail under`,
+      );
+    }
     const categoryId = await emailRepository.resolveCategoryId(
+      requesterCustomerId,
       env.integrations.email.defaultCategory,
     );
     if (categoryId == null) {
-      throw BadRequest("No category exists to route email tickets to");
+      throw BadRequest(
+        "That customer has no category to route email tickets to",
+      );
     }
 
     // Strip a stale/unauthorized [#id] tag out of the new ticket's subject so it

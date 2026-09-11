@@ -102,4 +102,154 @@ export const authRepository = {
       where: { expiresAt: { lt: new Date() } },
     });
   },
+
+  /**
+   * Revoke EVERY live session this user holds, across all families.
+   *
+   * What a successful password reset ends. Rotating the password without this
+   * would leave whoever prompted the reset — the reason the owner reset it —
+   * signed in on their own device for up to seven days, holding a refresh cookie
+   * the new password has no bearing on.
+   */
+  revokeAllSessions(userId: number) {
+    return prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  },
+
+  /**
+   * Look up an address for registration, case-insensitively.
+   *
+   * `findUserByEmail` above is a `findUnique` on the column and so is
+   * case-SENSITIVE, which is the right shape for signing in (it matches what was
+   * stored). Registration is asking a different question — "is this address
+   * already taken" — and `Dana@ACME.com` must not be able to take an address
+   * `dana@acme.com` already holds.
+   */
+  findUserByEmailInsensitive(email: string) {
+    return prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true, email: true, status: true, passwordHash: true },
+    });
+  },
+
+  /**
+   * Create a self-registered account.
+   *
+   * `pending` and no customer, both deliberate. Nobody has decided anything
+   * about this person yet: not whether they belong here, and not which tenant
+   * they belong to — and inventing a customer would file their first ticket
+   * under a company that never agreed to have them. The approval step is where
+   * both answers are given, together.
+   */
+  createSelfRegistered(data: {
+    name: string;
+    email: string;
+    passwordHash: string;
+  }) {
+    return prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        passwordHash: data.passwordHash,
+        role: "user",
+        status: "pending",
+        customerId: null,
+      },
+      select: { id: true, name: true, email: true },
+    });
+  },
+
+  /**
+   * Issue a single-use token, invalidating any the user is still holding for the
+   * same purpose.
+   *
+   * Both halves in one transaction. The invalidation is what stops a mailbox
+   * accumulating five working reset links, each valid for an hour — asking again
+   * has to REPLACE the last answer, or "request another one" quietly widens the
+   * window instead of refreshing it.
+   */
+  async issueUserToken(data: {
+    userId: number;
+    purpose: "password_reset" | "email_verification";
+    tokenHash: string;
+    expiresAt: Date;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      await tx.userToken.updateMany({
+        where: { userId: data.userId, purpose: data.purpose, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      return tx.userToken.create({ data, select: { id: true } });
+    });
+  },
+
+  findUserToken(tokenHash: string) {
+    return prisma.userToken.findUnique({
+      where: { tokenHash },
+      include: { user: { select: { id: true, email: true, status: true } } },
+    });
+  },
+
+  /**
+   * Redeem a reset token: mark it used, set the new password, and end every
+   * session — all or nothing.
+   *
+   * One transaction because a partial application is a security hole in either
+   * direction. Marking the token used without setting the password locks the
+   * owner out of their own account; setting the password without revoking leaves
+   * the sessions the reset was meant to close still open.
+   *
+   * `usedAt: null` in the WHERE is what makes it single-use under a race: two
+   * requests carrying the same token both pass the service's check, and only one
+   * of them matches a row here.
+   */
+  async redeemPasswordReset(data: {
+    tokenId: number;
+    userId: number;
+    passwordHash: string;
+  }): Promise<boolean> {
+    return prisma.$transaction(async (tx) => {
+      const claimed = await tx.userToken.updateMany({
+        where: { id: data.tokenId, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) return false;
+      await tx.user.update({
+        where: { id: data.userId },
+        data: { passwordHash: data.passwordHash },
+      });
+      await tx.refreshToken.updateMany({
+        where: { userId: data.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return true;
+    });
+  },
+
+  /**
+   * Redeem a verification token: mark it used and stamp the address as proven.
+   *
+   * Note what this does NOT do — it does not change `status`. Proving the address
+   * and being allowed in are two different decisions, and only a person makes
+   * the second one.
+   */
+  async redeemEmailVerification(data: {
+    tokenId: number;
+    userId: number;
+  }): Promise<boolean> {
+    return prisma.$transaction(async (tx) => {
+      const claimed = await tx.userToken.updateMany({
+        where: { id: data.tokenId, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) return false;
+      await tx.user.update({
+        where: { id: data.userId },
+        data: { emailVerifiedAt: new Date() },
+      });
+      return true;
+    });
+  },
 };

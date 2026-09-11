@@ -2,6 +2,9 @@ import type { Request, Response } from "express";
 import { Unauthorized } from "../../shared/errors";
 import { userService } from "./user.service";
 import {
+  approveUserBody,
+  listUsersQuery,
+  rejectUserBody,
   updateProfileBody,
   updateUserBody,
   userIdParam,
@@ -15,7 +18,20 @@ function currentUser(req: Request) {
 
 export const userController = {
   async list(req: Request, res: Response) {
-    res.json({ data: await userService.list(currentUser(req)) });
+    const filters = listUsersQuery.parse(req.query);
+    res.json({ data: await userService.list(currentUser(req), filters) });
+  },
+
+  async approve(req: Request, res: Response) {
+    const { id } = userIdParam.parse(req.params);
+    const body = approveUserBody.parse(req.body);
+    res.json({ data: await userService.approve(id, body, currentUser(req)) });
+  },
+
+  async reject(req: Request, res: Response) {
+    const { id } = userIdParam.parse(req.params);
+    const { reason } = rejectUserBody.parse(req.body);
+    res.json({ data: await userService.reject(id, reason, currentUser(req)) });
   },
 
   async get(req: Request, res: Response) {

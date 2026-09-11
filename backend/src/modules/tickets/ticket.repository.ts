@@ -167,6 +167,16 @@ export type TicketFilter = {
   priority?: Priority;
   /** A user id, or `"none"` for the unassigned queue. Absent = no filter. */
   assigneeId?: number | "none";
+  /**
+   * One project's tickets — what the project page lists.
+   *
+   * A filter on top of the caller's scope, never a way around it: it is ANDed
+   * with `ticketScopeWhere` like every other clause here, so naming another
+   * tenant's project id returns nothing rather than that tenant's tickets. The
+   * project page also 404s on the project itself first, so this is the second of
+   * two answers to the same question.
+   */
+  projectId?: number;
 };
 
 export type HistoryEntry = {
@@ -357,6 +367,7 @@ export const ticketRepository = {
                     filter.assigneeId === "none" ? null : filter.assigneeId,
                 }
               : {}),
+            ...(filter.projectId != null ? { projectId: filter.projectId } : {}),
           },
         ],
       },
@@ -669,12 +680,25 @@ export const ticketRepository = {
           );
         }
 
-        // The category has to be one this tenant may use: their own, or one of
-        // the shared ones. Checked here rather than left to the picker, because
-        // an id in a request body is not a choice made in a picker — without
-        // this, naming another customer's category id files a ticket under a
-        // label from a tenant the requester cannot see.
-        if (category.customerId != null && category.customerId !== requester.customerId) {
+        // The category has to be this tenant's own. There is no longer a second
+        // way for it to be usable: the shared rows are gone, so the old
+        // "null means everybody's" arm went with them and this is now a plain
+        // equality.
+        //
+        // Checked here rather than left to the picker, because an id in a
+        // request body is not a choice made in a picker — without this, naming
+        // another customer's category id files a ticket under a label from a
+        // tenant the requester cannot see.
+        //
+        // The composite foreign key would refuse the insert regardless, and that
+        // is the guarantee; this check exists so the caller gets "Unknown
+        // category" instead of a constraint violation surfacing as a 500. Two
+        // layers saying the same thing is the intent — one of them is a rule
+        // somebody can forget, the other is not.
+        //
+        // "Unknown", not "belongs to another customer": a caller who may not see
+        // a category should not learn from the error message that it exists.
+        if (category.customerId !== requester.customerId) {
           throw BadRequest("Unknown category");
         }
 
@@ -821,10 +845,11 @@ export const ticketRepository = {
    * would let an import name another tenant's category and file a ticket under
    * a label its own customer cannot see.
    *
-   * The customer's OWN wins over the shared one of the same name. A tenant that
-   * has made its own "Hardware" has said which one it means, and falling back
-   * to the platform's would quietly file the row somewhere else. The order by
-   * `customerId desc` puts the non-null first.
+   * Confined to the ONE customer, with no fallback. There used to be a shared
+   * arm here, preferring the tenant's own row over the platform's of the same
+   * name; shared categories no longer exist, so a name that this customer does
+   * not have is simply unknown — which the caller reports as an unusable row
+   * rather than filing it under somebody else's label.
    */
   async findCategoryIdByName(
     name: string,
@@ -833,9 +858,8 @@ export const ticketRepository = {
     const row = await prisma.category.findFirst({
       where: {
         name: { equals: name.trim(), mode: "insensitive" },
-        OR: [{ customerId: null }, { customerId }],
+        customerId,
       },
-      orderBy: { customerId: "desc" },
       select: { id: true },
     });
     return row?.id ?? null;

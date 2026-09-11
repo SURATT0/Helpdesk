@@ -37,6 +37,8 @@ export const listTicketsQuery = z.object({
   status: displayStatus.optional(),
   priority: priority.optional(),
   assigneeId: assigneeFilter.optional(),
+  /** One project's tickets — what the project page lists. See TicketFilter. */
+  projectId: z.coerce.number().int().positive().optional(),
 });
 
 /**

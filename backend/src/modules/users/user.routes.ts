@@ -22,6 +22,29 @@ router.patch(
   asyncHandler(userController.update),
 );
 
+/**
+ * Deciding a registration. Behind `user:write` like the patch above, but the
+ * gate that matters is in the SERVICE (`mayApproveRegistration`), because it
+ * keys on reach rather than on a permission string — `super_admin` holds the
+ * `*` wildcard, which any grant string would satisfy. Same reasoning as
+ * `PUT /:id/reach` below.
+ *
+ * Its own endpoints rather than fields on the patch, and for the same reason
+ * reach has its own: approving writes `customerId`, which the patch deliberately
+ * cannot touch. Folding it in would hand every `user:write` holder the power to
+ * move an existing person between tenants.
+ */
+router.post(
+  "/:id/approve",
+  requirePermission("user:write"),
+  asyncHandler(userController.approve),
+);
+router.post(
+  "/:id/reject",
+  requirePermission("user:write"),
+  asyncHandler(userController.reject),
+);
+
 // Which customers this person may work beyond their own. Deliberately its own
 // endpoint rather than a field on PATCH /:id — `user:write` is held by every
 // admin, and this is platform-wide only. Keeping it separate means the stricter

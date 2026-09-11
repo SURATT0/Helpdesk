@@ -14,27 +14,35 @@ Project-wide rules (domain invariants, RBAC scoping, design source of truth) liv
 
 ## Database objects Prisma does not know about
 
-Two **partial unique indexes** exist only in migration SQL, because Prisma has no
-syntax for them:
+One **partial unique index** exists only in migration SQL, because Prisma has no
+syntax for it:
 
 | index | rule |
 |---|---|
 | `projects_customer_id_name_live_key` | project names unique per customer **among live rows** — archiving one frees its name |
-| `categories_shared_name_key` | shared category names (`customer_id IS NULL`) unique — `@@unique([customerId, name])` cannot do it, since Postgres treats NULLs as distinct |
 
-`prisma migrate diff` leaves indexes it does not recognise alone, so they survive
+There used to be a second, `categories_shared_name_key`, covering the SHARED
+categories (`customer_id IS NULL`). It is gone with the state it described:
+`categories.customer_id` is now required, so there are no NULLs left for Postgres
+to treat as distinct and `@@unique([customerId, name])` answers the whole
+question on its own.
+
+`prisma migrate diff` leaves indexes it does not recognise alone, so it survives
 a normal migration. **Foreign keys are different** — a raw one IS reported as
-drift and proposed for dropping, which is why the composite
-`(project_id, customer_id) → projects(id, customer_id)` is declared in the schema
-instead (`@relation(fields: [projectId, customerId], references: [id, customerId])`).
+drift and proposed for dropping, which is why both composite keys are declared in
+the schema instead: `(project_id, customer_id) → projects(id, customer_id)` and
+`(category_id, customer_id) → categories(id, customer_id)`, each written as
+`@relation(fields: [xId, customerId], references: [id, customerId])`. Together
+they are what makes "a ticket's project and its category name the same tenant" a
+fact the database holds rather than a rule the service remembers.
 
 `test/constraints.integration.test.ts` asserts each rule still bites, so losing
 one turns a test red rather than silently removing a guarantee. If you regenerate
-a migration and Prisma proposes dropping either index, put it back.
+a migration and Prisma proposes dropping the index, put it back.
 
 **The test database is built with `migrate deploy`, not `db push`** (see
 `test/global-setup.ts`), for exactly this reason: `db push` applies
-schema.prisma alone, so a pushed database lacks both indexes and the suite would
+schema.prisma alone, so a pushed database lacks the index and the suite would
 accept writes production refuses.
 
 ## First run

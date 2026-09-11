@@ -28,9 +28,17 @@ async function login(email: string): Promise<string> {
 }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+/**
+ * A category by name, belonging to Acme — the tenant everyone in this file acts
+ * as.
+ *
+ * There are no shared categories any more: each customer has its own copy of the
+ * starter set, so a name alone names one row per tenant, and a ticket may only
+ * carry one of its own customer's.
+ */
 async function categoryId(name: string): Promise<number> {
   const c = await prisma.category.findFirstOrThrow({
-    where: { name, customerId: null },
+    where: { name, customer: { name: "Acme Corp" } },
   });
   return c.id;
 }

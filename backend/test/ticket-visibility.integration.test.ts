@@ -25,10 +25,16 @@ async function login(email: string): Promise<string> {
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-/** Ids are seeded deterministically, but the category is looked up by name. */
+/**
+ * Acme's own "Network" row.
+ *
+ * Named by tenant, because there is no shared category any more: each customer
+ * has its own copy of the starter set, and a ticket may only carry one of its
+ * own customer's. Everyone raising a ticket in this file is an Acme user.
+ */
 async function networkCategoryId(): Promise<number> {
   const c = await prisma.category.findFirstOrThrow({
-    where: { name: "Network", customerId: null },
+    where: { name: "Network", customer: { name: "Acme Corp" } },
   });
   return c.id;
 }
