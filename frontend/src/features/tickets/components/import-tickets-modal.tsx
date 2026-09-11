@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { PRIORITIES_ASCENDING } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
@@ -418,9 +418,7 @@ export function ImportTicketsModal({
               ) : null}
               {importTickets.isError ? (
                 <div className="mb-3 rounded-md border border-danger-edge bg-danger-bg px-3 py-2 text-body font-medium text-danger-ink">
-                  {importTickets.error instanceof ApiError
-                    ? importTickets.error.message
-                    : t("create.createError")}
+                  {apiErrorMessage(importTickets.error, t, "create.createError")}
                 </div>
               ) : null}
             </div>

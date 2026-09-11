@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT } from "@/components/ui/input";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { TEXT_MAX } from "@/lib/domain";
 import { useI18n } from "@/features/i18n/context";
 import { useRejectClosure } from "../queries";
@@ -42,7 +42,7 @@ export function RejectClosureDialog({
         onSuccess: () => onRejected(),
         onError: (err) =>
           setError(
-            err instanceof ApiError ? err.message : t("closure.rejectError"),
+            apiErrorMessage(err, t, "closure.rejectError"),
           ),
       },
     );

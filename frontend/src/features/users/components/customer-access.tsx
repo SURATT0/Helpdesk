@@ -5,7 +5,7 @@ import { Building2, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { TOUCH_TARGET } from "@/components/ui/touch";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useCustomers } from "@/features/customers/queries";
 import { useI18n } from "@/features/i18n/context";
@@ -113,7 +113,7 @@ function CustomerAccessModal({
       {
         onSuccess: onClose,
         onError: (err) =>
-          setError(err instanceof ApiError ? err.message : t("reach.error")),
+          setError(apiErrorMessage(err, t, "reach.error")),
       },
     );
   }

@@ -12,7 +12,7 @@ import {
   AuthSubmit,
 } from "@/features/auth/components/auth-shell";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 
 /**
  * Self sign-up.
@@ -54,7 +54,7 @@ export default function RegisterPage() {
       await register({ email, name, password, confirmPassword, lang });
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("register.error"));
+      setError(apiErrorMessage(err, t, "register.error"));
     } finally {
       setSubmitting(false);
     }

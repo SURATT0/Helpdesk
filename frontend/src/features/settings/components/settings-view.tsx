@@ -7,7 +7,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -128,9 +128,7 @@ export function SettingsView() {
           ) : null}
           {save.isError ? (
             <span className="text-body font-medium text-danger">
-              {save.error instanceof ApiError
-                ? save.error.message
-                : t("settings.saveError")}
+              {apiErrorMessage(save.error, t, "settings.saveError")}
             </span>
           ) : null}
         </div>
@@ -163,9 +161,7 @@ export function SettingsView() {
         ) : null}
         {availability.isError ? (
           <p className="mt-2 text-body font-medium text-danger">
-            {availability.error instanceof ApiError
-              ? availability.error.message
-              : t("settings.saveError")}
+            {apiErrorMessage(availability.error, t, "settings.saveError")}
           </p>
         ) : null}
       </Section>

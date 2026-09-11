@@ -4,7 +4,7 @@ import * as React from "react";
 import { Mail, Plug, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useEmailStatus, useSources, useSyncSource } from "../queries";
@@ -57,7 +57,7 @@ export function IntegrationsPanel() {
           ...r,
           [id]: {
             error:
-              err instanceof ApiError ? err.message : t("integrations.syncError"),
+              apiErrorMessage(err, t, "integrations.syncError"),
           },
         })),
       onSettled: () => setActiveId(null),

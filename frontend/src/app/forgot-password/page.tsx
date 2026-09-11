@@ -11,7 +11,7 @@ import {
   AuthSubmit,
 } from "@/features/auth/components/auth-shell";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 
 /**
  * Ask for a reset link.
@@ -40,7 +40,7 @@ export default function ForgotPasswordPage() {
       await requestPasswordReset(email);
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("forgot.error"));
+      setError(apiErrorMessage(err, t, "forgot.error"));
     } finally {
       setSubmitting(false);
     }

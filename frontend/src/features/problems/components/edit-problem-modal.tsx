@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useUpdateProblem } from "../queries";
@@ -63,7 +63,7 @@ export function EditProblemModal({
         onSuccess: () => onClose(),
         onError: (err) =>
           setError(
-            err instanceof ApiError ? err.message : t("problem.editError"),
+            apiErrorMessage(err, t, "problem.editError"),
           ),
       },
     );

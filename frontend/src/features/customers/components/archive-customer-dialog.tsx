@@ -5,7 +5,7 @@ import { AlertTriangle, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { TOUCH_TARGET } from "@/components/ui/touch";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useArchiveCustomer, useArchiveImpact } from "../queries";
@@ -41,7 +41,7 @@ export function ArchiveCustomerDialog({
     archive.mutate(customer.id, {
       onSuccess: onClose,
       onError: (err) =>
-        setError(err instanceof ApiError ? err.message : t("customers.archiveError")),
+        setError(apiErrorMessage(err, t, "customers.archiveError")),
     });
   }
 

@@ -10,7 +10,7 @@ import { Input, Label } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,7 +47,7 @@ export default function LoginPage() {
       await login(emailValue, passwordValue);
       router.replace("/dashboard");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("login.error"));
+      setError(apiErrorMessage(err, t, "login.error"));
     } finally {
       setSubmitting(false);
     }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { useDeleteProject, useDeletionImpact } from "../queries";
@@ -59,7 +59,7 @@ export function DeleteProjectDialog({
     remove.mutate(project.id, {
       onSuccess: onClose,
       onError: (err) =>
-        setError(err instanceof ApiError ? err.message : t("project.delete.error")),
+        setError(apiErrorMessage(err, t, "project.delete.error")),
     });
   }
 

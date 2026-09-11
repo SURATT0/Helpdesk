@@ -51,6 +51,22 @@ test("and in English when the form was read in English", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("a refusal from the API is read out in Thai too", async ({ page }) => {
+  await page.goto("/login");
+  await switchToThai(page);
+
+  await page.getByLabel("อีเมลที่ทำงาน").fill(NO_SUCH_ADDRESS);
+  await page.getByLabel("รหัสผ่าน", { exact: true }).fill("not-the-password");
+  await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
+
+  // The API answers INVALID_CREDENTIALS; the sentence is this side's. Before
+  // that mechanism existed the page showed the API's "Invalid email or
+  // password" — an English line under a Thai form, which is the whole reason
+  // errors travel as codes.
+  await expect(page.getByText("อีเมลหรือรหัสผ่านไม่ถูกต้อง")).toBeVisible();
+  await expect(page.getByText(/Invalid email or password/i)).toHaveCount(0);
+});
+
 test("sign-up says what happens next in Thai", async ({ page }) => {
   await page.goto("/register");
   await switchToThai(page);

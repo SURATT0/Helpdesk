@@ -9,7 +9,7 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { randomId } from "@/lib/random-id";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
 import { uploadAttachment } from "@/features/attachments/api";
@@ -548,9 +548,7 @@ export function CreateTicketModal({
 
           {createTicket.isError ? (
             <div className="rounded-md border border-danger-edge bg-danger-bg px-3 py-2 text-body font-medium text-danger-ink">
-              {createTicket.error instanceof ApiError
-                ? createTicket.error.message
-                : t("create.createError")}
+              {apiErrorMessage(createTicket.error, t, "create.createError")}
             </div>
           ) : null}
 

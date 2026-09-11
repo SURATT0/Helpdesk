@@ -3,7 +3,7 @@
 import * as React from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { STATUS_TRANSITIONS, type TicketStatus } from "@/lib/ticket-status";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUpdateTicketStatus } from "../queries";
@@ -68,9 +68,7 @@ export function StatusMenu({ ticket }: { ticket: Ticket }) {
 
       {mutation.isError ? (
         <span className="text-meta font-medium text-danger">
-          {mutation.error instanceof ApiError
-            ? mutation.error.message
-            : t("status.updateError")}
+          {apiErrorMessage(mutation.error, t, "status.updateError")}
         </span>
       ) : null}
     </div>

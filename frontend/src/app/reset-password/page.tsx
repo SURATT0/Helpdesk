@@ -12,7 +12,7 @@ import {
   AuthSubmit,
 } from "@/features/auth/components/auth-shell";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 
 /**
  * Set a new password from a mailed link.
@@ -49,7 +49,7 @@ function ResetPasswordForm() {
       await resetPassword({ token, password, confirmPassword });
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("reset.error"));
+      setError(apiErrorMessage(err, t, "reset.error"));
     } finally {
       setSubmitting(false);
     }

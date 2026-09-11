@@ -8,7 +8,7 @@ import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { TOUCH_TARGET } from "@/components/ui/touch";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { holds } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
@@ -194,7 +194,7 @@ function NameCell({
       { id: customer.id, name: next },
       {
         onError: (err) => {
-          setError(err instanceof ApiError ? err.message : t("customers.renameError"));
+          setError(apiErrorMessage(err, t, "customers.renameError"));
           setDraft(customer.name);
         },
       },
@@ -248,7 +248,7 @@ function NewCustomerRow() {
         // The server distinguishes a live namesake from an archived one, and
         // that difference is the whole value of the message — an archived one
         // is solved by restoring a row this list does not contain.
-        setError(err instanceof ApiError ? err.message : t("customers.createError")),
+        setError(apiErrorMessage(err, t, "customers.createError")),
     });
   }
 
