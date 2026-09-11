@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
-import { ATTACHMENT_ACCEPT } from "../accept";
+import { FileInput } from "./file-input";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import {
@@ -334,7 +334,6 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
   const { data: files = [], isLoading, isError } = useAttachments(ticketId);
   const upload = useUploadAttachment(ticketId);
   const del = useDeleteAttachment(ticketId);
-  const inputRef = React.useRef<HTMLInputElement>(null);
   const [opened, setOpened] = React.useState<Opened | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<number | null>(null);
@@ -350,10 +349,15 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
     });
   }
 
-  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) upload.mutate(file);
-    e.target.value = ""; // allow re-selecting the same file
+  /**
+   * One mutation per file, because the endpoint takes one.
+   *
+   * Fired together rather than in sequence: they are independent uploads and the
+   * panel already renders each row as it lands, so serialising them would only
+   * make a batch of photos feel slower than it is.
+   */
+  function onPick(list: FileList | null) {
+    for (const file of Array.from(list ?? [])) upload.mutate(file);
   }
 
   // Download/view hit an authed binary endpoint that can fail (e.g. the file is
@@ -423,11 +427,14 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
         </span>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
+      {/* `multiple` was missing here, so this surface took one file per trip
+          while the other two took several. The accept list is FileInput's, which
+          is also where the display:none bug that stopped the picker opening at
+          all is fixed. */}
+      <FileInput
+        onFiles={onPick}
         disabled={upload.isPending}
-        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-dim px-3 py-2 text-dense font-medium text-muted hover:bg-app disabled:opacity-50"
+        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-dim px-3 py-2 text-dense font-medium text-muted hover:bg-app"
       >
         {upload.isPending ? (
           <Loader2 size={13} className="animate-spin" />
@@ -435,17 +442,7 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
           <Upload size={13} strokeWidth={2} />
         )}
         {upload.isPending ? t("att.uploading") : t("att.upload")}
-      </button>
-      {/* This one carried no `accept` at all, so the picker offered every file
-          on the device and the API refused whatever it did not recognise —
-          after the upload, which is the worst moment to find out. */}
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ATTACHMENT_ACCEPT}
-        className="hidden"
-        onChange={onPick}
-      />
+      </FileInput>
 
       {upload.isError ? (
         <span className="text-meta font-medium text-danger">

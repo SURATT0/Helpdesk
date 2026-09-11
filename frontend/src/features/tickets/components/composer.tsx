@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Mail, MessageSquare, Paperclip, X } from "lucide-react";
+import { Camera, Loader2, Mail, MessageSquare, Paperclip, X } from "lucide-react";
 import { FIELD_TEXT, FIELD_TEXT_12 } from "@/components/ui/input";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
-import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
+import { FileInput } from "@/features/attachments/components/file-input";
 import { useUploadAttachment } from "@/features/attachments/queries";
 import { sendTyping } from "../api";
 import { useCreateComment, useSendReply } from "../queries";
@@ -54,7 +54,6 @@ export function Composer({
   const createComment = useCreateComment(ticketId);
   const sendReply = useSendReply(ticketId);
   const upload = useUploadAttachment(ticketId);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const lastTypingRef = React.useRef(0);
   const firstName = requester.split(" ")[0];
 
@@ -320,25 +319,26 @@ export function Composer({
       ) : null}
 
       <div className="flex items-center gap-2.5 border-t border-hairline bg-wash px-3 py-2.5">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
+        {/* A label with the input inside it, not a button that calls .click()
+            on a display:none input — see FileInput for what that broke. */}
+        <FileInput
+          onFiles={addFiles}
           className="inline-flex items-center gap-1.5 rounded-sm border border-line bg-white px-2.5 py-1.5 text-dense text-muted hover:bg-app"
         >
           <Paperclip size={13} strokeWidth={2} />
           {t("composer.attach")}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ATTACHMENT_ACCEPT}
-          className="hidden"
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
+        </FileInput>
+        {/* The camera, where there is one. The picker above already reaches the
+            photo library; this is the shortcut. */}
+        <FileInput
+          onFiles={addFiles}
+          multiple={false}
+          capture="environment"
+          className="hidden items-center gap-1.5 rounded-sm border border-line bg-white px-2.5 py-1.5 text-dense text-muted hover:bg-app [@media(pointer:coarse)]:inline-flex"
+        >
+          <Camera size={13} strokeWidth={2} />
+          {t("composer.takePhoto")}
+        </FileInput>
 
         {error ? (
           <span className="text-caption font-medium text-danger">

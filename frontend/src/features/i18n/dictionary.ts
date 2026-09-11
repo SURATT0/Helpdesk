@@ -373,6 +373,9 @@ const en: Dict = {
   "composer.saveNote": "Save note",
   "composer.sending": "Sending…",
   "composer.attach": "Attach",
+  // Shown only where the pointer is coarse. The file picker beside it already
+  // reaches the camera roll; this is the shortcut to the camera itself.
+  "composer.takePhoto": "Camera",
   "composer.attaching": "Attaching…",
   "composer.from": "From",
   "composer.to": "To",
@@ -482,6 +485,7 @@ const en: Dict = {
   "create.descriptionPlaceholder": "What happens, when it started, what you've tried…",
   "create.dropText": "Drag files here or",
   "create.browse": "browse",
+  "create.takePhoto": "Take a photo",
   "create.dropHint": "· images, PDF, Excel, CSV · max 25 MB each",
   "create.remove": "Remove {name}",
   "create.attachError": "Couldn't attach: {names}",
@@ -1364,6 +1368,7 @@ const th: Dict = {
   "composer.saveNote": "บันทึกโน้ต",
   "composer.sending": "กำลังส่ง…",
   "composer.attach": "แนบไฟล์",
+  "composer.takePhoto": "ถ่ายรูป",
   "composer.attaching": "กำลังแนบ…",
   "composer.from": "จาก",
   "composer.to": "ถึง",
@@ -1466,6 +1471,7 @@ const th: Dict = {
   "create.descriptionPlaceholder": "เกิดอะไรขึ้น เริ่มเมื่อไร ลองแก้อะไรมาแล้วบ้าง…",
   "create.dropText": "ลากไฟล์มาที่นี่ หรือ",
   "create.browse": "เลือกไฟล์",
+  "create.takePhoto": "ถ่ายรูป",
   "create.dropHint": "· รูปภาพ, PDF, Excel, CSV · ไม่เกิน 25 MB ต่อไฟล์",
   "create.remove": "ลบ {name}",
   "create.attachError": "แนบไม่สำเร็จ: {names}",

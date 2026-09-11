@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Upload, X } from "lucide-react";
+import { Camera, FileText, Upload, X } from "lucide-react";
 import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { randomId } from "@/lib/random-id";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
-import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
 import { uploadAttachment } from "@/features/attachments/api";
+import { FileInput } from "@/features/attachments/components/file-input";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
@@ -32,6 +32,55 @@ function formatSize(bytes: number): string {
 // Mildest first — a person filling this in is choosing on a scale, not working
 // a queue. The one list lives in lib/domain; this names which way up it goes.
 const PRIORITIES = PRIORITIES_ASCENDING;
+
+/**
+ * What a chosen file looks like before it is sent: the picture itself for an
+ * image, a document icon for anything else.
+ *
+ * A thumbnail rather than a filename because a phone's camera names its output
+ * `IMG_4417.HEIC`, and a list of those tells the person nothing about which one
+ * they meant to attach.
+ *
+ * The size is FIXED — a square in `rem`, with `object-cover` — so a portrait
+ * photo from a phone cannot stretch the row. `object-cover` crops to fill rather
+ * than letterboxing, which is what keeps a column of mixed orientations tidy.
+ *
+ * The object URL is revoked on unmount. Without that each re-pick leaks a blob
+ * for the life of the tab, which on a long session of attaching photos is real
+ * memory.
+ */
+function PendingThumb({ file }: { file: File }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!file.type.startsWith("image/")) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    // Revoke only. Clearing the state here as well is what made this flicker
+    // out entirely under StrictMode, which mounts, cleans up and mounts again:
+    // the second effect sets a fresh URL and a `setUrl(null)` racing beside it
+    // leaves the row with no image at all. Nothing needs clearing — the next
+    // effect sets a new URL, and an unmounting component has no state to tidy.
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  if (!url) {
+    return <FileText size={14} strokeWidth={2} className="flex-none text-muted" />;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- a blob: URL from the
+    // file the person just picked; next/image cannot optimise one and would only
+    // add a loader in front of something already on the device.
+    <img
+      src={url}
+      alt=""
+      className="size-9 flex-none rounded-sm border border-line object-cover"
+    />
+  );
+}
 
 export function CreateTicketModal({
   open,
@@ -72,7 +121,6 @@ export function CreateTicketModal({
   const [dragging, setDragging] = React.useState(false);
   const [attaching, setAttaching] = React.useState(false);
   const [attachError, setAttachError] = React.useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   /**
    * De-duplication key for the submission being composed.
@@ -470,14 +518,12 @@ export function CreateTicketModal({
           </div>
 
           <div>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={(e) =>
-                (e.key === "Enter" || e.key === " ") &&
-                fileInputRef.current?.click()
-              }
+            {/* A label, not a div with an onClick that calls `.click()` on a
+                hidden input — that combination is exactly what stopped the
+                picker opening on a phone. See FileInput. Drag and drop still
+                lands here; a label takes those handlers like any other element. */}
+            <FileInput
+              onFiles={addFiles}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -489,7 +535,7 @@ export function CreateTicketModal({
                 addFiles(e.dataTransfer.files);
               }}
               className={cn(
-                "flex cursor-pointer flex-wrap items-center justify-center gap-1.5 rounded-tile border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
+                "flex flex-wrap items-center justify-center gap-1.5 rounded-tile border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
                 dragging
                   ? "border-brand bg-accent-soft text-brand-hover"
                   : "border-dim bg-wash text-muted",
@@ -501,18 +547,23 @@ export function CreateTicketModal({
                 {t("create.browse")}
               </span>
               <span className="text-faint">{t("create.dropHint")}</span>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ATTACHMENT_ACCEPT}
-              className="hidden"
-              onChange={(e) => {
-                addFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
+            </FileInput>
+
+            {/* A second way in, for a device that has a camera. `capture` asks
+                for the camera directly; the picker above already offers the
+                photo library, so this is a shortcut rather than the only road —
+                which is what it had accidentally become. Shown where the pointer
+                is coarse, the same test the rest of the app uses for "this is a
+                touch device", because a camera is not a width. */}
+            <FileInput
+              onFiles={addFiles}
+              multiple={false}
+              capture="environment"
+              className="mt-2 hidden items-center justify-center gap-1.5 rounded-tile border border-line bg-white px-4 py-2.5 text-body font-medium text-muted [@media(pointer:coarse)]:flex"
+            >
+              <Camera size={15} strokeWidth={2} />
+              {t("create.takePhoto")}
+            </FileInput>
 
             {files.length > 0 ? (
               <div className="mt-2 flex flex-col gap-1.5">
@@ -521,11 +572,7 @@ export function CreateTicketModal({
                     key={`${f.name}-${i}`}
                     className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2 text-dense"
                   >
-                    <FileText
-                      size={14}
-                      strokeWidth={2}
-                      className="flex-none text-muted"
-                    />
+                    <PendingThumb file={f} />
                     <span className="min-w-0 flex-1 truncate font-medium text-strong">
                       {f.name}
                     </span>
