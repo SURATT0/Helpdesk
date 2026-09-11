@@ -1,7 +1,6 @@
 import { apiRequest, refreshSession } from "@/lib/api-client";
 import { tokenStore } from "./token-store";
 import {
-  messageEnvelope,
   sessionEnvelope,
   userEnvelope,
   verifyEmailEnvelope,
@@ -17,12 +16,18 @@ import {
  * it a 4xx from any of them would fire a pointless refresh attempt whose failure
  * clears a token store that was already empty.
  *
- * They deliberately return the server's own sentence rather than a code the page
- * maps to a local string. Registration and the reset request are answered
- * IDENTICALLY whatever the address turns out to be — that uniformity is what
- * stops the public forms doubling as a way to ask who has an account here — and
- * a client-side lookup table is exactly where that property gets quietly lost,
- * by someone adding a friendlier "this email is already taken".
+ * Three of them return nothing at all, and the page writes the sentence. They
+ * used to hand back the server's own English prose, which then sat in the middle
+ * of a Thai form: the API is not told which language the reader has and has no
+ * business composing UI copy for one.
+ *
+ * What that must NOT turn into is a page that branches on the outcome.
+ * Registration and the reset request are answered IDENTICALLY whatever the
+ * address turns out to be — that uniformity is what stops the public forms
+ * doubling as a way to ask who has an account here. Each of these calls has
+ * exactly one success, so each page has exactly one sentence and nothing to look
+ * up. The day someone wants a friendlier "this email is already taken", the
+ * property is gone, and the refusal belongs here rather than in the copy.
  */
 
 /** Submit a registration. Says nothing about whether the address was free. */
@@ -32,13 +37,12 @@ export async function register(input: {
   password: string;
   confirmPassword: string;
   lang: "en" | "th";
-}): Promise<string> {
-  const body = await apiRequest(
+}): Promise<void> {
+  await apiRequest(
     "/auth/register",
     { method: "POST", body: JSON.stringify(input) },
     { skipRefresh: true },
   );
-  return messageEnvelope.parse(body).data.message;
 }
 
 /** Redeem an email-confirmation link. Returns the account's status after it. */
@@ -52,33 +56,31 @@ export async function verifyEmail(token: string): Promise<UserStatus> {
 }
 
 /** Ask for a reset link. Answers the same whether or not one was sent. */
-export async function requestPasswordReset(email: string): Promise<string> {
-  const body = await apiRequest(
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiRequest(
     "/auth/forgot-password",
     { method: "POST", body: JSON.stringify({ email }) },
     { skipRefresh: true },
   );
-  return messageEnvelope.parse(body).data.message;
 }
 
 /**
  * Redeem a reset link and set a new password.
  *
- * Returns a message, not a session: the reset just signed this account out
- * everywhere, and taking a session back here would undo the half of that
- * guarantee that matters. The page sends them to sign in.
+ * Returns nothing, and in particular not a session: the reset just signed this
+ * account out everywhere, and taking a session back here would undo the half of
+ * that guarantee that matters. The page sends them to sign in.
  */
 export async function resetPassword(input: {
   token: string;
   password: string;
   confirmPassword: string;
-}): Promise<string> {
-  const body = await apiRequest(
+}): Promise<void> {
+  await apiRequest(
     "/auth/reset-password",
     { method: "POST", body: JSON.stringify(input) },
     { skipRefresh: true },
   );
-  return messageEnvelope.parse(body).data.message;
 }
 
 /** Verify credentials, stash the access token, return the user. */

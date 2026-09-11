@@ -855,6 +855,12 @@ const en: Dict = {
   "register.submit": "Create account",
   "register.submitting": "Creating…",
   "register.sentTitle": "Check your email",
+  // The one sentence this page can show on success, and deliberately the only
+  // one: the server answers identically whether or not the address was already
+  // taken, so there is nothing here to branch on — a friendlier "that email is
+  // taken" would turn the form into a way to ask who has an account.
+  "register.sent":
+    "Check your email for a confirmation link. After you confirm, an administrator has to approve the account before you can sign in.",
   "register.error": "Couldn't create the account. Try again.",
   "register.haveAccount": "Already have an account?",
   "register.signIn": "Sign in",
@@ -867,6 +873,9 @@ const en: Dict = {
   "forgot.submit": "Send reset link",
   "forgot.submitting": "Sending…",
   "forgot.sentTitle": "Check your email",
+  // Shown whether a link was sent or not — same reason as `register.sent`.
+  "forgot.sent":
+    "If that address has an account, a reset link is on its way. Check your inbox.",
   "forgot.checkSpam":
     "The message can take a minute to arrive. Check your spam folder if you do not see it.",
   "forgot.error": "Couldn't send the link. Try again.",
@@ -880,6 +889,8 @@ const en: Dict = {
   "reset.submit": "Save new password",
   "reset.submitting": "Saving…",
   "reset.doneTitle": "Password changed",
+  "reset.done":
+    "Your password has been changed and every other session was signed out. Sign in with your new password.",
   "reset.invalidTitle": "This link cannot be used",
   "reset.noToken":
     "This address is missing its reset code. Open the link from your email, or request a new one.",
@@ -1725,6 +1736,8 @@ const th: Dict = {
   "register.submit": "สร้างบัญชี",
   "register.submitting": "กำลังสร้างบัญชี…",
   "register.sentTitle": "กรุณาตรวจสอบอีเมล",
+  "register.sent":
+    "กรุณาตรวจสอบอีเมลเพื่อกดลิงก์ยืนยัน หลังยืนยันแล้ว ผู้ดูแลระบบจะต้องอนุมัติบัญชีก่อน คุณจึงจะเข้าสู่ระบบได้",
   "register.error": "สร้างบัญชีไม่สำเร็จ ลองอีกครั้ง",
   "register.haveAccount": "มีบัญชีอยู่แล้ว?",
   "register.signIn": "เข้าสู่ระบบ",
@@ -1736,6 +1749,8 @@ const th: Dict = {
   "forgot.submit": "ส่งลิงก์ตั้งรหัสผ่าน",
   "forgot.submitting": "กำลังส่ง…",
   "forgot.sentTitle": "กรุณาตรวจสอบอีเมล",
+  "forgot.sent":
+    "หากอีเมลนี้มีบัญชีอยู่ในระบบ ลิงก์สำหรับตั้งรหัสผ่านใหม่กำลังถูกส่งไป กรุณาตรวจสอบกล่องจดหมาย",
   "forgot.checkSpam":
     "อีเมลอาจใช้เวลาสักครู่ หากไม่พบกรุณาตรวจสอบในโฟลเดอร์อีเมลขยะ",
   "forgot.error": "ส่งลิงก์ไม่สำเร็จ ลองอีกครั้ง",
@@ -1749,6 +1764,8 @@ const th: Dict = {
   "reset.submit": "บันทึกรหัสผ่านใหม่",
   "reset.submitting": "กำลังบันทึก…",
   "reset.doneTitle": "เปลี่ยนรหัสผ่านแล้ว",
+  "reset.done":
+    "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว และระบบได้ออกจากการใช้งานบัญชีนี้ในทุกอุปกรณ์ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่",
   "reset.invalidTitle": "ลิงก์นี้ใช้งานไม่ได้",
   "reset.noToken":
     "ที่อยู่นี้ไม่มีรหัสสำหรับตั้งรหัสผ่าน กรุณาเปิดลิงก์จากอีเมล หรือขอลิงก์ใหม่",

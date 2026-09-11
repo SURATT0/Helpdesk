@@ -68,10 +68,6 @@ export const userStatusSchema = z.enum([
  * The shape the self-service endpoints answer with: one sentence, written by the
  * server. See the note in api.ts for why the copy lives there and not here.
  */
-export const messageEnvelope = z.object({
-  data: z.object({ message: z.string() }),
-});
-
 export const verifyEmailEnvelope = z.object({
   data: z.object({ status: userStatusSchema }),
 });

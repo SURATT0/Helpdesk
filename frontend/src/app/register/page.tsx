@@ -17,7 +17,7 @@ import { ApiError } from "@/lib/api-client";
 /**
  * Self sign-up.
  *
- * On success this page shows the server's sentence and STAYS — it does not
+ * On success this page says what happens next and STAYS — it does not
  * redirect to /login, and it does not sign anybody in. Both would misrepresent
  * what just happened: the account is `pending` and cannot sign in until an
  * administrator approves it, so dropping the person on a sign-in form would send
@@ -30,7 +30,7 @@ export default function RegisterPage() {
   const { t, lang } = useI18n();
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [done, setDone] = React.useState<string | null>(null);
+  const [done, setDone] = React.useState(false);
 
   const [email, setEmail] = React.useState("");
   const [name, setName] = React.useState("");
@@ -51,7 +51,8 @@ export default function RegisterPage() {
       // confirmation mail is written in — otherwise it arrives in the desk's
       // default, which for this deployment is Thai, for somebody who has just
       // used the app in English.
-      setDone(await register({ email, name, password, confirmPassword, lang }));
+      await register({ email, name, password, confirmPassword, lang });
+      setDone(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("register.error"));
     } finally {
@@ -63,7 +64,7 @@ export default function RegisterPage() {
     return (
       <AuthShell title={t("register.sentTitle")}>
         <div className="flex flex-col gap-4">
-          <AuthNotice tone="success">{done}</AuthNotice>
+          <AuthNotice tone="success">{t("register.sent")}</AuthNotice>
           <div className="text-center">
             <AuthLink href="/login">{t("register.backToSignIn")}</AuthLink>
           </div>

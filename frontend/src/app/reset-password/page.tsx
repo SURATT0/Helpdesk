@@ -36,7 +36,7 @@ function ResetPasswordForm() {
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [done, setDone] = React.useState<string | null>(null);
+  const [done, setDone] = React.useState(false);
 
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
@@ -46,7 +46,8 @@ function ResetPasswordForm() {
     setError(null);
     setSubmitting(true);
     try {
-      setDone(await resetPassword({ token, password, confirmPassword }));
+      await resetPassword({ token, password, confirmPassword });
+      setDone(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("reset.error"));
     } finally {
@@ -73,7 +74,7 @@ function ResetPasswordForm() {
     return (
       <AuthShell title={t("reset.doneTitle")}>
         <div className="flex flex-col gap-4">
-          <AuthNotice tone="success">{done}</AuthNotice>
+          <AuthNotice tone="success">{t("reset.done")}</AuthNotice>
           <button
             type="button"
             onClick={() => router.replace("/login")}
