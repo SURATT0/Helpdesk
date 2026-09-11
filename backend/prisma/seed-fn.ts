@@ -8,6 +8,7 @@ import type {
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
 import { categoryCode } from "../src/modules/categories/category.code";
+import { INITIAL_ROLE_PERMISSIONS } from "../src/shared/permissions";
 import { KB_ARTICLES } from "./kb-seed-data";
 
 // Every seeded user shares this demo password. Log in as e.g. dana.reyes@acme.com.
@@ -701,6 +702,39 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         where: { ticketId_assetId: { ticketId: link.ticketId, assetId } },
         update: {},
         create: { ticketId: link.ticketId, assetId },
+      });
+    }
+  }
+
+  await seedRolePermissions(prisma);
+}
+
+/**
+ * The grants each role starts with.
+ *
+ * Seeded rather than left to the migration, for a reason this repository has
+ * already been bitten by once: `resetDb` truncates `users` with CASCADE, and
+ * `role_permissions.granted_by_id` references it — so the rows the migration
+ * inserted go with the wipe, and every test after the first would find a desk
+ * where nobody may do anything.
+ *
+ * The same pitfall as the category list, and the same rule: whatever a real
+ * deployment gets from a migration, a seeded database has to get here too, or
+ * the two disagree about what the product starts as.
+ *
+ * Reads `INITIAL_ROLE_PERMISSIONS` rather than restating it, so there is one
+ * list and the migration, the seed and the test all compare against it.
+ */
+async function seedRolePermissions(prisma: PrismaClient): Promise<void> {
+  for (const [role, permissions] of Object.entries(INITIAL_ROLE_PERMISSIONS)) {
+    for (const permission of permissions) {
+      await prisma.rolePermission.upsert({
+        // Upsert rather than createMany+skipDuplicates: a grant somebody has
+        // since edited in a DEV database should survive a reseed of the demo
+        // data, and `update: {}` is what leaves it alone.
+        where: { role_permission: { role: role as Role, permission } },
+        update: {},
+        create: { role: role as Role, permission },
       });
     }
   }

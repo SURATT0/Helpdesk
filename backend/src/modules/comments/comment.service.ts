@@ -115,7 +115,10 @@ export const commentService = {
     // Deleting someone else's comment is moderation, so it stays at the top tier —
     // the same line as before, when it was manager-or-admin. An admin working the
     // case can still delete their own.
-    const mayModerate = user.role === "super_admin";
+    // A permission rather than a role comparison, so who may do it is editable
+    // on the matrix. The starting grants give it to super_admin alone, which is
+    // what the comparison said.
+    const mayModerate = hasPermission(user, "comment:moderate");
     if (!isOwner && !mayModerate) throw CannotDeleteComment();
 
     await ticketService.get(comment.ticketId, user); // ticket must be in scope

@@ -411,6 +411,7 @@ model User {
   statusChanges          TicketStatusHistory[]
   refreshTokens          RefreshToken[]
   auditLogs              AuditLog[]
+  grantedPermissions     RolePermission[]      @relation("RolePermissionGrantedBy")
   comments               Comment[]
   notifications          Notification[]
   attachments            Attachment[]
@@ -805,6 +806,32 @@ model Notification {
 }
 
 // Append-only audit trail — one row per mutation (create, status change, …).
+/// What each role may do.
+///
+/// This used to be a constant in `shared/auth.ts` and is now a table, because a
+/// super admin has to be able to change it without a deploy. What did NOT move
+/// is the meaning of the strings: each one corresponds to a gate in code, so the
+/// catalogue lives in `shared/permissions.ts` and this table only says who holds
+/// what. A row naming a permission the catalogue does not define gates nothing.
+///
+/// `role` is the existing enum rather than a foreign key to a roles table.
+/// Creating roles is deliberately out of scope: it would mean giving up the
+/// Postgres enum on `users.role`, which every scope query compares against.
+model RolePermission {
+  role       Role
+  permission String
+  /// Who granted it and when. The audit trail carries the full before/after of
+  /// every edit; these two are here so a single row can answer "where did this
+  /// come from" without a search.
+  grantedById Int?     @map("granted_by_id")
+  grantedBy   User?    @relation("RolePermissionGrantedBy", fields: [grantedById], references: [id])
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([role, permission])
+  @@index([role])
+  @@map("role_permissions")
+}
+
 model AuditLog {
   id        Int      @id @default(autoincrement())
   userId    Int?     @map("user_id")

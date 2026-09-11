@@ -18,6 +18,7 @@ import {
 } from "./modules/attachments/attachment.routes";
 import { categoryRoutes } from "./modules/categories/category.routes";
 import { customerRoutes } from "./modules/customers/customer.routes";
+import { permissionRoutes } from "./modules/permissions/permission.routes";
 import { assetRoutes } from "./modules/assets/asset.routes";
 import {
   problemRoutes,
@@ -100,6 +101,7 @@ export function createApp() {
   app.use(`${API_PREFIX}/attachments`, requireAuth, attachmentRoutes);
   app.use(`${API_PREFIX}/categories`, requireAuth, categoryRoutes);
   app.use(`${API_PREFIX}/customers`, requireAuth, customerRoutes);
+  app.use(`${API_PREFIX}/permissions`, requireAuth, permissionRoutes);
   app.use(`${API_PREFIX}/assets`, requireAuth, assetRoutes);
   app.use(`${API_PREFIX}/problems`, requireAuth, problemRoutes);
   app.use(`${API_PREFIX}/projects`, requireAuth, projectRoutes);
