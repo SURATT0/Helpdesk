@@ -4,14 +4,18 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Archive,
   ArrowLeft,
   Building2,
   ChevronRight,
   FolderKanban,
+  Pencil,
+  Plus,
   Search,
   ShieldAlert,
 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
@@ -19,9 +23,12 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { holds } from "@/lib/permissions";
 import { useCustomers } from "@/features/customers/queries";
+import { ArchiveCustomerDialog } from "@/features/customers/components/archive-customer-dialog";
 import { useProjects } from "@/features/projects/queries";
 import type { Customer } from "@/features/customers/schemas";
+import { CustomerFormModal } from "./customer-form-modal";
 
 /**
  * Customers and their projects, on one screen.
@@ -52,6 +59,7 @@ export function CustomersAdminView({
 }) {
   const { t } = useI18n();
   const { user } = useAuth();
+  const router = useRouter();
 
   /**
    * Mirrors the server's `customer:write` — the grant this screen's actions are
@@ -68,6 +76,23 @@ export function CustomersAdminView({
   const projects = useProjects({ enabled: canRead });
 
   const [query, setQuery] = React.useState("");
+  /**
+   * Which form is open, if any.
+   *
+   * `"new"` and a customer are the same modal with one field; the distinction
+   * lives here rather than in two pieces of state, so the two can never both be
+   * true.
+   */
+  const [editing, setEditing] = React.useState<Customer | "new" | null>(null);
+  const [archiving, setArchiving] = React.useState<Customer | null>(null);
+
+  /**
+   * Archiving is its own grant, read through the shared permission table rather
+   * than compared against a role name here — the same arrangement
+   * `project:delete` uses, and deliberately stricter than creating. Both are
+   * enforced by the API; these only decide whether a button is in the document.
+   */
+  const canArchive = user != null && holds(user.role, "customer:archive");
 
   if (!canRead) {
     return (
@@ -119,6 +144,13 @@ export function CustomersAdminView({
           )}
         >
           <div className="flex-none border-b border-hairline p-3">
+            <Button
+              onClick={() => setEditing("new")}
+              className="mb-2 w-full gap-1.5"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              {t("adminCustomers.new")}
+            </Button>
             <label className="relative block">
               <span className="sr-only">{t("adminCustomers.search")}</span>
               <Search
@@ -185,6 +217,9 @@ export function CustomersAdminView({
               customer={selected}
               projects={projectsFor(selected.id)}
               projectsLoading={projects.isLoading}
+              canArchive={canArchive}
+              onRename={() => setEditing(selected)}
+              onArchive={() => setArchiving(selected)}
             />
           ) : selectedId != null && !customers.isLoading ? (
             // A customer that is not in the list: archived, or an id somebody
@@ -207,6 +242,27 @@ export function CustomersAdminView({
           )}
         </div>
       </main>
+
+      <CustomerFormModal
+        open={editing != null}
+        customer={editing === "new" ? null : editing}
+        onClose={() => setEditing(null)}
+        // Land on what was just added, rather than leaving somebody to find it
+        // in a list they have just made longer.
+        onCreated={(id) => router.push(`/admin/customers/${id}`)}
+      />
+
+      {archiving ? (
+        <ArchiveCustomerDialog
+          customer={archiving}
+          onClose={() => {
+            setArchiving(null);
+            // The archived tenant leaves the list, so the detail pane is showing
+            // something that is no longer there.
+            if (archiving.id === selectedId) router.push("/admin/customers");
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -272,10 +328,16 @@ function CustomerDetail({
   customer,
   projects,
   projectsLoading,
+  canArchive,
+  onRename,
+  onArchive,
 }: {
   customer: Customer;
   projects: { id: number; name: string; members: number }[];
   projectsLoading: boolean;
+  canArchive: boolean;
+  onRename: () => void;
+  onArchive: () => void;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -283,11 +345,25 @@ function CustomerDetail({
     <div className="p-4 sm:p-6">
       <BackToList />
 
-      <header className="mb-4">
-        <h1 className="flex items-center gap-2 text-hero font-bold tracking-heading text-ink">
+      {/* `flex-wrap`, so the two controls drop below the name on a phone rather
+          than squeezing a long company name into a third of the width. */}
+      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <h1 className="flex min-w-0 items-center gap-2 text-hero font-bold tracking-heading text-ink">
           <Building2 size={20} className="flex-none text-faint" />
           <span className="min-w-0 break-words">{customer.name}</span>
         </h1>
+        <div className="flex flex-none items-center gap-2">
+          <Button variant="secondary" onClick={onRename} className="gap-1.5">
+            <Pencil size={13} strokeWidth={2} />
+            {t("adminCustomers.rename")}
+          </Button>
+          {canArchive ? (
+            <Button variant="secondary" onClick={onArchive} className="gap-1.5">
+              <Archive size={13} strokeWidth={2} />
+              {t("adminCustomers.archive")}
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       <Card className="mb-4 p-4">

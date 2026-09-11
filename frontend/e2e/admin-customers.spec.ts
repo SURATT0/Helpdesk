@@ -146,3 +146,92 @@ test.describe("who may open it", () => {
     ).toBeVisible();
   });
 });
+
+test.describe("managing customers", () => {
+  test("adds one, and lands on it", async ({ page }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+
+    const name = `Probe Industries ${Date.now()}`;
+    await page.getByRole("button", { name: "Add customer" }).click();
+    await page.getByLabel("Company name").fill(name);
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Add customer" })
+      .click();
+
+    // Landed on the new one rather than left to find it in a longer list.
+    await expect(page).toHaveURL(/\/admin\/customers\/\d+$/);
+    await expect(page.getByRole("heading", { name })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
+  });
+
+  test("says which kind of name collision it is", async ({ page }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+
+    await page.getByRole("button", { name: "Add customer" }).click();
+    await page.getByLabel("Company name").fill("Acme Corp");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Add customer" })
+      .click();
+
+    // The SERVER's sentence, because it distinguishes a live namesake from an
+    // archived one — and an archived one is solved by reviving a row this list
+    // does not contain, which "that name is taken" would send somebody hunting
+    // through the list for.
+    // Scoped to the dialog: Next's own route announcer is a `role="alert"` too,
+    // so an unscoped one matches two elements and resolves to the empty one.
+    await expect(
+      page.getByRole("dialog").getByRole("alert"),
+    ).toContainText(/already called/i);
+    // Still open, with what was typed still in it.
+    await expect(page.getByLabel("Company name")).toHaveValue("Acme Corp");
+  });
+
+  test("renames one", async ({ page }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+
+    const original = `Renamable ${Date.now()}`;
+    await page.getByRole("button", { name: "Add customer" }).click();
+    await page.getByLabel("Company name").fill(original);
+    await page.getByRole("dialog").getByRole("button", { name: "Add customer" }).click();
+    await expect(page.getByRole("heading", { name: original })).toBeVisible();
+
+    const renamed = `${original} (renamed)`;
+    await page.getByRole("button", { name: "Rename" }).click();
+    await page.getByLabel("Company name").fill(renamed);
+    await page.getByRole("button", { name: "Save name" }).click();
+
+    await expect(page.getByRole("heading", { name: renamed })).toBeVisible();
+  });
+
+  test("refuses to archive a customer that still has things under it, and counts them", async ({
+    page,
+  }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+    await page.getByRole("link", { name: /Acme Corp/ }).click();
+
+    await page.getByRole("button", { name: "Archive" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    // The numbers, not a raw refusal. They come from the server's own impact
+    // endpoint — the same figures the guard refuses on — so the dialog cannot
+    // promise an archive the API then declines.
+    await expect(dialog).toContainText(/\d+/);
+    const confirm = dialog.getByRole("button", { name: /Archive/ });
+    await expect(confirm).toBeDisabled();
+  });
+});
+
+test("the old customers route redirects rather than 404s", async ({ page }) => {
+  await loginAs(page, SUPER_ADMIN);
+  await page.goto("/customers");
+  // Bookmarks, history and pasted links all still work.
+  await expect(page).toHaveURL(/\/admin\/customers$/);
+  await expect(page.getByPlaceholder("Search customers")).toBeVisible();
+});

@@ -501,6 +501,14 @@ const en: Dict = {
   "categories.codeHint":
     "This name has no letters or digits to build a code from, so give one. A code is what reports group by across customers — it stays the same if the name is later renamed or translated.",
   // --- customers & their projects, on one screen ---------------------------
+  "adminCustomers.new": "Add customer",
+  "adminCustomers.newTitle": "Add a customer",
+  "adminCustomers.renameTitle": "Rename customer",
+  "adminCustomers.nameLabel": "Company name",
+  "adminCustomers.create": "Add customer",
+  "adminCustomers.saveName": "Save name",
+  "adminCustomers.rename": "Rename",
+  "adminCustomers.archive": "Archive",
   "adminCustomers.search": "Search customers",
   "adminCustomers.choose": "Choose a customer to see its details and projects.",
   "adminCustomers.back": "All customers",
@@ -1536,6 +1544,14 @@ const th: Dict = {
   "categories.codeHint":
     "ชื่อนี้ไม่มีตัวอักษรภาษาอังกฤษหรือตัวเลขให้สร้างรหัสได้ กรุณาระบุรหัสเอง — รหัสคือสิ่งที่รายงานใช้จัดกลุ่มข้ามลูกค้า และจะไม่เปลี่ยนแม้ภายหลังจะเปลี่ยนชื่อหรือแปลเป็นภาษาอื่น",
   // --- ลูกค้าและโปรเจกต์ในหน้าเดียว -----------------------------------------
+  "adminCustomers.new": "เพิ่มลูกค้า",
+  "adminCustomers.newTitle": "เพิ่มลูกค้าใหม่",
+  "adminCustomers.renameTitle": "เปลี่ยนชื่อลูกค้า",
+  "adminCustomers.nameLabel": "ชื่อบริษัท",
+  "adminCustomers.create": "เพิ่มลูกค้า",
+  "adminCustomers.saveName": "บันทึกชื่อ",
+  "adminCustomers.rename": "เปลี่ยนชื่อ",
+  "adminCustomers.archive": "เก็บเข้าคลัง",
   "adminCustomers.search": "ค้นหาลูกค้า",
   "adminCustomers.choose": "เลือกลูกค้าเพื่อดูรายละเอียดและโปรเจกต์",
   "adminCustomers.back": "รายชื่อลูกค้าทั้งหมด",
