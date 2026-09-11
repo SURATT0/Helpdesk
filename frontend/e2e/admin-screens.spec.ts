@@ -109,7 +109,18 @@ test.describe("the user directory narrows", () => {
     await expect(page.getByText("marcus.chen@acme.com")).toBeVisible();
   });
 
-  test("offers the customer filter only to someone who reaches more than one", async ({
+  /**
+   * The customer filter, from both sides of the reach boundary.
+   *
+   * TWO tests rather than one that signs in twice, and the split is the fix for
+   * a real race rather than a style choice: signing a second person in on the
+   * same page means visiting /login while the first session is still live, and
+   * that page redirects an authenticated visitor to /dashboard. The form renders
+   * for an instant and is then torn out from under the click — which is exactly
+   * how it failed, intermittently and only under CI's timing. Playwright gives
+   * each test its own context, so neither one inherits a session.
+   */
+  test("offers it to someone who reaches more than one customer", async ({
     page,
   }) => {
     await loginAs(page, PLATFORM);
@@ -117,11 +128,18 @@ test.describe("the user directory narrows", () => {
     // Exact, because every row also carries a "Customer access for …" button —
     // a substring match would find nine controls and mean nothing.
     await expect(page.getByLabel("Customer", { exact: true })).toBeVisible();
+  });
 
+  test("withholds it from someone inside a single customer", async ({
+    page,
+  }) => {
     // Dana is Acme's own admin: every row would carry the same customer, so the
     // filter would offer a choice with one answer.
     await loginAs(page, AGENT);
     await page.goto("/users");
     await expect(page.getByLabel("Customer", { exact: true })).toHaveCount(0);
+    // Proves the page actually loaded, so the assertion above is about the
+    // filter being absent rather than about nothing having rendered yet.
+    await expect(page.getByPlaceholder("Name or email")).toBeVisible();
   });
 });
