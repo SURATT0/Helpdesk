@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { BadRequest, NotFound } from "../../shared/errors";
+import { AttachmentGone, BadRequest, NotFound } from "../../shared/errors";
 import type { AuthUser } from "../../shared/auth";
 import { logger } from "../../shared/logger";
 import { storage } from "../../shared/storage";
@@ -174,7 +174,7 @@ export const attachmentService = {
         try {
           data = await storage.read(att.storageKey);
         } catch {
-          throw NotFound("Attachment file is no longer available in storage");
+          throw AttachmentGone();
         }
       } else {
         // The DB row exists but the bytes are gone (never persisted, pruned, or

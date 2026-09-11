@@ -1,5 +1,9 @@
 import type { AuthUser } from "../../shared/auth";
-import { BadRequest, NotFound, NotImplemented } from "../../shared/errors";
+import {
+  NotFound,
+  NotImplemented,
+  SourceNotConfigured,
+} from "../../shared/errors";
 import {
   ticketService,
   type ImportResult,
@@ -33,7 +37,7 @@ export const integrationService = {
       throw NotImplemented(`${source.label} is not implemented yet`);
     }
     if (!source.isConfigured()) {
-      throw BadRequest(`${source.label} is not configured`);
+      throw SourceNotConfigured(source.label);
     }
 
     const external = await source.fetchTickets();

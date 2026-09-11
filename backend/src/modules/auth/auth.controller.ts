@@ -1,6 +1,6 @@
 import type { CookieOptions, Request, Response } from "express";
 import { env } from "../../config/env";
-import { Unauthorized } from "../../shared/errors";
+import { SessionExpired, Unauthorized } from "../../shared/errors";
 import { authService } from "./auth.service";
 import {
   forgotPasswordBody,
@@ -105,7 +105,7 @@ export const authController = {
 
   async refresh(req: Request, res: Response) {
     const raw = req.cookies?.[REFRESH_COOKIE];
-    if (!raw) throw Unauthorized("No session");
+    if (!raw) throw SessionExpired("No session");
     const session = await authService.refresh(raw);
     respondWithSession(res, session);
   },

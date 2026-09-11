@@ -1,7 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
-import { BadRequest, Unauthorized } from "../../shared/errors";
+import {
+  AccountDeactivated,
+  AccountPendingApproval,
+  AccountRejected,
+  AccountSuspended,
+  BadRequest,
+  EmailNotVerified,
+  InvalidCredentials,
+  ResetLinkInvalid,
+  SessionExpired,
+  SessionReused,
+  Unauthorized,
+  VerificationLinkInvalid,
+} from "../../shared/errors";
 import { maySignIn, type Role, type UserStatus } from "../../shared/domain";
 import { DEFAULT_LANG, type Lang } from "../../shared/i18n";
 import { customerReach, isPlatformWide } from "../../shared/auth";
@@ -88,8 +101,7 @@ type UserRow = {
  * not already have — and telling a real person "invalid email or password" when
  * their password is fine sends them to reset it, twice, before they call anyone.
  */
-const Deactivated = () =>
-  Unauthorized("This account has been deactivated — contact your administrator");
+const Deactivated = AccountDeactivated;
 
 /**
  * Why an account that got its password right still may not come in.
@@ -110,21 +122,17 @@ function signInRefusal(user: {
   // The two terminal states come first. Somebody who was turned down or shut off
   // has nothing to gain from being sent to their inbox to confirm an address.
   if (user.status === "rejected") {
-    return Unauthorized("This registration was not approved — contact your administrator");
+    return AccountRejected();
   }
   if (user.status === "suspended") {
-    return Unauthorized("This account has been suspended — contact your administrator");
+    return AccountSuspended();
   }
   // Then the step that IS theirs to take.
   if (user.emailVerifiedAt == null) {
-    return Unauthorized(
-      "Confirm your email address first — check your inbox for the confirmation link",
-    );
+    return EmailNotVerified();
   }
   if (user.status === "pending") {
-    return Unauthorized(
-      "Your account is waiting for an administrator to approve it. You will be emailed when it is.",
-    );
+    return AccountPendingApproval();
   }
   return null;
 }
@@ -185,7 +193,7 @@ export const authService = {
     // (email intake creates those) answer in the same time as a real one.
     const ok = await verifyPassword(password, user?.passwordHash ?? null);
     if (!user || !user.passwordHash || !ok) {
-      throw Unauthorized("Invalid email or password");
+      throw InvalidCredentials();
     }
     // Everything below is checked AFTER the compare, so a wrong password still
     // answers uniformly and none of these states is something you can probe for.
@@ -289,7 +297,7 @@ export const authService = {
       // person holding a dead link — they need a new one either way — and
       // distinguishing "already used" from "never existed" tells anyone probing
       // tokens which guesses were close.
-      throw BadRequest("This confirmation link is no longer valid — request a new one");
+      throw VerificationLinkInvalid();
     }
     const redeemed = await authRepository.redeemEmailVerification({
       tokenId: row.id,
@@ -358,7 +366,7 @@ export const authService = {
       row.usedAt != null ||
       row.expiresAt.getTime() < Date.now()
     ) {
-      throw BadRequest("This reset link is no longer valid — request a new one");
+      throw ResetLinkInvalid();
     }
     const redeemed = await authRepository.redeemPasswordReset({
       tokenId: row.id,
@@ -372,7 +380,7 @@ export const authService = {
 
   async refresh(rawToken: string): Promise<Session> {
     const row = await authRepository.findRefreshToken(hashRefreshToken(rawToken));
-    if (!row) throw Unauthorized("Invalid session");
+    if (!row) throw SessionExpired("Invalid session");
 
     /**
      * Deactivation has to bite here, not only at the next login. The refresh
@@ -429,10 +437,10 @@ export const authService = {
       }
 
       await authRepository.revokeFamily(row.familyId);
-      throw Unauthorized("Session reuse detected");
+      throw SessionReused();
     }
     if (row.expiresAt.getTime() < Date.now()) {
-      throw Unauthorized("Session expired");
+      throw SessionExpired();
     }
 
     await authRepository.revokeRefreshToken(row.id); // rotate

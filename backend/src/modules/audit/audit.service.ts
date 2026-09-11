@@ -1,5 +1,5 @@
 import { maySeeWorkloadOf, type AuthUser } from "../../shared/auth";
-import { Forbidden } from "../../shared/errors";
+import { NotYoursToRead } from "../../shared/errors";
 import {
   auditRepository,
   type AuditFilter,
@@ -30,7 +30,7 @@ export const auditService = {
     user: AuthUser,
   ): Promise<{ items: AuditLogDto[]; total: number }> {
     if (filter.userId != null && !maySeeWorkloadOf(user, filter.userId)) {
-      throw Forbidden("You may only filter the audit trail by your own actions");
+      throw NotYoursToRead("audit");
     }
     // Row scope lives in the repository's WHERE clause, not here.
     return auditRepository.findMany(filter, user);

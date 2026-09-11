@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { BadRequest, Unauthorized } from "../../shared/errors";
+import { NoFileUploaded, NotAnImage, Unauthorized } from "../../shared/errors";
 import { attachmentService } from "./attachment.service";
 import { decodeUploadName } from "./attachment.naming";
 
@@ -51,7 +51,7 @@ export const attachmentController = {
 
   async upload(req: Request, res: Response) {
     const { ticketId } = ticketIdParam.parse(req.params);
-    if (!req.file) throw BadRequest("No file uploaded (field 'file')");
+    if (!req.file) throw NoFileUploaded();
     const { commentId } = uploadBody.parse(req.body ?? {});
     const dto = await attachmentService.upload(
       ticketId,
@@ -92,7 +92,7 @@ export const attachmentController = {
       // Nothing to render. Refusing here means an `<img>` pointed at a PDF gets
       // a clean error the client can fall back from, not a document served as an
       // image with whatever type happened to be stored.
-      throw BadRequest("Attachment is not an image");
+      throw NotAnImage();
     }
     res.setHeader("Content-Type", file.contentType);
     res.setHeader("Content-Disposition", contentDisposition("inline", file.displayName));

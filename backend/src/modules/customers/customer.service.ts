@@ -2,8 +2,8 @@ import { hasPermission, type AuthUser } from "../../shared/auth";
 import {
   BadRequest,
   CustomerNotEmpty,
-  Forbidden,
   NotFound,
+  NotYoursToManage,
 } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
 import {
@@ -38,7 +38,7 @@ function mayManage(actor: AuthUser): boolean {
 
 function assertMayManage(actor: AuthUser): void {
   if (!mayManage(actor)) {
-    throw Forbidden("You don't have permission to manage customers");
+    throw NotYoursToManage("customers");
   }
 }
 
@@ -59,7 +59,7 @@ function assertMayArchive(actor: AuthUser, customerId?: number): void {
       })
       .catch(() => {});
   }
-  throw Forbidden("You don't have permission to archive customers");
+  throw NotYoursToManage("customer_archive");
 }
 
 export const customerService = {

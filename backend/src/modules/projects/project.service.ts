@@ -1,8 +1,9 @@
 import { hasPermission, type AuthUser } from "../../shared/auth";
 import {
   BadRequest,
-  Forbidden,
+  CannotOwnProject,
   NotFound,
+  NotYoursToManage,
   ProjectHasMembers,
 } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
@@ -56,7 +57,7 @@ function assertMayDelete(actor: AuthUser, projectId?: number): void {
       })
       .catch(() => {});
   }
-  throw Forbidden("You don't have permission to delete projects");
+  throw NotYoursToManage("projects");
 }
 
 export type CreateProjectInput = {
@@ -97,7 +98,7 @@ async function assertOwnersAssignable(
       // Deliberately the same message whatever the reason — distinguishing "is a
       // requester" from "belongs to another customer" would leak the directory of
       // tenants the actor cannot see.
-      throw Forbidden(`User #${userId} cannot own a project`);
+      throw CannotOwnProject(userId);
     }
   }
 }

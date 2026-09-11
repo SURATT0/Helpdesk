@@ -8,10 +8,14 @@ import { maySeeWorkloadOf, type AuthUser } from "../../shared/auth";
 import {
   AppError,
   BadRequest,
-  Forbidden,
   IllegalTransition,
+  NotAssignable,
   NotFound,
+  NotYourTicketToAnswer,
+  NotYoursToRead,
   ReopenWindowExpired,
+  SameAssignee,
+  TicketNotAwaitingAnswer,
 } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
 import { commentService } from "../comments/comment.service";
@@ -148,7 +152,7 @@ export const ticketService = {
       typeof filter.assigneeId === "number" &&
       !maySeeWorkloadOf(user, filter.assigneeId)
     ) {
-      throw Forbidden("You may only filter the ticket list by your own queue");
+      throw NotYoursToRead("queue");
     }
     return ticketRepository.findMany(filter, user);
   },
@@ -497,12 +501,10 @@ export const ticketService = {
   async requireOwnPendingTicket(id: number, user: AuthUser): Promise<Ticket> {
     const ticket = await this.get(id, user); // row scope → 404 if out of reach
     if (ticket.requesterId !== user.id) {
-      throw Forbidden("Only the person who raised a ticket can answer its closure");
+      throw NotYourTicketToAnswer();
     }
     if (ticket.status !== "pending") {
-      throw BadRequest(
-        `Ticket #${id} is not waiting to be confirmed (it is ${ticket.displayStatus})`,
-      );
+      throw TicketNotAwaitingAnswer(ticket.displayStatus);
     }
     return ticket;
   },
@@ -554,7 +556,7 @@ export const ticketService = {
       if (!mayReceiveAssignment(user, candidate)) {
         // Deliberately one message, as in `reassign` — distinguishing the reasons
         // would leak the directory of tenants the actor cannot see.
-        throw Forbidden(`User #${assigneeId} cannot be assigned tickets`);
+        throw NotAssignable(assigneeId);
       }
     }
     const updated = await ticketRepository.updateAssignee(id, assigneeId, user.id);
@@ -582,7 +584,7 @@ export const ticketService = {
     user: AuthUser,
   ): Promise<ReassignResult> {
     if (input.toUserId === input.fromUserId) {
-      throw BadRequest("Source and target assignee are the same");
+      throw SameAssignee();
     }
 
     if (input.toUserId != null) {
@@ -594,7 +596,7 @@ export const ticketService = {
         // Same message either way: telling a manager apart "that user is in
         // another customer" from "that user is a requester" would leak the
         // directory of tenants they cannot see.
-        throw Forbidden(`User #${input.toUserId} cannot be assigned tickets`);
+        throw NotAssignable(input.toUserId);
       }
     }
 

@@ -3,7 +3,7 @@ import {
   maySeeWorkloadOf,
   type AuthUser,
 } from "../../shared/auth";
-import { Forbidden } from "../../shared/errors";
+import { NotYoursToRead, WorkloadIsStaffOnly } from "../../shared/errors";
 import {
   reportsRepository,
   type AgentWorkload,
@@ -25,7 +25,7 @@ export const reportsService = {
    */
   async agentWorkload(user: AuthUser): Promise<AgentWorkload[]> {
     if (!maySeeTeamWorkload(user)) {
-      throw Forbidden("Agent workload is visible to super admins only");
+      throw WorkloadIsStaffOnly();
     }
     return reportsRepository.getAgentWorkload(user);
   },
@@ -44,7 +44,7 @@ export const reportsService = {
   ): Promise<AgentWorkload | null> {
     const target = assigneeId ?? user.id;
     if (!maySeeWorkloadOf(user, target)) {
-      throw Forbidden("You may only read your own workload");
+      throw NotYoursToRead("workload");
     }
     const [row] = await reportsRepository.getAgentWorkload(user, target);
     return row ?? null;
