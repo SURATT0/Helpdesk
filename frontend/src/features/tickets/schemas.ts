@@ -63,6 +63,17 @@ export const ticketSchema = z.object({
   assigneeId: z.number().nullable(),
   category: z.string(),
   /**
+   * The category's CODE, so a reader can tell WHICH option this is without
+   * matching on a name a tenant may have renamed or translated. See
+   * lib/category-other.ts.
+   *
+   * Defaulted, so a response from an API that predates the field parses rather
+   * than failing the whole list — an unknown code simply is not "Other".
+   */
+  categoryCode: z.string().default(""),
+  /** What the person typed when they chose "Other". Null for every other category. */
+  categoryOther: z.string().nullable().default(null),
+  /**
    * The project this ticket belongs to, or null. Grouping and routing — never
    * a visibility scope; a ticket in a project is still visible to every agent
    * of its customer.

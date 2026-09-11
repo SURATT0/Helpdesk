@@ -10,7 +10,13 @@ import {
 } from "../../shared/ticket-status";
 import type { AuthUser } from "../../shared/auth";
 import {
+  categoryOtherMessage,
+  checkCategoryOther,
+  storedCategoryOther,
+} from "../../shared/category-other";
+import {
   BadRequest,
+  CategoryDetailRequired,
   ConcurrentStatusChange,
   IllegalTransition,
 } from "../../shared/errors";
@@ -108,6 +114,17 @@ export type Ticket = {
   assigneeId: number | null;
   category: string;
   /**
+   * The category's CODE — the identity its name is a display of.
+   *
+   * Sent so the client can tell WHICH option this is without matching on a name
+   * a tenant may have translated. Only one reader needs it today (the form and
+   * the detail page both ask "is this the Other category?"), and that question
+   * has exactly one right answer on both sides: `OTHER`.
+   */
+  categoryCode: string;
+  /** What the person typed when they chose "Other", or null for every other category. */
+  categoryOther: string | null;
+  /**
    * The project this ticket belongs to, or null.
    *
    * Grouping and routing, never visibility: a ticket in a project is still
@@ -196,6 +213,15 @@ export type CreateTicketInput = {
   subject: string;
   description: string;
   categoryId: number;
+  /**
+   * What the problem actually is, when the category is "Other".
+   *
+   * Optional on the type because most callers have nothing to put here; the
+   * rule that makes it required for one category — and refused for the rest —
+   * is `checkCategoryOther`, applied below at the one place every path writes
+   * through.
+   */
+  categoryOther?: string | null;
   priority: Priority;
   requesterId: number;
   /**
@@ -306,6 +332,8 @@ function toTicketDto(
     assignee: row.assignee?.name ?? null,
     assigneeId: row.assigneeId,
     category: row.category.name,
+    categoryCode: row.category.code,
+    categoryOther: row.categoryOther,
     project: row.project,
     customer: row.customer,
     slaDue,
@@ -702,6 +730,30 @@ export const ticketRepository = {
           throw BadRequest("Unknown category");
         }
 
+        /**
+         * "Other" has to say what it is.
+         *
+         * Here, rather than in the ticket service, because this repository
+         * method is the ONE writer every path goes through — the web form, the
+         * CSV import and the inbound-mail intake all end up on this line. A
+         * check in the service would cover the form alone and leave the other
+         * two filing "Other" with nothing written down, which is the exact hole
+         * the field exists to close.
+         *
+         * The category row is already loaded and already proven to be this
+         * tenant's, so the code is in hand and this costs no extra query.
+         */
+        const otherProblem = checkCategoryOther({
+          categoryCode: category.code,
+          categoryOther: input.categoryOther,
+        });
+        if (otherProblem) {
+          throw CategoryDetailRequired(
+            otherProblem.reason,
+            categoryOtherMessage(otherProblem),
+          );
+        }
+
         // Auto-assignment, from a project. Two ways to reach one, and the
         // explicit one wins: a ticket that NAMES a project is asking for that
         // project's caseworker, and falling back to the requester's own would
@@ -746,6 +798,13 @@ export const ticketRepository = {
             customerId: requester.customerId,
             assigneeId,
             categoryId: input.categoryId,
+            // Normalised through the same rule that validated it, so a description
+            // never lands on a category that does not take one and an empty
+            // string never lands where NULL is meant.
+            categoryOther: storedCategoryOther({
+              categoryCode: category.code,
+              categoryOther: input.categoryOther,
+            }),
             projectId,
             dueAt: computeDueAt(input.priority, now),
             createdAt: now,

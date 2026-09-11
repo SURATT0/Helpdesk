@@ -20,6 +20,11 @@ import { useCustomers } from "@/features/customers/queries";
 import { useProjects } from "@/features/projects/queries";
 import { useCategories, useCreateTicket } from "../queries";
 import { PRIORITIES_ASCENDING, TEXT_MAX, type Priority } from "@/lib/domain";
+import {
+  needsOwnDescription,
+  otherLast,
+  whyNotReady,
+} from "@/lib/category-other";
 
 // Images + common help-desk data files (mirrors the backend allowlist).
 
@@ -104,6 +109,8 @@ export function CreateTicketModal({
   const [subject, setSubject] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [categoryId, setCategoryId] = React.useState<number | null>(null);
+  /** What the person typed when they chose "Other". Empty for every other choice. */
+  const [categoryOther, setCategoryOther] = React.useState("");
   /**
    * The tenant the rest of the form is filtered by.
    *
@@ -141,7 +148,7 @@ export function CreateTicketModal({
     // missing when the app is opened by IP over plain HTTP — and this effect
     // runs with the shell, so the throw took the whole page down. See randomId.
     setIdempotencyKey(randomId());
-  }, [subject, description, categoryId, priority]);
+  }, [subject, description, categoryId, categoryOther, priority]);
 
   const projects = projectData?.projects ?? [];
 
@@ -218,6 +225,7 @@ export function CreateTicketModal({
     setDescription("");
     setPriority("medium");
     setCategoryId(null);
+    setCategoryOther("");
     setProjectId(null);
     // Leave the customer alone: with one it is already right, and with several
     // the person is about to choose. Resetting it here would clear a preselect
@@ -241,10 +249,25 @@ export function CreateTicketModal({
   if (!open) return null;
 
   const busy = createTicket.isPending || attaching;
+  /**
+   * Which option is selected, as a CODE.
+   *
+   * The name is a display decision a tenant may translate, so nothing may match
+   * on it — see lib/category-other.ts.
+   */
+  const chosen = categories.find((c) => c.id === categoryId);
+  const wantsOwnDescription = needsOwnDescription(chosen?.code);
+  const blocker = whyNotReady({
+    categoryCode: chosen?.code,
+    categoryOther,
+  });
   const canSubmit =
     subject.trim().length >= 3 &&
     description.trim().length >= 1 &&
     categoryId != null &&
+    // The API refuses a blank one regardless; this stops the person finding out
+    // after the round trip. Disabling the button is NOT the enforcement.
+    blocker == null &&
     !busy;
 
   /**
@@ -268,6 +291,11 @@ export function CreateTicketModal({
         subject: subject.trim(),
         description: description.trim(),
         categoryId,
+        // Sent only for the category that takes one. The server refuses a
+        // description on any other, which is the right answer to a client that
+        // has misunderstood the field — so this must not send an empty string
+        // "just in case".
+        ...(wantsOwnDescription ? { categoryOther: categoryOther.trim() } : {}),
         projectId,
         priority,
         idempotencyKey,
@@ -468,7 +496,11 @@ export function CreateTicketModal({
                 {customerId == null ? (
                   <option value="">{t("create.projectPickCustomerFirst")}</option>
                 ) : null}
-                {categories.map((c) => (
+                {/* "Other" last, whatever order the server sent. It is the
+                    answer for a ticket none of the others fit, and offering it
+                    among them invites it as a first choice — which is how a free
+                    text box becomes the category everybody uses. */}
+                {otherLast(categories).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -502,6 +534,52 @@ export function CreateTicketModal({
               </div>
             </div>
           </div>
+
+          {/* Only for the category whose whole meaning is "none of the above".
+              Full width rather than in the half-column beside Priority: it is a
+              sentence about what went wrong, and a half-width box invites three
+              words where the desk needs a description.
+
+              Rendered conditionally rather than disabled — a field that does not
+              apply should not be on the page at all, and leaving a greyed one
+              there would suggest the person is missing something. */}
+          {wantsOwnDescription ? (
+            <div>
+              <Label htmlFor="ticket-category-other">
+                {t("create.categoryOther")} <span className="text-danger">*</span>
+              </Label>
+              <Textarea
+                id="ticket-category-other"
+                rows={2}
+                maxLength={TEXT_MAX.BODY}
+                value={categoryOther}
+                onChange={(e) => setCategoryOther(e.target.value)}
+                placeholder={t("create.categoryOtherPlaceholder")}
+                aria-describedby="ticket-category-other-hint"
+              />
+              {/*
+                Says what the field is FOR, not just that it is required. The
+                text stays on this ticket and never becomes a category on its own
+                — that is the whole reason it exists, and a person who knows that
+                writes a sentence instead of a label.
+
+                aria-live, so a screen reader hears the blocker appear and go as
+                the box is filled rather than only on submit.
+              */}
+              <p
+                id="ticket-category-other-hint"
+                aria-live="polite"
+                className={cn(
+                  "mt-1 text-caption leading-relaxed",
+                  blocker === "detail_missing" ? "text-danger" : "text-faint",
+                )}
+              >
+                {blocker === "detail_missing"
+                  ? t("create.categoryOtherRequired")
+                  : t("create.categoryOtherHint")}
+              </p>
+            </div>
+          ) : null}
 
           <div>
             <Label htmlFor="ticket-description">

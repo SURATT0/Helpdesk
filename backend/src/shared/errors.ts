@@ -517,6 +517,7 @@ export const ERROR_CODES = [
   "NOT_YOUR_TICKET_TO_ANSWER",
   "TICKET_NOT_AWAITING_ANSWER",
   "SAME_ASSIGNEE",
+  "CATEGORY_DETAIL_REQUIRED",
   "NOT_ASSIGNABLE",
   // People, projects, customers.
   "LAST_ADMIN",
@@ -544,3 +545,19 @@ export const ERROR_CODES = [
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
+/**
+ * Filing under "Other" without saying what the problem is — or sending a
+ * description for a category that does not take one.
+ *
+ * `field` so the form can point at the control rather than printing a sentence
+ * above it, and `reason` so the client can word the two cases differently; they
+ * are different mistakes and only one of them is the person's to fix.
+ */
+export const CategoryDetailRequired = (
+  reason: "missing" | "not_applicable",
+  message: string,
+) =>
+  new AppError(400, "CATEGORY_DETAIL_REQUIRED", message, {
+    field: "categoryOther",
+    reason,
+  });

@@ -479,7 +479,38 @@ const en: Dict = {
   "create.projectPickCustomerFirst": "Choose a customer first",
   "create.projectNone": "This customer has no projects",
   "create.projectOptional": "No project",
+  "nav.categories": "Categories",
+  "categories.explainer":
+    "What people typed when no category fitted. A phrase that keeps coming back is one the list is missing — promote it and it becomes a category this customer can file under from now on.",
+  "categories.forbidden": "Not your page",
+  "categories.forbiddenNote":
+    "Reviewing what people type into a free text box is kept to platform staff.",
+  "categories.loadError": "Couldn't load what people have typed.",
+  "categories.emptyNote":
+    "When somebody picks Other and describes their problem, it appears here.",
+  "categories.timesUsed": "{n}×",
+  "categories.lastUsed": "last {when}",
+  "categories.andMore": "+{n} more",
+  "categories.promote": "Make it a category",
+  "categories.promoteNote":
+    "This adds the category to {customer} for future tickets. The tickets already filed under Other keep their own words — their category is what the desk actually worked them under, and rewriting it would change what past reports say.",
+  "categories.promoted": "Added as “{name}”",
+  "categories.promoteError": "Couldn't add the category. Try again.",
+  "categories.nameLabel": "Category name",
+  "categories.codeLabel": "Code",
+  "categories.codeHint":
+    "This name has no letters or digits to build a code from, so give one. A code is what reports group by across customers — it stays the same if the name is later renamed or translated.",
   "create.category": "Category",
+  // The escape hatch, and the words that keep it from becoming a second
+  // category list. The hint says what the text is FOR — it stays on this ticket
+  // — because a person who knows that writes a sentence instead of a label.
+  "create.categoryOther": "What is the problem?",
+  "create.categoryOtherPlaceholder":
+    "Describe what went wrong, in your own words",
+  "create.categoryOtherHint":
+    "This stays on this ticket. The desk can turn a recurring one into a category of its own later.",
+  "create.categoryOtherRequired":
+    "Say what the problem is — that is the whole point of choosing Other.",
   "create.priority": "Priority",
   "create.description": "Description",
   "create.descriptionPlaceholder": "What happens, when it started, what you've tried…",
@@ -1465,7 +1496,34 @@ const th: Dict = {
   "create.projectPickCustomerFirst": "เลือกลูกค้าก่อน",
   "create.projectNone": "ลูกค้ารายนี้ยังไม่มีโปรเจกต์",
   "create.projectOptional": "ไม่ระบุโปรเจกต์",
+  "nav.categories": "หมวดหมู่",
+  "categories.explainer":
+    "ข้อความที่ผู้ใช้พิมพ์เมื่อไม่มีหมวดหมู่ไหนตรง ถ้าเรื่องไหนเกิดซ้ำ แปลว่าหมวดหมู่ยังขาดอยู่ — เลื่อนขึ้นเป็นหมวดหมู่แล้วลูกค้ารายนี้จะเลือกได้ตั้งแต่ Ticket ถัดไป",
+  "categories.forbidden": "ไม่ใช่หน้าของคุณ",
+  "categories.forbiddenNote":
+    "การดูข้อความที่ผู้ใช้พิมพ์เข้ามาจำกัดไว้เฉพาะทีมงานระดับแพลตฟอร์ม",
+  "categories.loadError": "โหลดข้อมูลไม่สำเร็จ",
+  "categories.emptyNote":
+    "เมื่อมีผู้เลือก “อื่นๆ” แล้วอธิบายปัญหา ข้อความจะมาแสดงที่นี่",
+  "categories.timesUsed": "{n} ครั้ง",
+  "categories.lastUsed": "ล่าสุด {when}",
+  "categories.andMore": "และอีก {n} รายการ",
+  "categories.promote": "เลื่อนขึ้นเป็นหมวดหมู่",
+  "categories.promoteNote":
+    "จะเพิ่มหมวดหมู่นี้ให้ {customer} สำหรับ Ticket ใหม่ ส่วน Ticket เดิมที่แจ้งไว้ภายใต้ “อื่นๆ” จะยังคงข้อความเดิม — หมวดหมู่ของมันคือสิ่งที่ทีมใช้ทำงานจริง การแก้ย้อนหลังจะทำให้รายงานเก่าเปลี่ยนไป",
+  "categories.promoted": "เพิ่ม “{name}” แล้ว",
+  "categories.promoteError": "เพิ่มหมวดหมู่ไม่สำเร็จ ลองอีกครั้ง",
+  "categories.nameLabel": "ชื่อหมวดหมู่",
+  "categories.codeLabel": "รหัส",
+  "categories.codeHint":
+    "ชื่อนี้ไม่มีตัวอักษรภาษาอังกฤษหรือตัวเลขให้สร้างรหัสได้ กรุณาระบุรหัสเอง — รหัสคือสิ่งที่รายงานใช้จัดกลุ่มข้ามลูกค้า และจะไม่เปลี่ยนแม้ภายหลังจะเปลี่ยนชื่อหรือแปลเป็นภาษาอื่น",
   "create.category": "หมวดหมู่",
+  "create.categoryOther": "ปัญหาคืออะไร?",
+  "create.categoryOtherPlaceholder": "อธิบายสิ่งที่เกิดขึ้นด้วยคำพูดของคุณเอง",
+  "create.categoryOtherHint":
+    "ข้อความนี้จะอยู่กับ Ticket นี้เท่านั้น หากเรื่องนี้เกิดซ้ำ ผู้ดูแลระบบสามารถเลื่อนขึ้นเป็นหมวดหมู่จริงได้ภายหลัง",
+  "create.categoryOtherRequired":
+    "กรุณาระบุว่าปัญหาคืออะไร — นี่คือเหตุผลทั้งหมดของการเลือก \"อื่นๆ\"",
   "create.priority": "ความสำคัญ",
   "create.description": "รายละเอียด",
   "create.descriptionPlaceholder": "เกิดอะไรขึ้น เริ่มเมื่อไร ลองแก้อะไรมาแล้วบ้าง…",

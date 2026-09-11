@@ -128,13 +128,28 @@ const PROJECTS: {
   },
 ];
 
-const CATEGORIES: { name: string; team: string }[] = [
+/**
+ * The categories every seeded customer gets.
+ *
+ * Must stay in step with `STARTER_CATEGORY_NAMES`, which is what a customer
+ * created through the app gets. The two lists are not one because this one also
+ * names a default team per category and that constant does not — but a name in
+ * either and not the other means a seeded database and a real one disagree about
+ * what a tenant starts with, which is how the "Other" row came to be missing
+ * from every test run while being present in production.
+ */
+const CATEGORIES: { name: string; team: string | null }[] = [
   { name: "Network", team: "Network Operations" },
   { name: "Email", team: "IT Support" },
   { name: "Hardware", team: "Field Services" },
   { name: "Access", team: "IT Support" },
   { name: "Accounts", team: "IT Support" },
   { name: "Software", team: "IT Support" },
+  // No default team, deliberately: a ticket nobody could categorise is not one
+  // any particular queue owns, so it goes to the unassigned queue where somebody
+  // reads it and decides. Routing a whole bucket of unknowns at one team by
+  // default is how they stop being read.
+  { name: "Other", team: null },
 ];
 
 /**

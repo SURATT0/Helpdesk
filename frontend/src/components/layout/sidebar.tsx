@@ -13,6 +13,7 @@ import {
   BookOpen,
   ScrollText,
   ShieldCheck,
+  Tag,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -63,6 +64,17 @@ const NAV: Array<{
     key: "nav.projects",
     icon: FolderKanban,
     roles: ["admin", "super_admin"],
+  },
+  // Reviewing what people typed under "Other". Top tier only, mirroring the
+  // server's `category:write` — and unlike the entries above it, the READ is
+  // gated too: this is every phrase anybody has typed into a free text box,
+  // which is a more revealing thing than the list of categories they may file
+  // under.
+  {
+    href: "/categories",
+    key: "nav.categories",
+    icon: Tag,
+    roles: ["super_admin"],
   },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },

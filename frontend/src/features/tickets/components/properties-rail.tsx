@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { AttachmentsPanel } from "@/features/attachments/components/attachments-panel";
 import { ProblemPanel } from "@/features/problems/components/problem-panel";
 import { useI18n } from "@/features/i18n/context";
+import { needsOwnDescription } from "@/lib/category-other";
 import { SlaBadge } from "./sla-badge";
 import { useAssessSla } from "../use-sla";
 import { HistoryPanel } from "./history-panel";
@@ -66,7 +67,21 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
             </span>
           </Row>
           <Row label={t("col.category")}>
-            <span className="font-medium text-ink">{ticket.category}</span>
+            {/* For "Other" the category name says nothing — "Other" is the
+                absence of an answer, and what the person actually wrote is the
+                answer. Both are shown, the words first: a reader scanning the
+                rail needs to know what this ticket is about, and "Other" alone
+                makes them open the thread to find out. */}
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium text-ink">
+                {needsOwnDescription(ticket.categoryCode) && ticket.categoryOther
+                  ? ticket.categoryOther
+                  : ticket.category}
+              </span>
+              {needsOwnDescription(ticket.categoryCode) && ticket.categoryOther ? (
+                <span className="text-caption text-faint">{ticket.category}</span>
+              ) : null}
+            </span>
           </Row>
           <Row label={t("col.requester")}>
             <span className="font-medium text-ink">{ticket.requester}</span>
