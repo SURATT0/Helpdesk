@@ -500,6 +500,24 @@ const en: Dict = {
   "categories.codeLabel": "Code",
   "categories.codeHint":
     "This name has no letters or digits to build a code from, so give one. A code is what reports group by across customers — it stays the same if the name is later renamed or translated.",
+  // --- customers & their projects, on one screen ---------------------------
+  "adminCustomers.search": "Search customers",
+  "adminCustomers.choose": "Choose a customer to see its details and projects.",
+  "adminCustomers.back": "All customers",
+  "adminCustomers.loadError": "Couldn't load the customers.",
+  "adminCustomers.empty": "No customers yet.",
+  "adminCustomers.noMatch": "No customer matches “{q}”.",
+  "adminCustomers.notFound": "That customer is not in this list — it may have been archived.",
+  "adminCustomers.forbidden": "Not your page",
+  "adminCustomers.forbiddenNote":
+    "Creating and archiving tenants is kept to platform staff. The routing table is on the Projects page.",
+  "adminCustomers.projectCount": "{n} projects",
+  "adminCustomers.memberCount": "{n} members",
+  "adminCustomers.projects": "Projects",
+  "adminCustomers.noProjects": "No projects for this customer yet.",
+  "adminCustomers.count.projects": "Projects",
+  "adminCustomers.count.tickets": "Tickets",
+  "adminCustomers.count.users": "Users",
   "create.category": "Category",
   // The escape hatch, and the words that keep it from becoming a second
   // category list. The hint says what the text is FOR — it stays on this ticket
@@ -1517,6 +1535,24 @@ const th: Dict = {
   "categories.codeLabel": "รหัส",
   "categories.codeHint":
     "ชื่อนี้ไม่มีตัวอักษรภาษาอังกฤษหรือตัวเลขให้สร้างรหัสได้ กรุณาระบุรหัสเอง — รหัสคือสิ่งที่รายงานใช้จัดกลุ่มข้ามลูกค้า และจะไม่เปลี่ยนแม้ภายหลังจะเปลี่ยนชื่อหรือแปลเป็นภาษาอื่น",
+  // --- ลูกค้าและโปรเจกต์ในหน้าเดียว -----------------------------------------
+  "adminCustomers.search": "ค้นหาลูกค้า",
+  "adminCustomers.choose": "เลือกลูกค้าเพื่อดูรายละเอียดและโปรเจกต์",
+  "adminCustomers.back": "รายชื่อลูกค้าทั้งหมด",
+  "adminCustomers.loadError": "โหลดรายชื่อลูกค้าไม่สำเร็จ",
+  "adminCustomers.empty": "ยังไม่มีลูกค้า",
+  "adminCustomers.noMatch": "ไม่พบลูกค้าที่ตรงกับ “{q}”",
+  "adminCustomers.notFound": "ไม่พบลูกค้ารายนี้ในรายการ — อาจถูกเก็บเข้าคลังแล้ว",
+  "adminCustomers.forbidden": "ไม่ใช่หน้าของคุณ",
+  "adminCustomers.forbiddenNote":
+    "การสร้างและเก็บลูกค้าเข้าคลังจำกัดไว้เฉพาะทีมงานระดับแพลตฟอร์ม ส่วนตารางการกระจายงานอยู่ที่หน้าโปรเจกต์",
+  "adminCustomers.projectCount": "{n} โปรเจกต์",
+  "adminCustomers.memberCount": "สมาชิก {n} คน",
+  "adminCustomers.projects": "โปรเจกต์",
+  "adminCustomers.noProjects": "ลูกค้ารายนี้ยังไม่มีโปรเจกต์",
+  "adminCustomers.count.projects": "โปรเจกต์",
+  "adminCustomers.count.tickets": "Ticket",
+  "adminCustomers.count.users": "ผู้ใช้",
   "create.category": "หมวดหมู่",
   "create.categoryOther": "ปัญหาคืออะไร?",
   "create.categoryOtherPlaceholder": "อธิบายสิ่งที่เกิดขึ้นด้วยคำพูดของคุณเอง",

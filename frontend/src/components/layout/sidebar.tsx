@@ -53,17 +53,24 @@ const NAV: Array<{
   // the nav should read the same way the data nests. Same roles — the list is
   // open to anyone authenticated, but a requester has no use for a page of one
   // row they cannot act on.
+  // Customers and the projects under them, on one screen. Top tier only: this is
+  // where tenants are created, renamed and archived, which is a different thing
+  // from the routing table an agent reads.
   {
-    href: "/customers",
+    href: "/admin/customers",
     key: "nav.customers",
     icon: Building2,
-    roles: ["admin", "super_admin"],
+    roles: ["super_admin"],
   },
+  // The routing table, kept for an admin who may read it but not change it.
+  // Folding it into the screen above would have taken that away — an agent
+  // working cases needs to see where their queue's work comes from, which is
+  // why `project:read` reaches them in the first place.
   {
     href: "/projects",
     key: "nav.projects",
     icon: FolderKanban,
-    roles: ["admin", "super_admin"],
+    roles: ["admin"],
   },
   // Reviewing what people typed under "Other". Top tier only, mirroring the
   // server's `category:write` — and unlike the entries above it, the READ is
