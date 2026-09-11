@@ -910,6 +910,105 @@ const en: Dict = {
   "verify.failedHint":
     "Confirmation links expire and can only be used once. If yours has expired, sign up again or ask an administrator.",
   "verify.error": "Couldn't confirm the address.",
+
+  // --- what the API refused, in the reader's own words ---------------------
+  //
+  // The API answers with a CODE, never with copy — it is not told what language
+  // the reader has, so a sentence composed there arrives in English and sits in
+  // the middle of a Thai page. These are the sentences; `lib/api-error.ts` is
+  // the one place that picks one, and `api-error.test.ts` fails if a code the
+  // API can send has no line here or in th.
+  //
+  // Generic, for guards a working client should not trip. Vague on purpose:
+  // saying more about a state the product is not supposed to produce would be
+  // inventing detail.
+  "error.BAD_REQUEST": "Something was wrong with that request.",
+  "error.NOT_FOUND": "That is no longer there.",
+  "error.UNAUTHORIZED": "You need to sign in again.",
+  "error.FORBIDDEN": "You do not have permission to do that.",
+  "error.CONFLICT": "Something with those details already exists.",
+  "error.INTERNAL": "Something went wrong at our end. Try again.",
+  "error.NOT_IMPLEMENTED": "That is not available yet.",
+  "error.SERVICE_UNAVAILABLE": "That is switched off on this deployment.",
+  "error.VALIDATION_ERROR": "Check the highlighted fields and try again.",
+  "error.UPLOAD_ERROR": "That file could not be uploaded.",
+  "error.PAYLOAD_TOO_LARGE": "That is too large to send.",
+  "error.NETWORK_ERROR": "Cannot reach the server. Check your connection.",
+  "error.UNKNOWN": "Something went wrong. Try again.",
+
+  // Signing in. Each of these needs a different thing done about it, and only
+  // some of them are the reader's own to do — which is the whole reason they
+  // are separate codes rather than one refusal.
+  "error.INVALID_CREDENTIALS": "That email and password do not match.",
+  "error.ACCOUNT_DEACTIVATED":
+    "This account has been deactivated. Contact your administrator.",
+  "error.ACCOUNT_REJECTED":
+    "This registration was not approved. Contact your administrator.",
+  "error.ACCOUNT_SUSPENDED":
+    "This account has been suspended. Contact your administrator.",
+  "error.EMAIL_NOT_VERIFIED":
+    "Confirm your email address first — check your inbox for the confirmation link.",
+  "error.ACCOUNT_PENDING_APPROVAL":
+    "Your account is waiting for an administrator to approve it. You will be emailed when it is.",
+  "error.ACCOUNT_NOT_ACTIVE": "This account is not active.",
+
+  // Sessions and links.
+  "error.SESSION_EXPIRED": "Your session has ended. Sign in again.",
+  "error.SESSION_REUSED":
+    "For safety you have been signed out everywhere. Sign in again.",
+  "error.VERIFICATION_LINK_INVALID":
+    "This confirmation link is no longer valid. Request a new one.",
+  "error.RESET_LINK_INVALID":
+    "This reset link is no longer valid. Request a new one.",
+  "error.MISSING_PERMISSION": "Your role does not allow that ({permission}).",
+
+  // Tickets.
+  "error.ILLEGAL_TRANSITION": "A ticket cannot go from {from} to {to}.",
+  "error.CONCURRENT_STATUS_CHANGE":
+    "Somebody else moved this ticket to {actual} while you were working. Reload and choose again.",
+  "error.REOPEN_WINDOW_EXPIRED":
+    "This ticket was closed more than 30 days ago. Raise a new one instead.",
+  "error.NOT_YOUR_TICKET_TO_ANSWER":
+    "Only the person who raised a ticket can answer its closure.",
+  "error.TICKET_NOT_AWAITING_ANSWER":
+    "This ticket is {actual}, so there is nothing to confirm.",
+  "error.SAME_ASSIGNEE": "That is the same person the queue is already with.",
+  "error.NOT_ASSIGNABLE": "That person cannot be assigned tickets.",
+
+  // People, projects, customers.
+  "error.LAST_ADMIN":
+    "This is the last active super admin. Promote somebody else first.",
+  "error.USER_HAS_OPEN_QUEUE":
+    "This person still has {count} unfinished ticket(s). Hand the queue over first.",
+  "error.PROJECT_HAS_MEMBERS":
+    "{count} person(s) still route through this project. Move them first.",
+  "error.CUSTOMER_NOT_EMPTY":
+    "This customer still has {tickets} open ticket(s), {projects} project(s) and {users} user(s). Close or move them first.",
+  "error.CANNOT_DEACTIVATE_SELF": "You cannot deactivate your own account.",
+  "error.CANNOT_CHANGE_OWN_ACCESS":
+    "You cannot change your own customer access.",
+  "error.PLATFORM_STAFF_ONLY": "Only platform staff can do that.",
+  "error.CANNOT_OWN_PROJECT": "That person cannot own a project.",
+  "error.NOT_YOURS_TO_MANAGE": "You do not have permission to manage that.",
+
+  // Files.
+  "error.NO_FILE_UPLOADED": "Choose a file first.",
+  "error.UNSUPPORTED_FILE_TYPE": "Files of type {mimetype} cannot be attached.",
+  "error.NOT_AN_IMAGE": "That attachment is not an image.",
+  "error.ATTACHMENT_GONE": "That file is no longer in storage.",
+
+  // Comments.
+  "error.INTERNAL_NOTES_ARE_FOR_AGENTS":
+    "Only agents can add internal notes.",
+  "error.CANNOT_DELETE_COMMENT": "You cannot delete this message.",
+
+  // Other people's views.
+  "error.NOT_YOURS_TO_READ": "You can only see your own work here.",
+  "error.WORKLOAD_IS_STAFF_ONLY":
+    "Agent workload is visible to super admins only.",
+
+  // Integrations.
+  "error.SOURCE_NOT_CONFIGURED": "{label} is not configured on this deployment.",
 };
 
 const th: Dict = {
@@ -1784,6 +1883,84 @@ const th: Dict = {
   "verify.failedHint":
     "ลิงก์ยืนยันมีวันหมดอายุและใช้ได้ครั้งเดียว หากลิงก์หมดอายุแล้ว กรุณาสมัครใหม่หรือติดต่อผู้ดูแลระบบ",
   "verify.error": "ยืนยันอีเมลไม่สำเร็จ",
+
+  // --- what the API refused, in the reader's own words ---------------------
+  "error.BAD_REQUEST": "คำขอนี้มีบางอย่างไม่ถูกต้อง",
+  "error.NOT_FOUND": "ไม่พบรายการนี้แล้ว",
+  "error.UNAUTHORIZED": "กรุณาเข้าสู่ระบบอีกครั้ง",
+  "error.FORBIDDEN": "คุณไม่มีสิทธิ์ทำรายการนี้",
+  "error.CONFLICT": "มีรายการที่ใช้ข้อมูลนี้อยู่แล้ว",
+  "error.INTERNAL": "เกิดข้อผิดพลาดที่ระบบ กรุณาลองอีกครั้ง",
+  "error.NOT_IMPLEMENTED": "ยังไม่เปิดให้ใช้งาน",
+  "error.SERVICE_UNAVAILABLE": "ระบบนี้ถูกปิดไว้ในเซิร์ฟเวอร์นี้",
+  "error.VALIDATION_ERROR": "กรุณาตรวจสอบช่องที่ไฮไลต์ไว้แล้วลองใหม่",
+  "error.UPLOAD_ERROR": "อัปโหลดไฟล์นี้ไม่สำเร็จ",
+  "error.PAYLOAD_TOO_LARGE": "ข้อมูลมีขนาดใหญ่เกินกว่าที่ส่งได้",
+  "error.NETWORK_ERROR": "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อ",
+  "error.UNKNOWN": "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง",
+
+  "error.INVALID_CREDENTIALS": "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+  "error.ACCOUNT_DEACTIVATED":
+    "บัญชีนี้ถูกปิดการใช้งาน กรุณาติดต่อผู้ดูแลระบบ",
+  "error.ACCOUNT_REJECTED":
+    "การสมัครนี้ไม่ได้รับอนุมัติ กรุณาติดต่อผู้ดูแลระบบ",
+  "error.ACCOUNT_SUSPENDED": "บัญชีนี้ถูกระงับ กรุณาติดต่อผู้ดูแลระบบ",
+  "error.EMAIL_NOT_VERIFIED":
+    "กรุณายืนยันอีเมลก่อน — ตรวจสอบลิงก์ยืนยันในกล่องจดหมายของคุณ",
+  "error.ACCOUNT_PENDING_APPROVAL":
+    "บัญชีของคุณกำลังรอผู้ดูแลระบบอนุมัติ ระบบจะแจ้งทางอีเมลเมื่ออนุมัติแล้ว",
+  "error.ACCOUNT_NOT_ACTIVE": "บัญชีนี้ไม่ได้เปิดใช้งาน",
+
+  "error.SESSION_EXPIRED": "เซสชันหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง",
+  "error.SESSION_REUSED":
+    "เพื่อความปลอดภัย ระบบได้ออกจากการใช้งานในทุกอุปกรณ์แล้ว กรุณาเข้าสู่ระบบใหม่",
+  "error.VERIFICATION_LINK_INVALID":
+    "ลิงก์ยืนยันนี้ใช้งานไม่ได้แล้ว กรุณาขอลิงก์ใหม่",
+  "error.RESET_LINK_INVALID":
+    "ลิงก์ตั้งรหัสผ่านนี้ใช้งานไม่ได้แล้ว กรุณาขอลิงก์ใหม่",
+  "error.MISSING_PERMISSION": "สิทธิ์ของคุณไม่อนุญาตให้ทำรายการนี้ ({permission})",
+
+  "error.ILLEGAL_TRANSITION": "Ticket ไม่สามารถเปลี่ยนจาก {from} ไปเป็น {to} ได้",
+  "error.CONCURRENT_STATUS_CHANGE":
+    "มีคนอื่นเปลี่ยนสถานะ Ticket นี้เป็น {actual} ระหว่างที่คุณทำงานอยู่ กรุณารีเฟรชแล้วเลือกใหม่",
+  "error.REOPEN_WINDOW_EXPIRED":
+    "Ticket นี้ปิดไปนานกว่า 30 วันแล้ว กรุณาเปิด Ticket ใหม่แทน",
+  "error.NOT_YOUR_TICKET_TO_ANSWER":
+    "เฉพาะผู้แจ้ง Ticket เท่านั้นที่ยืนยันการปิดได้",
+  "error.TICKET_NOT_AWAITING_ANSWER":
+    "Ticket นี้อยู่ในสถานะ {actual} จึงไม่มีอะไรให้ยืนยัน",
+  "error.SAME_ASSIGNEE": "เป็นคนเดิมที่ถือคิวนี้อยู่แล้ว",
+  "error.NOT_ASSIGNABLE": "ไม่สามารถมอบหมาย Ticket ให้คนนี้ได้",
+
+  "error.LAST_ADMIN":
+    "นี่คือ super admin ที่ใช้งานอยู่คนสุดท้าย กรุณาแต่งตั้งคนอื่นก่อน",
+  "error.USER_HAS_OPEN_QUEUE":
+    "คนนี้ยังมี Ticket ค้างอยู่ {count} รายการ กรุณาโอนคิวก่อน",
+  "error.PROJECT_HAS_MEMBERS":
+    "ยังมีผู้ใช้ {count} คนที่ใช้โปรเจกต์นี้ในการกระจายงาน กรุณาย้ายออกก่อน",
+  "error.CUSTOMER_NOT_EMPTY":
+    "ลูกค้ารายนี้ยังมี Ticket ที่เปิดอยู่ {tickets} รายการ, โปรเจกต์ {projects} รายการ และผู้ใช้ {users} คน กรุณาปิดหรือย้ายก่อน",
+  "error.CANNOT_DEACTIVATE_SELF": "คุณไม่สามารถปิดบัญชีของตัวเองได้",
+  "error.CANNOT_CHANGE_OWN_ACCESS":
+    "คุณไม่สามารถแก้สิทธิ์การเข้าถึงลูกค้าของตัวเองได้",
+  "error.PLATFORM_STAFF_ONLY": "เฉพาะทีมงานระดับแพลตฟอร์มเท่านั้นที่ทำรายการนี้ได้",
+  "error.CANNOT_OWN_PROJECT": "คนนี้ไม่สามารถเป็นเจ้าของโปรเจกต์ได้",
+  "error.NOT_YOURS_TO_MANAGE": "คุณไม่มีสิทธิ์จัดการรายการนี้",
+
+  "error.NO_FILE_UPLOADED": "กรุณาเลือกไฟล์ก่อน",
+  "error.UNSUPPORTED_FILE_TYPE": "ไม่รองรับไฟล์ประเภท {mimetype}",
+  "error.NOT_AN_IMAGE": "ไฟล์แนบนี้ไม่ใช่รูปภาพ",
+  "error.ATTACHMENT_GONE": "ไฟล์นี้ไม่อยู่ในระบบจัดเก็บแล้ว",
+
+  "error.INTERNAL_NOTES_ARE_FOR_AGENTS":
+    "เฉพาะเจ้าหน้าที่เท่านั้นที่เพิ่มบันทึกภายในได้",
+  "error.CANNOT_DELETE_COMMENT": "คุณไม่สามารถลบข้อความนี้ได้",
+
+  "error.NOT_YOURS_TO_READ": "คุณดูได้เฉพาะงานของตัวเองเท่านั้น",
+  "error.WORKLOAD_IS_STAFF_ONLY":
+    "ปริมาณงานแยกตามเจ้าหน้าที่ดูได้เฉพาะ super admin",
+
+  "error.SOURCE_NOT_CONFIGURED": "{label} ยังไม่ได้ตั้งค่าในเซิร์ฟเวอร์นี้",
 };
 
 export const dictionaries: Record<Lang, Dict> = { en, th };
