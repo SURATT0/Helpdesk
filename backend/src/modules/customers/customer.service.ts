@@ -1,4 +1,4 @@
-import { hasPermission, type AuthUser } from "../../shared/auth";
+import { hasPermission, isPlatformWide, type AuthUser } from "../../shared/auth";
 import {
   BadRequest,
   CustomerNotEmpty,
@@ -49,9 +49,44 @@ function assertMayManage(actor: AuthUser): void {
   }
 }
 
-/** Gate an archive, recording the refusal against the customer it named. */
+/**
+ * Bringing a tenant into existence, or ending one, is platform work — so it asks
+ * for platform reach on top of the permission.
+ *
+ * Reach is not a nicety here, it is what makes the answer honest. A customer is
+ * created outside everybody's reach by definition: nothing grants the creator
+ * access to it, because `mayGrantReach` is platform-wide only and deliberately
+ * stricter than the permission to create (otherwise anyone could make a tenant
+ * and walk into it unreviewed). So a creator who is not platform-wide got a 201
+ * for a row they could not then list, open or rename — and the screen, which
+ * sends you to the new customer's page, landed them on a 404 one heartbeat after
+ * being told it worked. Every retry left another orphan tenant behind.
+ *
+ * Refusing up front is the truthful version of the same rule: a caller who could
+ * not see the result is told so instead of being handed one they cannot have.
+ *
+ * This narrows `customer:write` — an `admin` holds it and is never platform-wide,
+ * so an admin no longer creates tenants. That is the same trade: what they got
+ * before was an invisible row somebody else had to find and tidy up.
+ */
+function assertMayManagePlatform(actor: AuthUser): void {
+  assertMayManage(actor);
+  if (!isPlatformWide(actor)) {
+    throw NotYoursToManage("customers");
+  }
+}
+
+/**
+ * Gate an archive, recording the refusal against the customer it named.
+ *
+ * Platform reach as well as the permission, for the same reason `create` asks
+ * for it: ending a tenant is platform work. Row scope already stops a
+ * tenant-scoped super admin reaching a customer that is not theirs — the impact
+ * read is scoped and answers 404 — so what this adds is the one case scope would
+ * have allowed, somebody archiving the company they themselves belong to.
+ */
 function assertMayArchive(actor: AuthUser, customerId?: number): void {
-  if (hasPermission(actor, CUSTOMER_ARCHIVE)) return;
+  if (hasPermission(actor, CUSTOMER_ARCHIVE) && isPlatformWide(actor)) return;
   if (customerId != null) {
     // Fire-and-forget: the refusal is the answer, and failing to write the
     // trail must not turn a clean 403 into a 500. Same shape as the project
@@ -62,7 +97,11 @@ function assertMayArchive(actor: AuthUser, customerId?: number): void {
         action: "customer.archive_denied",
         entity: "customer",
         entityId: customerId,
-        meta: { actorRole: actor.role, permission: CUSTOMER_ARCHIVE },
+        meta: {
+          actorRole: actor.role,
+          permission: CUSTOMER_ARCHIVE,
+          platformWide: isPlatformWide(actor),
+        },
       })
       .catch(() => {});
   }
@@ -87,7 +126,7 @@ export const customerService = {
   },
 
   async create(name: string, actor: AuthUser): Promise<CustomerDto> {
-    assertMayManage(actor);
+    assertMayManagePlatform(actor);
     const trimmed = name.trim();
 
     // Checked before the insert so the answer can say WHICH kind of collision it
@@ -155,17 +194,15 @@ export const customerService = {
       throw CustomerNotEmpty(impact);
     }
 
-    // False means the guarded write found something live after all — someone
-    // raised a ticket between the count and the update. Reported as the same
-    // 409, because it is the same situation and the caller's next step is the same.
+    // A refusal here means the guarded re-count inside the transaction found
+    // something the read above did not — somebody raised a ticket, or added a
+    // project, in between. Reported as the same 409 with the numbers THAT
+    // transaction saw, not the ones from before it: the previous version passed
+    // `max(impact.tickets, 1)` so the message would have something to name, and
+    // on a tenant with no tickets at all it said there was one.
     const archived = await customerRepository.archive(id, actor);
-    if (!archived) {
-      throw CustomerNotEmpty({
-        projects: impact.projects,
-        tickets: Math.max(impact.tickets, 1),
-        users: impact.users,
-        categories: impact.categories,
-      });
+    if (!archived.ok) {
+      throw CustomerNotEmpty(archived.blocking);
     }
   },
 };

@@ -10,7 +10,10 @@ import { loginAs } from "./helpers";
  * own commits and gets its own cases.
  */
 
+/** Platform-wide: the top role AND no customer of their own. */
 const SUPER_ADMIN = "sam.rivera@acme.com";
+/** The top role, but scoped to Acme — which is a different thing, see below. */
+const TENANT_SUPER_ADMIN = "morgan.lee@acme.com";
 const AGENT = "dana.reyes@acme.com";
 const PHONE = { width: 375, height: 720 };
 
@@ -148,6 +151,23 @@ test.describe("who may open it", () => {
       ).first(),
     ).toBeVisible();
   });
+
+  test("a super admin who belongs to a customer is refused too, and is not offered the link", async ({
+    page,
+  }) => {
+    // Role and reach are separate axes. Morgan holds the top role and every
+    // permission with it, and is still scoped to Acme — so a tenant they created
+    // would land outside their own reach: a 201 followed by a 404 on the page
+    // this screen sends them to, and an orphan tenant per attempt.
+    await loginAs(page, TENANT_SUPER_ADMIN);
+
+    await expect(
+      page.getByRole("navigation").getByRole("link", { name: "Customers" }),
+    ).toHaveCount(0);
+
+    await page.goto("/admin/customers");
+    await expect(page.getByText("Not your page")).toBeVisible();
+  });
 });
 
 test.describe("managing customers", () => {
@@ -228,24 +248,26 @@ test.describe("managing customers", () => {
     // endpoint — the same figures the guard refuses on — so the dialog cannot
     // promise an archive the API then declines.
     await expect(dialog).toContainText(/\d+/);
-    // Categories are counted too, and are the line that never reaches zero: a
-    // customer is created with the starter set and nothing removes one. The
-    // dialog names the number rather than leaving a dead end unexplained.
-    await expect(dialog).toContainText(/categor/i);
+    // And it refuses on the things somebody can actually go and deal with.
+    // Categories are not one of them — nothing in the product removes a category
+    // — so naming one here would be sending the reader nowhere.
+    await expect(dialog).not.toContainText(/categor/i);
 
     const confirm = dialog.getByRole("button", { name: "Archive", exact: true });
     await expect(confirm).toBeDisabled();
   });
 
-  test("an empty new customer still cannot be archived, because of its categories", async ({
+  test("an empty new customer archives, starter categories and all", async ({
     page,
   }) => {
-    // The consequence of counting them, seen from the screen: a tenant with no
-    // work at all is still blocked, and the dialog says by what.
+    // The regression this replaced: every customer is created with the starter
+    // categories, the guard counted them, and nothing in the product removes
+    // one — so no tenant the app had ever made could be archived. A brand-new
+    // one is the case that proves the rule, because it has nothing else.
     await loginAs(page, SUPER_ADMIN);
     await page.goto("/admin/customers");
 
-    const name = `Blocked By Categories ${Date.now()}`;
+    const name = `Archivable ${Date.now()}`;
     await page.getByRole("button", { name: "Add customer" }).click();
     await page.getByLabel("Company name").fill(name);
     await page
@@ -256,10 +278,19 @@ test.describe("managing customers", () => {
 
     await page.getByRole("button", { name: "Archive", exact: true }).click();
     const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // Told what comes along rather than what is in the way — the categories are
+    // mentioned, but as a consequence of archiving, not a blocker.
     await expect(dialog).toContainText(/categor/i);
-    await expect(
-      dialog.getByRole("button", { name: "Archive", exact: true }),
-    ).toBeDisabled();
+
+    const confirm = dialog.getByRole("button", { name: "Archive", exact: true });
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+
+    // Gone from the list it was in a moment ago.
+    await expect(page.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveCount(
+      0,
+    );
   });
 });
 

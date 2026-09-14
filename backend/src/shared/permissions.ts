@@ -71,8 +71,21 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "project:read", group: "structure", description: "See the routing table" },
   { key: "project:write", group: "structure", description: "Change who owns a routing project" },
   { key: "project:delete", group: "structure", description: "Delete a routing project" },
-  { key: "customer:write", group: "structure", description: "Create and rename customers" },
-  { key: "customer:archive", group: "structure", description: "Archive a customer" },
+  // Both also require platform reach, which no permission string can express:
+  // creating a tenant puts it outside every reach, so a creator who is not
+  // platform-wide cannot see what they made. Granting it to a role that always
+  // belongs to a customer therefore grants nothing usable — the description says
+  // so, because the matrix is editable and this is not obvious from the key.
+  {
+    key: "customer:write",
+    group: "structure",
+    description: "Create and rename customers (also needs platform-wide reach)",
+  },
+  {
+    key: "customer:archive",
+    group: "structure",
+    description: "Archive a customer (also needs platform-wide reach)",
+  },
   { key: "category:write", group: "structure", description: "Add categories, and promote what people typed under Other" },
 
   // --- Administering the desk ----------------------------------------------

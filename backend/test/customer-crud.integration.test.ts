@@ -32,50 +32,54 @@ beforeEach(async () => {
   await prisma.customer.deleteMany({ where: { name: { startsWith: "CRUD probe" } } });
 });
 
-/**
- * Strip a tenant's categories so it can be archived at all.
- *
- * Not a step anybody can take in the product: nothing removes a category, and a
- * customer is created with the starter set, so a tenant that still has them can
- * never be archived. That is the agreed behaviour rather than a gap these tests
- * are working around — and doing it here in raw Prisma is what keeps that
- * visible. When a real removal path exists, these two lines become a call to it.
- */
-async function stripCategories(customerId: number): Promise<void> {
-  await prisma.category.deleteMany({ where: { customerId } });
-}
-
 describe("creating a customer", () => {
-  it("is open to an admin", async () => {
-    // As agreed: `admin` and above. Deliberately wider than granting reach,
-    // and safe because it confers none — an admin who creates a tenant cannot
-    // see into it and cannot grant themselves the reach to.
-    const res = await create(await login(ACME_ADMIN), "CRUD probe — Initech");
+  it("puts the new tenant in its creator's own list, at once", async () => {
+    const platform = await login(PLATFORM);
+    const res = await create(platform, "CRUD probe — Initech");
     expect(res.status).toBe(201);
     expect(res.body.data.name).toBe("CRUD probe — Initech");
     // Empty of work, but NOT of categories: a customer is created with the
     // starter set in the same transaction, which is what makes its ticket form
-    // usable on day one — and, since categories are counted, what stops it being
-    // archived until somebody can remove them.
+    // usable on day one. Reported, and — since they no longer block an archive —
+    // reported as context rather than as an obstacle.
     expect(res.body.data.counts).toEqual({
       projects: 0,
       tickets: 0,
       users: 0,
       categories: STARTER_CATEGORY_NAMES.length,
     });
+
+    // The half that used to be missing. A 201 for a row the caller cannot then
+    // see is not a create, it is a trap: the screen sends them to the new
+    // customer's page and the page answers 404.
+    const list = await request(app).get(`${API}/customers`).set(bearer(platform));
+    const names = (list.body.data as { name: string }[]).map((c) => c.name);
+    expect(names).toContain("CRUD probe — Initech");
   });
 
-  it("does not let the creator see into it", async () => {
-    // The reason creating is safe at admin level. Reach is a separate axis, so
-    // the new tenant does not appear in their own list.
-    const dana = await login(ACME_ADMIN);
-    const created = await create(dana, "CRUD probe — Unreachable");
-    expect(created.status).toBe(201);
+  it("is refused to an admin, who cannot see what they would make", async () => {
+    // `customer:write` is not enough on its own any more. An admin is never
+    // platform-wide, and nothing grants a creator reach into what they created
+    // (`mayGrantReach` is platform-wide only, deliberately stricter than
+    // creating) — so an admin's tenant landed outside everybody's reach and
+    // somebody else had to go and find it. A 403 says that up front.
+    const res = await create(await login(ACME_ADMIN), "CRUD probe — Initech");
+    expect(res.status).toBe(403);
+  });
 
-    const list = await request(app).get(`${API}/customers`).set(bearer(dana));
-    const names = (list.body.data as { name: string }[]).map((c) => c.name);
-    expect(names).not.toContain("CRUD probe — Unreachable");
-    expect(names).toEqual(["Acme Corp"]);
+  it("is refused to a super admin who belongs to a customer", async () => {
+    // The reported bug, pinned. Role and reach are separate axes: Morgan holds
+    // the top role and every permission with it, and is still scoped to Acme, so
+    // a tenant they create is one they cannot list, open or rename.
+    const morgan = await login(ACME_SUPER);
+    const res = await create(morgan, "CRUD probe — Scoped");
+    expect(res.status).toBe(403);
+
+    // And nothing was written on the way to the refusal.
+    const row = await prisma.customer.findFirst({
+      where: { name: "CRUD probe — Scoped" },
+    });
+    expect(row).toBeNull();
   });
 
   it("is refused to a requester", async () => {
@@ -84,7 +88,7 @@ describe("creating a customer", () => {
   });
 
   it("refuses a name already taken", async () => {
-    const res = await create(await login(ACME_ADMIN), "Acme Corp");
+    const res = await create(await login(PLATFORM), "Acme Corp");
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain("already called");
   });
@@ -107,9 +111,7 @@ describe("creating a customer", () => {
 });
 
 describe("archiving a customer", () => {
-  it("is refused to an admin, who may create one", async () => {
-    // The asymmetry, on purpose: a mistaken create leaves an empty row nobody
-    // has to care about; an archive removes a company from every picker.
+  it("is refused to an admin", async () => {
     const acme = await prisma.customer.findFirstOrThrow({
       where: { name: "Acme Corp" },
     });
@@ -117,6 +119,22 @@ describe("archiving a customer", () => {
       .delete(`${API}/customers/${acme.id}`)
       .set(bearer(await login(ACME_ADMIN)));
     expect(res.status).toBe(403);
+  });
+
+  it("is refused to a super admin archiving their OWN customer", async () => {
+    // Row scope would have allowed this one — Acme is inside Morgan's reach —
+    // so the platform check is what stops it. Ending a tenant is platform work,
+    // and the company you belong to is the last one you should be able to end.
+    const acme = await prisma.customer.findFirstOrThrow({
+      where: { name: "Acme Corp" },
+    });
+    const res = await request(app)
+      .delete(`${API}/customers/${acme.id}`)
+      .set(bearer(await login(ACME_SUPER)));
+    expect(res.status).toBe(403);
+
+    const after = await prisma.customer.findUniqueOrThrow({ where: { id: acme.id } });
+    expect(after.deletedAt).toBeNull();
   });
 
   it("refuses while the tenant still carries work, naming what and how much", async () => {
@@ -143,7 +161,6 @@ describe("archiving a customer", () => {
     const before = await request(app).get(`${API}/customers`).set(bearer(platform));
     expect((before.body.data as { id: number }[]).map((c) => c.id)).toContain(id);
 
-    await stripCategories(id);
     const archived = await request(app)
       .delete(`${API}/customers/${id}`)
       .set(bearer(platform));
@@ -184,21 +201,28 @@ describe("archiving a customer", () => {
       },
     });
 
-    // The ticket has to go before the categories it points at.
-    await prisma.ticket.deleteMany({ where: { customerId: id } });
-    await stripCategories(id);
-
+    // The closed ticket STAYS, and so do the categories it points at. That is
+    // the case worth pinning: a soft delete leaves every row and every foreign
+    // key where it is, so there is nothing to tidy first.
     const res = await request(app)
       .delete(`${API}/customers/${id}`)
       .set(bearer(platform));
     expect(res.status).toBe(204);
+
+    const ticketStillThere = await prisma.ticket.count({ where: { customerId: id } });
+    expect(ticketStillThere).toBe(1);
+    const categoriesStillThere = await prisma.category.count({
+      where: { customerId: id },
+    });
+    expect(categoriesStillThere).toBe(STARTER_CATEGORY_NAMES.length);
   });
 
-  it("refuses while the tenant still has categories, and says how many", async () => {
-    // The agreed consequence of counting them, pinned so it cannot be softened
-    // by accident: a customer is created with the starter set, nothing in the
-    // product removes a category, so a brand-new tenant with no work at all
-    // still cannot be archived.
+  it("archives a brand-new tenant, starter categories and all", async () => {
+    // The regression this replaced: categories were counted by the guard, every
+    // customer is created with the starter set, and nothing in the product
+    // removes one — so no tenant the app had ever made could be archived. The
+    // count is still reported, because the dialog is a fair place to say what is
+    // coming along; it is simply not in the way.
     const platform = await login(PLATFORM);
     const made = await create(platform, "CRUD probe — Categorised");
     const id = made.body.data.id as number;
@@ -214,32 +238,34 @@ describe("archiving a customer", () => {
       categories: STARTER_CATEGORY_NAMES.length,
     });
 
-    const refused = await request(app)
-      .delete(`${API}/customers/${id}`)
-      .set(bearer(platform));
-    expect(refused.status).toBe(409);
-    // The number, not just a refusal — it is the only thing that tells a reader
-    // why an apparently empty tenant will not archive.
-    expect(refused.body.error.message).toContain(
-      String(STARTER_CATEGORY_NAMES.length),
-    );
-    expect(refused.body.error.message).toMatch(/categor/i);
-
-    // Still live.
-    const row = await prisma.customer.findUniqueOrThrow({ where: { id } });
-    expect(row.deletedAt).toBeNull();
-  });
-
-  it("archives once the categories are gone, which is the only way through", async () => {
-    const platform = await login(PLATFORM);
-    const made = await create(platform, "CRUD probe — Decategorised");
-    const id = made.body.data.id as number;
-
-    await stripCategories(id);
     await request(app)
       .delete(`${API}/customers/${id}`)
       .set(bearer(platform))
       .expect(204);
+
+    const row = await prisma.customer.findUniqueOrThrow({ where: { id } });
+    expect(row.deletedAt).not.toBeNull();
+    // Archived, not emptied — the categories are still owned by the row.
+    expect(
+      await prisma.category.count({ where: { customerId: id } }),
+    ).toBe(STARTER_CATEGORY_NAMES.length);
+  });
+
+  it("never blames categories when it does refuse", async () => {
+    // A refusal names what a person can actually act on. Acme has real work, so
+    // this one is refused for tickets — and must not mention the categories it
+    // also has, because nothing in the product can remove them and sending
+    // somebody after them is sending them nowhere.
+    const acme = await prisma.customer.findFirstOrThrow({
+      where: { name: "Acme Corp" },
+    });
+    const res = await request(app)
+      .delete(`${API}/customers/${acme.id}`)
+      .set(bearer(await login(PLATFORM)));
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).not.toMatch(/categor/i);
+    // Still carried in the details, for the dialog to show alongside.
+    expect(res.body.error.details.categories).toBeGreaterThan(0);
   });
 
   it("shows the dialog the same numbers the guard refuses on", async () => {
