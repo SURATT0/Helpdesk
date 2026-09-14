@@ -62,15 +62,22 @@ const NAV: Array<{
     icon: Building2,
     roles: ["super_admin"],
   },
-  // The routing table, kept for an admin who may read it but not change it.
-  // Folding it into the screen above would have taken that away — an agent
-  // working cases needs to see where their queue's work comes from, which is
-  // why `project:read` reaches them in the first place.
+  // The routing table, kept for everyone `project:read` reaches. Folding it into
+  // the screen above would have taken it away from an agent working cases, who
+  // needs to see where their queue's work comes from.
+  //
+  // `super_admin` belongs here too, and leaving it off was a bug: the entry
+  // above is NOT the same page for everyone holding that role. Role and reach
+  // are separate axes — a super_admin who belongs to a customer stays inside it
+  // — so a tenant's own super_admin got the tenant-management screen in place of
+  // the routing table and lost the routing table altogether. The top tier sees
+  // both entries, which is the truth: one is where tenants are made, the other
+  // is where a customer's work is routed.
   {
     href: "/projects",
     key: "nav.projects",
     icon: FolderKanban,
-    roles: ["admin"],
+    roles: ["admin", "super_admin"],
   },
   // Reviewing what people typed under "Other". Top tier only, mirroring the
   // server's `category:write` — and unlike the entries above it, the READ is
