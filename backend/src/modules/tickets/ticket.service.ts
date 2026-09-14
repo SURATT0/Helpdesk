@@ -711,7 +711,7 @@ export const ticketService = {
       if (customerId == null) return [];
       const cached = escalationByCustomer.get(customerId);
       if (cached) return cached;
-      const ids = await ticketRepository.findCustomerSuperAdminIds(customerId);
+      const ids = await ticketRepository.findCustomerEscalationIds(customerId);
       escalationByCustomer.set(customerId, ids);
       return ids;
     };

@@ -604,22 +604,36 @@ export const ticketRepository = {
   },
 
   /**
-   * The super admins belonging to one customer — the fallback recipients for an
-   * unassigned ticket's SLA alert, since there is no assignee to tell.
+   * Who to tell when an UNASSIGNED ticket breaches its SLA — the case with no
+   * assignee to notify, and the one where a breach otherwise goes unnoticed.
    *
-   * Requiring a `customerId` is what keeps platform-wide super admins out: they
-   * span every customer and would drown in every tenant's noise. That is also why
-   * a null argument returns nobody rather than everybody.
+   * The customer's own staff, in order of seniority: its super admins if it has
+   * any, otherwise its admins. The second half is not a nicety. This used to ask
+   * for `role: super_admin` alone and a tenant with none — which is now every
+   * tenant, since super admins belong to no customer any more — got an empty
+   * list, so the alert was raised and sent to nobody. Silently: there is no
+   * error in a sweep that finds no recipients.
+   *
+   * Seniority rather than everyone at once, because an alert that reaches the
+   * whole desk every time stops being an alert. The admins are the fallback, not
+   * the default.
+   *
+   * Requiring a `customerId` is what keeps platform-wide staff out: they span
+   * every customer and would drown in every tenant's noise. That is also why a
+   * null argument returns nobody rather than everybody.
    */
-  async findCustomerSuperAdminIds(
+  async findCustomerEscalationIds(
     customerId: number | null,
   ): Promise<number[]> {
     if (customerId == null) return [];
-    const rows = await prisma.user.findMany({
-      where: { role: "super_admin", customerId },
-      select: { id: true },
-    });
-    return rows.map((r) => r.id);
+    for (const role of ["super_admin", "admin"] as const) {
+      const rows = await prisma.user.findMany({
+        where: { role, customerId },
+        select: { id: true },
+      });
+      if (rows.length > 0) return rows.map((r) => r.id);
+    }
+    return [];
   },
 
   async findById(id: number, user: AuthUser): Promise<Ticket | null> {
