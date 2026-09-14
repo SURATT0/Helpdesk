@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 const app = createApp();
 const API = "/api/v1";
@@ -9,7 +9,8 @@ const API = "/api/v1";
 // Seeded principals, chosen for what each one is rather than who:
 const PLATFORM = "sam.rivera@acme.com"; // super_admin, no customer → platform-wide
 const ACME_ADMIN = "dana.reyes@acme.com"; // admin, Acme — the one being granted
-const ACME_SUPER = "morgan.lee@acme.com"; // super_admin WITH a customer
+// A super admin WITH a customer is no longer a seeded shape — every seeded one
+// is platform-wide now — so the suite makes its own. See `tenantSuperAdmin`.
 const GLOBEX_USER = "priya.shah@acme.com"; // role `user`, Globex
 const PASSWORD = "password123";
 
@@ -221,8 +222,8 @@ describe("granting reach is platform-wide only", () => {
   it("refuses a customer's own super admin", async () => {
     // Top role, but a tenant of their own — reach, not the role name, is what
     // decides this, exactly as it decides granting the super_admin role.
-    const morgan = await login(ACME_SUPER);
-    const res = await grant(morgan, await userId("kai.t@acme.com"), [
+    const confined = await tenantSuperAdmin("Acme Corp");
+    const res = await grant(await login(confined.email), await userId("kai.t@acme.com"), [
       await customerId("Globex Inc"),
     ]);
     expect(res.status).toBe(403);

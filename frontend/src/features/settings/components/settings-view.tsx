@@ -228,7 +228,14 @@ export function SettingsView() {
           only to whoever may change it — the top tier, matching the server's
           `settings:write`. WHICH tenant's policy they get is decided server-side
           on their customerId, not here. */}
-      <NotificationsPanel canManage={user.role === "super_admin"} />
+      {/* `needsCustomer` is reach, not role: a policy belongs to one tenant, and
+          the API reads which off the caller — unless they belong to none, in
+          which case it asks. Every super admin belongs to none now, so this is
+          how the panel learns whose settings it is editing. */}
+      <NotificationsPanel
+        canManage={user.role === "super_admin"}
+        needsCustomer={user.platformWide === true}
+      />
 
       {/* Integrations — external ticket sources (import-capable roles only) */}
       {CAN_INTEGRATE.has(user.role) ? <IntegrationsPanel /> : null}

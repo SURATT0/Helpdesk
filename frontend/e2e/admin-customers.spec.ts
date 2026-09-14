@@ -12,8 +12,6 @@ import { loginAs } from "./helpers";
 
 /** Platform-wide: the top role AND no customer of their own. */
 const SUPER_ADMIN = "sam.rivera@acme.com";
-/** The top role, but scoped to Acme — which is a different thing, see below. */
-const TENANT_SUPER_ADMIN = "morgan.lee@acme.com";
 const AGENT = "dana.reyes@acme.com";
 const PHONE = { width: 375, height: 720 };
 
@@ -152,22 +150,18 @@ test.describe("who may open it", () => {
     ).toBeVisible();
   });
 
-  test("a super admin who belongs to a customer is refused too, and is not offered the link", async ({
-    page,
-  }) => {
-    // Role and reach are separate axes. Morgan holds the top role and every
-    // permission with it, and is still scoped to Acme — so a tenant they created
-    // would land outside their own reach: a 201 followed by a 404 on the page
-    // this screen sends them to, and an orphan tenant per attempt.
-    await loginAs(page, TENANT_SUPER_ADMIN);
-
-    await expect(
-      page.getByRole("navigation").getByRole("link", { name: "Customers" }),
-    ).toHaveCount(0);
-
-    await page.goto("/admin/customers");
-    await expect(page.getByText("Not your page")).toBeVisible();
-  });
+  /*
+   * A super admin who BELONGS to a customer is refused this screen too — role
+   * and reach are separate axes, and a tenant they created would land outside
+   * their own reach.
+   *
+   * That case lives in customer-crud.integration.test.ts now, not here. No
+   * seeded account has that shape any more, and the only way to make one through
+   * the product is to register an account and approve it into a tenant, which
+   * drags email verification into a test about a navigation link. The integration
+   * suite builds the user directly and asserts the same refusal on the API that
+   * this screen is a window onto.
+   */
 });
 
 test.describe("managing customers", () => {

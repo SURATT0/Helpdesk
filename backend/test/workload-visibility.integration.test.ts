@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 /**
  * Who may see how much work someone else is carrying.
@@ -54,7 +54,7 @@ function allKeys(value: unknown, into = new Set<string>()): Set<string> {
 }
 
 const AGENT = "dana.reyes@acme.com"; // admin — what the UI calls an agent
-const SUPERUSER = "morgan.lee@acme.com"; // super_admin inside Acme
+const SUPERUSER = "morgan.lee@acme.com"; // super_admin, platform-wide like every seeded one
 const PLATFORM = "sam.rivera@acme.com"; // super_admin, no customer of their own
 const REQUESTER = "marcus.chen@acme.com"; // user
 const OTHER_AGENT = "ana.m@acme.com";
@@ -114,8 +114,13 @@ describe("GET /reports/workload/agents — the comparison table", () => {
 
   it("keeps a customer's super admin inside their own tenant", async () => {
     // The gate is the role; row scope is still what decides WHOSE numbers those
-    // are. Morgan runs Acme's desk, so Globex staff must not appear in it.
-    const token = await login(SUPERUSER);
+    // are. This one runs Acme's desk, so Globex staff must not appear in it.
+    //
+    // Built here rather than taken from the seed: every seeded super admin is
+    // platform-wide now, and a platform-wide one is the opposite of the case
+    // under test — it would pass by reaching everybody.
+    const confined = await tenantSuperAdmin("Acme Corp");
+    const token = await login(confined.email);
     const res = await request(app)
       .get(`${API}/reports/workload/agents`)
       .set(bearer(token));
@@ -123,7 +128,6 @@ describe("GET /reports/workload/agents — the comparison table", () => {
     expect(res.status).toBe(200);
     const names: string[] = res.body.data.map((r: { agent: string }) => r.agent);
     expect(names).not.toContain("Owen Park"); // Globex
-    expect(names).not.toContain("Nadia Kofi"); // Globex
 
     // And the platform-wide super admin, who has no customer, does reach across.
     const platform = await login(PLATFORM);

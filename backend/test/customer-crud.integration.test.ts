@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { STARTER_CATEGORY_NAMES } from "../src/modules/categories/category.code";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 const app = createApp();
 const API = "/api/v1";
 
 const PLATFORM = "sam.rivera@acme.com"; // super_admin, no customer
-const ACME_SUPER = "morgan.lee@acme.com"; // super_admin WITH a customer
+// A super admin WITH a customer is no longer a seeded shape — every seeded one
+// is platform-wide — so the cases that need one build it. See `tenantSuperAdmin`.
 const ACME_ADMIN = "dana.reyes@acme.com"; // admin
 const ACME_USER = "marcus.chen@acme.com"; // requester
 
@@ -68,11 +69,11 @@ describe("creating a customer", () => {
   });
 
   it("is refused to a super admin who belongs to a customer", async () => {
-    // The reported bug, pinned. Role and reach are separate axes: Morgan holds
+    // The reported bug, pinned. Role and reach are separate axes: this one holds
     // the top role and every permission with it, and is still scoped to Acme, so
     // a tenant they create is one they cannot list, open or rename.
-    const morgan = await login(ACME_SUPER);
-    const res = await create(morgan, "CRUD probe — Scoped");
+    const confined = await tenantSuperAdmin("Acme Corp");
+    const res = await create(await login(confined.email), "CRUD probe — Scoped");
     expect(res.status).toBe(403);
 
     // And nothing was written on the way to the refusal.
@@ -128,9 +129,10 @@ describe("archiving a customer", () => {
     const acme = await prisma.customer.findFirstOrThrow({
       where: { name: "Acme Corp" },
     });
+    const confined = await tenantSuperAdmin("Acme Corp");
     const res = await request(app)
       .delete(`${API}/customers/${acme.id}`)
-      .set(bearer(await login(ACME_SUPER)));
+      .set(bearer(await login(confined.email)));
     expect(res.status).toBe(403);
 
     const after = await prisma.customer.findUniqueOrThrow({ where: { id: acme.id } });
@@ -301,9 +303,10 @@ describe("renaming a customer", () => {
     const globex = await prisma.customer.findFirstOrThrow({
       where: { name: "Globex Inc" },
     });
+    const confined = await tenantSuperAdmin("Acme Corp");
     const res = await request(app)
       .patch(`${API}/customers/${globex.id}`)
-      .set(bearer(await login(ACME_SUPER)))
+      .set(bearer(await login(confined.email)))
       .send({ name: "CRUD probe — hijacked" });
     // 404 rather than 403: a tenant they cannot reach must not be confirmed to exist.
     expect(res.status).toBe(404);

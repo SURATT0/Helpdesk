@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
+import { useCustomers } from "@/features/customers/queries";
 import { toMinutes } from "../api";
 import {
   useNotificationSettings,
@@ -24,11 +25,46 @@ import {
  * than a copy kept here: an event added to the catalogue should appear on this
  * screen without a frontend change, and a bound should be enforced in one place.
  */
-export function NotificationsPanel({ canManage }: { canManage: boolean }) {
+export function NotificationsPanel({
+  canManage,
+  /**
+   * True when the reader belongs to no customer of their own.
+   *
+   * A policy is one tenant's, and the API reads the tenant off the caller —
+   * except for platform staff, who have none, so it asks them which and answers
+   * 400 if nobody says. Every super admin is platform staff now, which made this
+   * panel unusable for everybody: it sent no customer, and there was no longer
+   * anyone whose own tenant could be assumed. So they choose, here.
+   *
+   * Deliberately a choice and not a default. Quietly picking the first customer
+   * would be one company's settings being edited from a screen that never said
+   * whose they were.
+   */
+  needsCustomer,
+}: {
+  canManage: boolean;
+  needsCustomer: boolean;
+}) {
   const { t } = useI18n();
-  const { data, isLoading, isError } = useNotificationSettings(canManage);
-  const save = useSaveNotificationSettings();
-  const reset = useResetNotificationSettings();
+  const customers = useCustomers({ enabled: canManage && needsCustomer });
+  const [customerId, setCustomerId] = React.useState<number | null>(null);
+
+  // With exactly one tenant there is nothing to choose, so the picker answers
+  // itself rather than making somebody confirm the only option.
+  const options = customers.data ?? [];
+  React.useEffect(() => {
+    if (customerId == null && options.length === 1) setCustomerId(options[0].id);
+  }, [options, customerId]);
+
+  const chosen = needsCustomer ? (customerId ?? undefined) : undefined;
+  const ready = !needsCustomer || chosen != null;
+
+  const { data, isLoading, isError } = useNotificationSettings(
+    canManage && ready,
+    chosen,
+  );
+  const save = useSaveNotificationSettings(chosen);
+  const reset = useResetNotificationSettings(chosen);
 
   // Draft state, seeded from the server once it arrives. Held apart from the
   // query so typing does not fight a refetch.
@@ -52,6 +88,44 @@ export function NotificationsPanel({ canManage }: { canManage: boolean }) {
   }, [data, loadedFor]);
 
   if (!canManage) return null;
+
+  /** The picker, above whatever state the panel is in — it is what chooses that state. */
+  const picker = needsCustomer ? (
+    <div className="mb-4">
+      <Label htmlFor="notify-customer">{t("notifySettings.customer")}</Label>
+      <select
+        id="notify-customer"
+        value={customerId ?? ""}
+        onChange={(e) =>
+          setCustomerId(e.target.value ? Number(e.target.value) : null)
+        }
+        className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-control text-ink"
+      >
+        <option value="">{t("notifySettings.customerPlaceholder")}</option>
+        {options.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-caption text-faint">
+        {t("notifySettings.customerHint")}
+      </p>
+    </div>
+  ) : null;
+
+  // Nothing to show until a tenant is named — the policy belongs to one.
+  if (!ready) {
+    return (
+      <Card className="p-5">
+        <div className="mb-3.5 text-section font-semibold text-ink">
+          {t("notifySettings.title")}
+        </div>
+        {picker}
+      </Card>
+    );
+  }
+
   if (isLoading) {
     return (
       <Card className="p-5">
@@ -111,6 +185,8 @@ export function NotificationsPanel({ canManage }: { canManage: boolean }) {
             : t("notifySettings.noteDefaults")}
         </div>
       </div>
+
+      {picker}
 
       {/* Per-event switches. A checked box means the event IS mailed; the stored
           shape is the inverse (a deny list), which is the right thing to store

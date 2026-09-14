@@ -2,17 +2,24 @@ import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { settingsRepository } from "../src/modules/settings/settings.repository";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 /**
  * Notification policy, per customer.
  *
- * The seed gives all three shapes this has to get right, which is why they are
- * named rather than generic:
+ * Three shapes have to come out right, and they are named rather than generic
+ * because WHICH one is asking is the entire subject:
  *
- *   Morgan Lee   super_admin OF customer 1  — a tenant's own manager
- *   Nadia Kofi   super_admin OF customer 2  — another tenant's manager
- *   Sam Rivera   super_admin, NO customer   — platform-wide
+ *   a super_admin OF customer 1  — a tenant's own manager
+ *   a super_admin OF customer 2  — another tenant's manager
+ *   Sam Rivera, super_admin, NO customer — platform-wide
+ *
+ * Only the third is seeded. The first two used to be (Morgan in Acme, Nadia in
+ * Globex) and are not any more — every seeded super admin belongs to no tenant
+ * now — so this suite builds them, in `beforeEach` below. It has to: "one
+ * customer's manager cannot touch another's" is not a question a platform-wide
+ * account can answer, and a suite that quietly swapped one in would go green
+ * while proving nothing.
  *
  * Role and reach are separate axes. All three hold the permission; what differs
  * is whose policy they can touch, and that is the property most worth pinning.
@@ -30,8 +37,6 @@ async function login(email: string): Promise<string> {
 }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-const TENANT_ADMIN = "morgan.lee@acme.com"; // super_admin of customer 1
-const OTHER_TENANT_ADMIN = "nadia.kofi@acme.com"; // super_admin of customer 2
 const PLATFORM_ADMIN = "sam.rivera@acme.com"; // super_admin, no customer
 
 async function customerOf(email: string): Promise<number> {
@@ -50,8 +55,21 @@ const body = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/**
+ * The two confined shapes this suite is about, rebuilt for every case.
+ *
+ * They used to be seeded — Morgan in Acme, Nadia in Globex — and are not any
+ * more: every seeded super admin is platform-wide now. The property under test
+ * needs them anyway, and needs them CONFINED, because "one customer's manager
+ * cannot touch another's" is not a question a platform-wide account can answer.
+ */
+let TENANT_ADMIN = "";
+let OTHER_TENANT_ADMIN = "";
+
 beforeEach(async () => {
   await resetDb();
+  TENANT_ADMIN = (await tenantSuperAdmin("Acme Corp")).email;
+  OTHER_TENANT_ADMIN = (await tenantSuperAdmin("Globex Inc")).email;
 });
 
 describe("an unconfigured customer", () => {
