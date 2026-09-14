@@ -1,5 +1,5 @@
 import { prisma } from "../src/shared/db";
-import { DEMO_PASSWORD, seedDatabase } from "../prisma/seed-fn";
+import { seedDatabase, seedPassword } from "../prisma/seed-fn";
 import { hashPassword } from "../src/modules/auth/auth.password";
 
 // FK-safe wipe via TRUNCATE ... CASCADE; RESTART IDENTITY resets sequences so
@@ -80,7 +80,7 @@ export async function tenantSuperAdmin(customerName: string): Promise<{
       email,
       role: "super_admin",
       customerId: customer.id,
-      passwordHash: await hashPassword(DEMO_PASSWORD),
+      passwordHash: await hashPassword(seedPassword()),
       status: "active",
       emailVerifiedAt: new Date(),
     },

@@ -26,6 +26,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: "4000"
+      # The demo password `npm run db:seed` gives every seeded account, and what
+      # the E2E job signs in with — the CI workflow seeds through this container.
+      # It lives here rather than in the seed script so the script carries no
+      # password at all: a deployment that does not set it gets a generated one,
+      # printed once, instead of one that was published with the source.
+      #
+      # This stack is a demo, served on localhost, wiped by `down -v`. Point it
+      # at anything real and set SEED_PASSWORD to something else first.
+      SEED_PASSWORD: "${SEED_PASSWORD:-password123}"
       # The calendar the server reckons periods in. Every date bucket in the app
       # is computed in JS from the process timezone — the closed-ticket log's
       # week/month windows (history.period.ts) and the reports trend's daily

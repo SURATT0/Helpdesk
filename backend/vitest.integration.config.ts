@@ -14,6 +14,11 @@ export default defineConfig({
     globalSetup: ["./test/global-setup.ts"],
     env: {
       DATABASE_URL: testDbUrl,
+      // The seed reads this rather than carrying a password of its own, and the
+      // suites sign in with the same literal. Set here so it is a TEST decision:
+      // nothing in the seed knows what a test password is, and a real deployment
+      // that forgets to set it gets a generated one instead of this.
+      SEED_PASSWORD: "password123",
       NODE_ENV: "production", // plain pino (no pretty-transport worker)
       LOG_LEVEL: "silent",
       // Headroom for the cases that deliberately submit wrong passwords. The
