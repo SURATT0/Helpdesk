@@ -42,9 +42,27 @@ const USERS: {
   customer?: string;
   available?: boolean;
 }[] = [
-  { name: "Sam Rivera", role: "super_admin" }, // platform-wide: no customer of their own → every customer
+  /**
+   * The platform tier: `super_admin` with no customer of their own, which is
+   * what `isPlatformWide` asks for and therefore what reaches every tenant.
+   *
+   * All three sit here together now. Morgan and Nadia used to belong to Acme and
+   * Globex — the top role INSIDE one tenant — and that is a state the code still
+   * allows and still confines; it simply is not one the seed hands anybody any
+   * more, because a super admin who cannot see the customer they just created
+   * reads as a broken product rather than as a rule.
+   *
+   * Suites that need the confined shape build it themselves, so the guard keeps
+   * its coverage: notification-settings, customer-reach and user-admin each
+   * create a super admin bound to a tenant in their own setup.
+   *
+   * No `team` for any of them either. A team belongs to a customer, so platform
+   * staff have none to be in.
+   */
+  { name: "Sam Rivera", role: "super_admin" },
+  { name: "Morgan Lee", role: "super_admin" },
+  { name: "Nadia Kofi", role: "super_admin" },
   // --- Acme Corp ---
-  { name: "Morgan Lee", role: "super_admin", team: "IT Support", customer: "Acme Corp" },
   { name: "Dana Reyes", role: "admin", team: "IT Support", customer: "Acme Corp" },
   // Away — demonstrates project routing falling through to the backup owner.
   { name: "Kai T.", role: "admin", team: "Field Services", customer: "Acme Corp", available: false },
@@ -58,7 +76,6 @@ const USERS: {
   { name: "HR Ops", role: "user", customer: "Acme Corp" },
   { name: "L. Osei", role: "user", customer: "Acme Corp" },
   // --- Globex Inc ---
-  { name: "Nadia Kofi", role: "super_admin", team: "Globex Support", customer: "Globex Inc" },
   { name: "Owen Park", role: "admin", team: "Globex Support", customer: "Globex Inc" },
   { name: "Priya Shah", role: "user", customer: "Globex Inc" },
 ];
