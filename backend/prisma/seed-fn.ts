@@ -8,6 +8,7 @@ import type {
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
 import { categoryCode } from "../src/modules/categories/category.code";
+import { INITIAL_ROLE_PERMISSIONS } from "../src/shared/permissions";
 import { KB_ARTICLES } from "./kb-seed-data";
 
 // Every seeded user shares this demo password. Log in as e.g. dana.reyes@acme.com.
@@ -128,13 +129,28 @@ const PROJECTS: {
   },
 ];
 
-const CATEGORIES: { name: string; team: string }[] = [
+/**
+ * The categories every seeded customer gets.
+ *
+ * Must stay in step with `STARTER_CATEGORY_NAMES`, which is what a customer
+ * created through the app gets. The two lists are not one because this one also
+ * names a default team per category and that constant does not — but a name in
+ * either and not the other means a seeded database and a real one disagree about
+ * what a tenant starts with, which is how the "Other" row came to be missing
+ * from every test run while being present in production.
+ */
+const CATEGORIES: { name: string; team: string | null }[] = [
   { name: "Network", team: "Network Operations" },
   { name: "Email", team: "IT Support" },
   { name: "Hardware", team: "Field Services" },
   { name: "Access", team: "IT Support" },
   { name: "Accounts", team: "IT Support" },
   { name: "Software", team: "IT Support" },
+  // No default team, deliberately: a ticket nobody could categorise is not one
+  // any particular queue owns, so it goes to the unassigned queue where somebody
+  // reads it and decides. Routing a whole bucket of unknowns at one team by
+  // default is how they stop being read.
+  { name: "Other", team: null },
 ];
 
 /**
@@ -686,6 +702,39 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
         where: { ticketId_assetId: { ticketId: link.ticketId, assetId } },
         update: {},
         create: { ticketId: link.ticketId, assetId },
+      });
+    }
+  }
+
+  await seedRolePermissions(prisma);
+}
+
+/**
+ * The grants each role starts with.
+ *
+ * Seeded rather than left to the migration, for a reason this repository has
+ * already been bitten by once: `resetDb` truncates `users` with CASCADE, and
+ * `role_permissions.granted_by_id` references it — so the rows the migration
+ * inserted go with the wipe, and every test after the first would find a desk
+ * where nobody may do anything.
+ *
+ * The same pitfall as the category list, and the same rule: whatever a real
+ * deployment gets from a migration, a seeded database has to get here too, or
+ * the two disagree about what the product starts as.
+ *
+ * Reads `INITIAL_ROLE_PERMISSIONS` rather than restating it, so there is one
+ * list and the migration, the seed and the test all compare against it.
+ */
+async function seedRolePermissions(prisma: PrismaClient): Promise<void> {
+  for (const [role, permissions] of Object.entries(INITIAL_ROLE_PERMISSIONS)) {
+    for (const permission of permissions) {
+      await prisma.rolePermission.upsert({
+        // Upsert rather than createMany+skipDuplicates: a grant somebody has
+        // since edited in a DEV database should survive a reseed of the demo
+        // data, and `update: {}` is what leaves it alone.
+        where: { role_permission: { role: role as Role, permission } },
+        update: {},
+        create: { role: role as Role, permission },
       });
     }
   }

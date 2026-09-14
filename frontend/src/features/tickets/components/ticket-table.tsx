@@ -14,6 +14,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { useI18n } from "@/features/i18n/context";
+import { needsOwnDescription } from "@/lib/category-other";
 import { useAuth } from "@/features/auth/context";
 import { useCustomers } from "@/features/customers/queries";
 import { matchesFilters, useSearch } from "../search-context";
@@ -416,7 +417,22 @@ export function TicketTable() {
                 <span className="italic text-faint">{unassignedLabel}</span>
               )}
             </span>
-            <span className="text-body text-subtle">{t.category}</span>
+            {/* What the person wrote, for a ticket filed under "Other" — a
+                column of identical "Other" cells tells a reader working a queue
+                nothing at all. `title` carries the full text for one that is
+                truncated here. */}
+            <span
+              className="truncate pr-2 text-body text-subtle"
+              title={
+                needsOwnDescription(t.categoryCode) && t.categoryOther
+                  ? t.categoryOther
+                  : undefined
+              }
+            >
+              {needsOwnDescription(t.categoryCode) && t.categoryOther
+                ? t.categoryOther
+                : t.category}
+            </span>
             {showCustomer ? (
               <span className="truncate pr-2 text-body text-subtle">
                 {t.customer?.name ?? "—"}

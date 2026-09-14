@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Upload, X } from "lucide-react";
+import { Camera, FileText, Upload, X } from "lucide-react";
 import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { randomId } from "@/lib/random-id";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
-import { ATTACHMENT_ACCEPT } from "@/features/attachments/accept";
 import { uploadAttachment } from "@/features/attachments/api";
+import { FileInput } from "@/features/attachments/components/file-input";
 import { useKbSuggest } from "@/features/kb/queries";
 import { useI18n } from "@/features/i18n/context";
 import { useAuth } from "@/features/auth/context";
@@ -20,6 +20,11 @@ import { useCustomers } from "@/features/customers/queries";
 import { useProjects } from "@/features/projects/queries";
 import { useCategories, useCreateTicket } from "../queries";
 import { PRIORITIES_ASCENDING, TEXT_MAX, type Priority } from "@/lib/domain";
+import {
+  needsOwnDescription,
+  otherLast,
+  whyNotReady,
+} from "@/lib/category-other";
 
 // Images + common help-desk data files (mirrors the backend allowlist).
 
@@ -32,6 +37,55 @@ function formatSize(bytes: number): string {
 // Mildest first — a person filling this in is choosing on a scale, not working
 // a queue. The one list lives in lib/domain; this names which way up it goes.
 const PRIORITIES = PRIORITIES_ASCENDING;
+
+/**
+ * What a chosen file looks like before it is sent: the picture itself for an
+ * image, a document icon for anything else.
+ *
+ * A thumbnail rather than a filename because a phone's camera names its output
+ * `IMG_4417.HEIC`, and a list of those tells the person nothing about which one
+ * they meant to attach.
+ *
+ * The size is FIXED — a square in `rem`, with `object-cover` — so a portrait
+ * photo from a phone cannot stretch the row. `object-cover` crops to fill rather
+ * than letterboxing, which is what keeps a column of mixed orientations tidy.
+ *
+ * The object URL is revoked on unmount. Without that each re-pick leaks a blob
+ * for the life of the tab, which on a long session of attaching photos is real
+ * memory.
+ */
+function PendingThumb({ file }: { file: File }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!file.type.startsWith("image/")) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    // Revoke only. Clearing the state here as well is what made this flicker
+    // out entirely under StrictMode, which mounts, cleans up and mounts again:
+    // the second effect sets a fresh URL and a `setUrl(null)` racing beside it
+    // leaves the row with no image at all. Nothing needs clearing — the next
+    // effect sets a new URL, and an unmounting component has no state to tidy.
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  if (!url) {
+    return <FileText size={14} strokeWidth={2} className="flex-none text-muted" />;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- a blob: URL from the
+    // file the person just picked; next/image cannot optimise one and would only
+    // add a loader in front of something already on the device.
+    <img
+      src={url}
+      alt=""
+      className="size-9 flex-none rounded-sm border border-line object-cover"
+    />
+  );
+}
 
 export function CreateTicketModal({
   open,
@@ -55,6 +109,8 @@ export function CreateTicketModal({
   const [subject, setSubject] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [categoryId, setCategoryId] = React.useState<number | null>(null);
+  /** What the person typed when they chose "Other". Empty for every other choice. */
+  const [categoryOther, setCategoryOther] = React.useState("");
   /**
    * The tenant the rest of the form is filtered by.
    *
@@ -72,7 +128,6 @@ export function CreateTicketModal({
   const [dragging, setDragging] = React.useState(false);
   const [attaching, setAttaching] = React.useState(false);
   const [attachError, setAttachError] = React.useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   /**
    * De-duplication key for the submission being composed.
@@ -93,7 +148,7 @@ export function CreateTicketModal({
     // missing when the app is opened by IP over plain HTTP — and this effect
     // runs with the shell, so the throw took the whole page down. See randomId.
     setIdempotencyKey(randomId());
-  }, [subject, description, categoryId, priority]);
+  }, [subject, description, categoryId, categoryOther, priority]);
 
   const projects = projectData?.projects ?? [];
 
@@ -155,25 +210,41 @@ export function CreateTicketModal({
   const suggest = useKbSuggest(subject, subject.trim().length >= 3);
   const suggestions = suggest.data ?? [];
 
-  function addFiles(list: FileList | null) {
-    if (!list || list.length === 0) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+  // A settled array, never a live FileList: the updater below runs whenever
+  // React gets to it, and a FileList can be empty by then. See FileInput.
+  function addFiles(picked: File[]) {
+    if (picked.length === 0) return;
+    setFiles((prev) => [...prev, ...picked]);
   }
   function removeFile(idx: number) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  // Reset the form each time the modal opens.
+  /**
+   * Empty the form on the way OUT, so the next open finds it already clean.
+   *
+   * It used to reset on the way in, and that is a race rather than a tidy-up: an
+   * effect runs after paint, so the dialog is on screen and taking input for a
+   * frame before the reset lands. Anything done in that frame is thrown away —
+   * a file picked the instant the dialog appeared was added and then wiped, and
+   * the person got an empty attachment row with no hint why. It showed up first
+   * as an e2e case that passed or failed depending on the machine, which is what
+   * a race looks like from the outside.
+   *
+   * Nothing can race a closed dialog, so doing it here has no such window. The
+   * first mount needs no reset either — the initial state IS the empty form.
+   */
   React.useEffect(() => {
-    if (!open) return;
+    if (open) return;
     setSubject("");
     setDescription("");
     setPriority("medium");
     setCategoryId(null);
+    setCategoryOther("");
     setProjectId(null);
     // Leave the customer alone: with one it is already right, and with several
     // the person is about to choose. Resetting it here would clear a preselect
-    // this same render just made.
+    // the next open is about to make.
     setFiles([]);
     setAttaching(false);
     setAttachError(null);
@@ -193,10 +264,25 @@ export function CreateTicketModal({
   if (!open) return null;
 
   const busy = createTicket.isPending || attaching;
+  /**
+   * Which option is selected, as a CODE.
+   *
+   * The name is a display decision a tenant may translate, so nothing may match
+   * on it — see lib/category-other.ts.
+   */
+  const chosen = categories.find((c) => c.id === categoryId);
+  const wantsOwnDescription = needsOwnDescription(chosen?.code);
+  const blocker = whyNotReady({
+    categoryCode: chosen?.code,
+    categoryOther,
+  });
   const canSubmit =
     subject.trim().length >= 3 &&
     description.trim().length >= 1 &&
     categoryId != null &&
+    // The API refuses a blank one regardless; this stops the person finding out
+    // after the round trip. Disabling the button is NOT the enforcement.
+    blocker == null &&
     !busy;
 
   /**
@@ -220,6 +306,11 @@ export function CreateTicketModal({
         subject: subject.trim(),
         description: description.trim(),
         categoryId,
+        // Sent only for the category that takes one. The server refuses a
+        // description on any other, which is the right answer to a client that
+        // has misunderstood the field — so this must not send an empty string
+        // "just in case".
+        ...(wantsOwnDescription ? { categoryOther: categoryOther.trim() } : {}),
         projectId,
         priority,
         idempotencyKey,
@@ -420,7 +511,11 @@ export function CreateTicketModal({
                 {customerId == null ? (
                   <option value="">{t("create.projectPickCustomerFirst")}</option>
                 ) : null}
-                {categories.map((c) => (
+                {/* "Other" last, whatever order the server sent. It is the
+                    answer for a ticket none of the others fit, and offering it
+                    among them invites it as a first choice — which is how a free
+                    text box becomes the category everybody uses. */}
+                {otherLast(categories).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -455,6 +550,52 @@ export function CreateTicketModal({
             </div>
           </div>
 
+          {/* Only for the category whose whole meaning is "none of the above".
+              Full width rather than in the half-column beside Priority: it is a
+              sentence about what went wrong, and a half-width box invites three
+              words where the desk needs a description.
+
+              Rendered conditionally rather than disabled — a field that does not
+              apply should not be on the page at all, and leaving a greyed one
+              there would suggest the person is missing something. */}
+          {wantsOwnDescription ? (
+            <div>
+              <Label htmlFor="ticket-category-other">
+                {t("create.categoryOther")} <span className="text-danger">*</span>
+              </Label>
+              <Textarea
+                id="ticket-category-other"
+                rows={2}
+                maxLength={TEXT_MAX.BODY}
+                value={categoryOther}
+                onChange={(e) => setCategoryOther(e.target.value)}
+                placeholder={t("create.categoryOtherPlaceholder")}
+                aria-describedby="ticket-category-other-hint"
+              />
+              {/*
+                Says what the field is FOR, not just that it is required. The
+                text stays on this ticket and never becomes a category on its own
+                — that is the whole reason it exists, and a person who knows that
+                writes a sentence instead of a label.
+
+                aria-live, so a screen reader hears the blocker appear and go as
+                the box is filled rather than only on submit.
+              */}
+              <p
+                id="ticket-category-other-hint"
+                aria-live="polite"
+                className={cn(
+                  "mt-1 text-caption leading-relaxed",
+                  blocker === "detail_missing" ? "text-danger" : "text-faint",
+                )}
+              >
+                {blocker === "detail_missing"
+                  ? t("create.categoryOtherRequired")
+                  : t("create.categoryOtherHint")}
+              </p>
+            </div>
+          ) : null}
+
           <div>
             <Label htmlFor="ticket-description">
               {t("create.description")} <span className="text-danger">*</span>
@@ -470,14 +611,12 @@ export function CreateTicketModal({
           </div>
 
           <div>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={(e) =>
-                (e.key === "Enter" || e.key === " ") &&
-                fileInputRef.current?.click()
-              }
+            {/* A label, not a div with an onClick that calls `.click()` on a
+                hidden input — that combination is exactly what stopped the
+                picker opening on a phone. See FileInput. Drag and drop still
+                lands here; a label takes those handlers like any other element. */}
+            <FileInput
+              onFiles={addFiles}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -486,10 +625,10 @@ export function CreateTicketModal({
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                addFiles(e.dataTransfer.files);
+                addFiles(Array.from(e.dataTransfer.files));
               }}
               className={cn(
-                "flex cursor-pointer flex-wrap items-center justify-center gap-1.5 rounded-tile border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
+                "flex flex-wrap items-center justify-center gap-1.5 rounded-tile border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",
                 dragging
                   ? "border-brand bg-accent-soft text-brand-hover"
                   : "border-dim bg-wash text-muted",
@@ -501,18 +640,23 @@ export function CreateTicketModal({
                 {t("create.browse")}
               </span>
               <span className="text-faint">{t("create.dropHint")}</span>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ATTACHMENT_ACCEPT}
-              className="hidden"
-              onChange={(e) => {
-                addFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
+            </FileInput>
+
+            {/* A second way in, for a device that has a camera. `capture` asks
+                for the camera directly; the picker above already offers the
+                photo library, so this is a shortcut rather than the only road —
+                which is what it had accidentally become. Shown where the pointer
+                is coarse, the same test the rest of the app uses for "this is a
+                touch device", because a camera is not a width. */}
+            <FileInput
+              onFiles={addFiles}
+              multiple={false}
+              capture="environment"
+              className="mt-2 hidden items-center justify-center gap-1.5 rounded-tile border border-line bg-white px-4 py-2.5 text-body font-medium text-muted [@media(pointer:coarse)]:flex"
+            >
+              <Camera size={15} strokeWidth={2} />
+              {t("create.takePhoto")}
+            </FileInput>
 
             {files.length > 0 ? (
               <div className="mt-2 flex flex-col gap-1.5">
@@ -521,11 +665,7 @@ export function CreateTicketModal({
                     key={`${f.name}-${i}`}
                     className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2 text-dense"
                   >
-                    <FileText
-                      size={14}
-                      strokeWidth={2}
-                      className="flex-none text-muted"
-                    />
+                    <PendingThumb file={f} />
                     <span className="min-w-0 flex-1 truncate font-medium text-strong">
                       {f.name}
                     </span>

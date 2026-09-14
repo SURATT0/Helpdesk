@@ -150,11 +150,15 @@ export const CustomerNotEmpty = (counts: {
   projects: number;
   tickets: number;
   users: number;
+  categories: number;
 }) => {
   const parts = [
     counts.tickets > 0 ? `${counts.tickets} open ticket${counts.tickets === 1 ? "" : "s"}` : null,
     counts.projects > 0 ? `${counts.projects} project${counts.projects === 1 ? "" : "s"}` : null,
     counts.users > 0 ? `${counts.users} user${counts.users === 1 ? "" : "s"}` : null,
+    counts.categories > 0
+      ? `${counts.categories} categor${counts.categories === 1 ? "y" : "ies"}`
+      : null,
   ].filter(Boolean);
   return new AppError(
     409,
@@ -517,11 +521,14 @@ export const ERROR_CODES = [
   "NOT_YOUR_TICKET_TO_ANSWER",
   "TICKET_NOT_AWAITING_ANSWER",
   "SAME_ASSIGNEE",
+  "CATEGORY_DETAIL_REQUIRED",
   "NOT_ASSIGNABLE",
   // People, projects, customers.
   "LAST_ADMIN",
   "USER_HAS_OPEN_QUEUE",
   "PROJECT_HAS_MEMBERS",
+  "PROJECT_HAS_OPEN_TICKETS",
+  "PROJECT_NAME_TAKEN",
   "CUSTOMER_NOT_EMPTY",
   "CANNOT_DEACTIVATE_SELF",
   "CANNOT_CHANGE_OWN_ACCESS",
@@ -544,3 +551,60 @@ export const ERROR_CODES = [
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
+/**
+ * Filing under "Other" without saying what the problem is — or sending a
+ * description for a category that does not take one.
+ *
+ * `field` so the form can point at the control rather than printing a sentence
+ * above it, and `reason` so the client can word the two cases differently; they
+ * are different mistakes and only one of them is the person's to fix.
+ */
+export const CategoryDetailRequired = (
+  reason: "missing" | "not_applicable",
+  message: string,
+) =>
+  new AppError(400, "CATEGORY_DETAIL_REQUIRED", message, {
+    field: "categoryOther",
+    reason,
+  });
+
+/**
+ * Thrown when archiving a project that still has live work filed under it.
+ *
+ * Beside `ProjectHasMembers` rather than folded into it: they are different
+ * situations with different next steps. Members are moved to another project;
+ * tickets are finished or re-filed. Telling somebody "move the members first"
+ * when the members are already gone and the problem is eleven open tickets is
+ * how a clear refusal becomes a confusing one.
+ *
+ * OPEN tickets only — see `ProjectDeletionImpact.openTickets`. A project's
+ * closed history keeps pointing at it and keeps rendering its name, so archiving
+ * takes nothing away from it.
+ */
+export const ProjectHasOpenTickets = (count: number) =>
+  new AppError(
+    409,
+    "PROJECT_HAS_OPEN_TICKETS",
+    `This project still has ${count} open ticket${count === 1 ? "" : "s"} filed under it — finish or re-file them first`,
+    { count },
+  );
+
+/**
+ * Thrown when a customer already runs a project under this name.
+ *
+ * Checked before the insert rather than left to the unique index, so the answer
+ * names the project instead of naming a constraint. The index stays as the thing
+ * that actually guarantees it — two layers saying the same thing, one of them a
+ * rule somebody can forget and the other not.
+ *
+ * Per customer, never global: two companies may each run a "Migration", and
+ * that is the whole reason the index is on (customer_id, name) rather than on
+ * the name alone.
+ */
+export const ProjectNameTaken = (name: string) =>
+  new AppError(
+    409,
+    "PROJECT_NAME_TAKEN",
+    `This customer already has a project called "${name}"`,
+    { name },
+  );

@@ -46,7 +46,27 @@ export type CustomerDto = {
    * number a person is shown is the number the guard refuses on, and by the list
    * so "empty" is visible before anyone tries.
    */
-  counts: { projects: number; tickets: number; users: number };
+  counts: {
+    projects: number;
+    tickets: number;
+    users: number;
+    /**
+     * The tenant's own categories.
+     *
+     * Counted, and the consequence is deliberate and permanent: every customer
+     * is created with the starter set, so this is never zero and a tenant can
+     * therefore never be archived while it still has them. That was the choice —
+     * a category belongs to exactly one customer and carries the codes its
+     * reports group by, so archiving the customer out from under it would leave
+     * rows nothing owns.
+     *
+     * Making a tenant archivable again means giving somebody a way to remove its
+     * categories first. There is no such path today, which is why this number is
+     * shown rather than merely enforced: a dialog that says "7 categories" is a
+     * dead end somebody can see, and a refusal with no number is one they cannot.
+     */
+    categories: number;
+  };
   createdAt: string;
 };
 
@@ -57,22 +77,29 @@ export type CustomerArchiveImpact = {
   projects: number;
   tickets: number;
   users: number;
+  categories: number;
 };
 
 /**
- * Live projects, OPEN tickets and active users, per customer.
+ * Live projects, OPEN tickets, active users and categories, per customer.
  *
  * Open tickets rather than all of them, deliberately: a tenant whose work is
  * finished is exactly the one you archive, and counting closed tickets would
  * make that impossible forever. Live/active on the other two for the same
  * reason — an archived project or a closed account is not a thing to move.
+ *
+ * Categories are counted WITHOUT such an escape, and that is the point rather
+ * than an oversight: every customer is created with the starter set, so this
+ * number is never zero and a tenant with categories can never be archived. See
+ * `CustomerDto["counts"].categories` for why that was chosen and what would have
+ * to exist before it could change.
  */
 async function countsFor(ids: number[]): Promise<Map<number, CustomerDto["counts"]>> {
-  const empty = () => ({ projects: 0, tickets: 0, users: 0 });
+  const empty = () => ({ projects: 0, tickets: 0, users: 0, categories: 0 });
   const out = new Map(ids.map((id) => [id, empty()]));
   if (ids.length === 0) return out;
 
-  const [projects, tickets, users] = await Promise.all([
+  const [projects, tickets, users, categories] = await Promise.all([
     prisma.project.groupBy({
       by: ["customerId"],
       where: { customerId: { in: ids }, deletedAt: null },
@@ -92,6 +119,11 @@ async function countsFor(ids: number[]): Promise<Map<number, CustomerDto["counts
       where: { customerId: { in: ids }, isActive: true },
       _count: { _all: true },
     }),
+    prisma.category.groupBy({
+      by: ["customerId"],
+      where: { customerId: { in: ids } },
+      _count: { _all: true },
+    }),
   ]);
 
   for (const r of projects) {
@@ -106,6 +138,10 @@ async function countsFor(ids: number[]): Promise<Map<number, CustomerDto["counts
     if (r.customerId == null) continue;
     const c = out.get(r.customerId);
     if (c) c.users = r._count._all;
+  }
+  for (const r of categories) {
+    const c = out.get(r.customerId);
+    if (c) c.categories = r._count._all;
   }
   return out;
 }
@@ -123,7 +159,8 @@ export const customerRepository = {
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
-      counts: counts.get(r.id) ?? { projects: 0, tickets: 0, users: 0 },
+      counts:
+        counts.get(r.id) ?? { projects: 0, tickets: 0, users: 0, categories: 0 },
       createdAt: r.createdAt.toISOString(),
     }));
   },
@@ -138,7 +175,7 @@ export const customerRepository = {
     return {
       id: row.id,
       name: row.name,
-      counts: counts.get(row.id) ?? { projects: 0, tickets: 0, users: 0 },
+      counts: counts.get(row.id) ?? { projects: 0, tickets: 0, users: 0, categories: 0 },
       createdAt: row.createdAt.toISOString(),
     };
   },
@@ -191,7 +228,17 @@ export const customerRepository = {
       return {
         id: created.id,
         name: created.name,
-        counts: { projects: 0, tickets: 0, users: 0 },
+        // Zero work, and the starter categories this transaction just wrote.
+        // Reported rather than assumed zero: the list endpoint counts them, so a
+        // create that claimed none would have the new customer change shape the
+        // moment the page refetched — and, now that categories block archiving,
+        // it would be claiming the tenant is archivable when it is not.
+        counts: {
+          projects: 0,
+          tickets: 0,
+          users: 0,
+          categories: STARTER_CATEGORY_NAMES.length,
+        },
         createdAt: created.createdAt.toISOString(),
       };
     });
@@ -225,7 +272,7 @@ export const customerRepository = {
       return {
         id: updated.id,
         name: updated.name,
-        counts: counts.get(id) ?? { projects: 0, tickets: 0, users: 0 },
+        counts: counts.get(id) ?? { projects: 0, tickets: 0, users: 0, categories: 0 },
         createdAt: updated.createdAt.toISOString(),
       };
     });
@@ -244,6 +291,7 @@ export const customerRepository = {
       projects: 0,
       tickets: 0,
       users: 0,
+      categories: 0,
     };
     return { id: row.id, name: row.name, ...counts };
   },
@@ -261,14 +309,17 @@ export const customerRepository = {
    */
   async archive(id: number, actor: AuthUser): Promise<boolean> {
     return prisma.$transaction(async (tx) => {
-      const [projects, tickets, users] = await Promise.all([
+      const [projects, tickets, users, categories] = await Promise.all([
         tx.project.count({ where: { customerId: id, deletedAt: null } }),
         tx.ticket.count({
           where: { customerId: id, deletedAt: null, status: { not: "closed" } },
         }),
         tx.user.count({ where: { customerId: id, isActive: true } }),
+        tx.category.count({ where: { customerId: id } }),
       ]);
-      if (projects > 0 || tickets > 0 || users > 0) return false;
+      if (projects > 0 || tickets > 0 || users > 0 || categories > 0) {
+        return false;
+      }
 
       const done = await tx.customer.updateMany({
         where: { id, deletedAt: null },

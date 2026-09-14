@@ -37,6 +37,19 @@ export type ProjectDeletionImpact = {
   name: string;
   customerId: number;
   members: number;
+  /**
+   * Tickets still open on this project — `status != closed`, the same shape the
+   * customer archive uses for the same question.
+   *
+   * OPEN ones only, deliberately. A project that has been running for a year has
+   * hundreds of closed tickets pointing at it and archiving it takes nothing
+   * away from them: their name still renders, because the ticket DTO reads the
+   * project row directly without filtering `deletedAt`. What archiving WOULD
+   * strand is live work — a ticket somebody is still expected to finish, filed
+   * under a project that has just left every picker. Counting the closed ones
+   * too would mean a routing project could never be retired at all.
+   */
+  openTickets: number;
 };
 
 export type ProjectDto = {
@@ -201,6 +214,38 @@ export const projectRepository = {
     };
   },
 
+  /**
+   * A LIVE project of this customer with this name, if there is one.
+   *
+   * Live only, because that is exactly what the unique index covers:
+   * `projects_customer_id_name_live_key` is partial on `deleted_at IS NULL`, so
+   * archiving a project frees its name for the next one. A check that counted
+   * archived rows would refuse a name the database would happily accept.
+   *
+   * Case-insensitive, which the index is NOT. That is deliberate and the two
+   * disagreeing is the point: the database stops "Migration" twice, and this
+   * stops "Migration" and "migration" — two names nobody can tell apart in a
+   * picker, and which the index would let through.
+   *
+   * Unscoped by actor on purpose: it answers "does this customer already have
+   * one", and the caller has already established that the customer is within
+   * reach. Scoping it here would let a name look free because the ASKER cannot
+   * see the row that takes it, and then fail at the insert.
+   */
+  findLiveByName(
+    customerId: number,
+    name: string,
+  ): Promise<{ id: number; name: string } | null> {
+    return prisma.project.findFirst({
+      where: {
+        customerId,
+        deletedAt: null,
+        name: { equals: name.trim(), mode: "insensitive" },
+      },
+      select: { id: true, name: true },
+    });
+  },
+
   async create(
     data: {
       name: string;
@@ -335,11 +380,15 @@ export const projectRepository = {
           where: { id: { in: [...extra] }, projectId: id },
         })
       : 0;
+    const openTickets = await prisma.ticket.count({
+      where: { projectId: id, deletedAt: null, status: { not: "closed" } },
+    });
     return {
       id: row.id,
       name: row.name,
       customerId: row.customerId,
       members: row._count.members + extra.size - alsoMembers,
+      openTickets,
     };
   },
 
@@ -358,7 +407,12 @@ export const projectRepository = {
   async softDelete(
     id: number,
     actor: AuthUser,
-    snapshot: { name: string; customerId: number; members: number },
+    snapshot: {
+      name: string;
+      customerId: number;
+      members: number;
+      openTickets: number;
+    },
   ): Promise<boolean> {
     return prisma.$transaction(async (tx) => {
       const claimed = await tx.project.updateMany({
@@ -367,6 +421,10 @@ export const projectRepository = {
             { id },
             projectScopeWhere(actor),
             { members: { none: {} }, ownerId: null, backupOwnerId: null },
+            // Re-checked inside the transaction for the same reason the member
+            // clause is: the counts the caller validated were read outside it,
+            // and a ticket filed in between must not slip through.
+            { tickets: { none: { deletedAt: null, status: { not: "closed" } } } },
           ],
         },
         data: { deletedAt: new Date(), deletedById: actor.id },
@@ -387,6 +445,7 @@ export const projectRepository = {
             name: snapshot.name,
             customerId: snapshot.customerId,
             members: snapshot.members,
+            openTickets: snapshot.openTickets,
             actorRole: actor.role,
           },
         },

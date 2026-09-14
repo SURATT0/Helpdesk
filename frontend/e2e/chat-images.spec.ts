@@ -26,6 +26,13 @@ const TICKET = 1042;
  * unscoped selector matches both. They are also not interchangeable — the
  * sidebar's upload is ticket-level, so a file added there is deliberately
  * attached to no message and would never appear in a bubble.
+ *
+ * And scoped again WITHIN the composer, which now carries two inputs: the
+ * picker, and a `capture` one that opens the camera on a touch device. The
+ * camera is deliberately single-file, so a multi-image case that landed on it
+ * would quietly attach one picture instead of three — hence `:not([capture])`,
+ * which names the input it wants, rather than `.first()`, which would depend on
+ * the order the two happen to render in.
  */
 async function attach(
   page: Page,
@@ -33,7 +40,7 @@ async function attach(
 ) {
   await page
     .getByTestId("chat-scroll")
-    .locator('input[type="file"]')
+    .locator('input[type="file"]:not([capture])')
     .setInputFiles(files);
 }
 

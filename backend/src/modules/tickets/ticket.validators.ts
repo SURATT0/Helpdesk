@@ -141,6 +141,16 @@ export const createTicketBody = z.object({
   description: freeText({ max: TEXT_MAX.BODY }),
   categoryId: z.coerce.number().int().positive(),
   /**
+   * What the problem is, for the "Other" category.
+   *
+   * `min: 0` is load-bearing. With a minimum here, a whitespace-only
+   * description is refused by zod as a 400 VALIDATION_ERROR naming a field
+   * length — and the one place that decides this rule never runs. The shape is
+   * checked here; whether it is REQUIRED is `checkCategoryOther's question, and
+   * it has to be reached to answer it.
+   */
+  categoryOther: freeText({ min: 0, max: TEXT_MAX.BODY }).optional(),
+  /**
    * Which project to file this under. Optional here even though the web form
    * asks for it: the same endpoint serves callers with no project to give, and
    * the column is nullable for good reasons (see Ticket.projectId). Making the

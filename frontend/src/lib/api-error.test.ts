@@ -115,6 +115,12 @@ describe("values are interpolated, shapes are not", () => {
       CUSTOMER_NOT_EMPTY: { projects: 1, tickets: 2, users: 3 },
       UNSUPPORTED_FILE_TYPE: { mimetype: "image/heic" },
       SOURCE_NOT_CONFIGURED: { label: "Jira" },
+      PROJECT_HAS_OPEN_TICKETS: { count: 11 },
+      PROJECT_NAME_TAKEN: { name: "Acme Migration" },
+      // No placeholder in its sentence, but the API does send these — listed so
+      // the map stays a record of what each code carries rather than only of
+      // what happens to be interpolated today.
+      CATEGORY_DETAIL_REQUIRED: { field: "categoryOther", reason: "missing" },
     };
     for (const code of API_ERROR_CODES) {
       const err = new ApiError(400, code, "english", SENT[code]);

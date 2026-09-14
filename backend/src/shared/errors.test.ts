@@ -55,7 +55,7 @@ const SAMPLES: Array<[string, AppError]> = [
   ["ProjectHasMembers", errors.ProjectHasMembers(3)],
   [
     "CustomerNotEmpty",
-    errors.CustomerNotEmpty({ projects: 1, tickets: 2, users: 3 }),
+    errors.CustomerNotEmpty({ projects: 1, tickets: 2, users: 3, categories: 4 }),
   ],
   ["NotFound", errors.NotFound()],
   ["BadRequest", errors.BadRequest()],
@@ -109,8 +109,8 @@ describe("anything interpolated is machine-readable too", () => {
     [errors.HasOpenQueue(4), ["count"]],
     [errors.ProjectHasMembers(3), ["count"]],
     [
-      errors.CustomerNotEmpty({ projects: 1, tickets: 2, users: 3 }),
-      ["projects", "tickets", "users"],
+      errors.CustomerNotEmpty({ projects: 1, tickets: 2, users: 3, categories: 4 }),
+      ["projects", "tickets", "users", "categories"],
     ],
     [errors.Conflict("Name is taken", ["name"]), ["fields"]],
   ];
@@ -125,8 +125,8 @@ describe("anything interpolated is machine-readable too", () => {
   it("counts a count, rather than a rendered phrase", () => {
     // The trap this guards: "2 open tickets, 1 project" reads fine in English
     // and is unusable to anyone writing the same list in Thai.
-    const err = errors.CustomerNotEmpty({ projects: 1, tickets: 2, users: 3 });
-    expect(err.details).toEqual({ projects: 1, tickets: 2, users: 3 });
+    const err = errors.CustomerNotEmpty({ projects: 1, tickets: 2, users: 3, categories: 4 });
+    expect(err.details).toEqual({ projects: 1, tickets: 2, users: 3, categories: 4 });
   });
 });
 

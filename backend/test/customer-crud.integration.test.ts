@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
+import { STARTER_CATEGORY_NAMES } from "../src/modules/categories/category.code";
 import { prisma, resetDb } from "./db";
 
 const app = createApp();
@@ -31,6 +32,19 @@ beforeEach(async () => {
   await prisma.customer.deleteMany({ where: { name: { startsWith: "CRUD probe" } } });
 });
 
+/**
+ * Strip a tenant's categories so it can be archived at all.
+ *
+ * Not a step anybody can take in the product: nothing removes a category, and a
+ * customer is created with the starter set, so a tenant that still has them can
+ * never be archived. That is the agreed behaviour rather than a gap these tests
+ * are working around — and doing it here in raw Prisma is what keeps that
+ * visible. When a real removal path exists, these two lines become a call to it.
+ */
+async function stripCategories(customerId: number): Promise<void> {
+  await prisma.category.deleteMany({ where: { customerId } });
+}
+
 describe("creating a customer", () => {
   it("is open to an admin", async () => {
     // As agreed: `admin` and above. Deliberately wider than granting reach,
@@ -39,7 +53,16 @@ describe("creating a customer", () => {
     const res = await create(await login(ACME_ADMIN), "CRUD probe — Initech");
     expect(res.status).toBe(201);
     expect(res.body.data.name).toBe("CRUD probe — Initech");
-    expect(res.body.data.counts).toEqual({ projects: 0, tickets: 0, users: 0 });
+    // Empty of work, but NOT of categories: a customer is created with the
+    // starter set in the same transaction, which is what makes its ticket form
+    // usable on day one — and, since categories are counted, what stops it being
+    // archived until somebody can remove them.
+    expect(res.body.data.counts).toEqual({
+      projects: 0,
+      tickets: 0,
+      users: 0,
+      categories: STARTER_CATEGORY_NAMES.length,
+    });
   });
 
   it("does not let the creator see into it", async () => {
@@ -120,6 +143,7 @@ describe("archiving a customer", () => {
     const before = await request(app).get(`${API}/customers`).set(bearer(platform));
     expect((before.body.data as { id: number }[]).map((c) => c.id)).toContain(id);
 
+    await stripCategories(id);
     const archived = await request(app)
       .delete(`${API}/customers/${id}`)
       .set(bearer(platform));
@@ -160,12 +184,62 @@ describe("archiving a customer", () => {
       },
     });
 
+    // The ticket has to go before the categories it points at.
+    await prisma.ticket.deleteMany({ where: { customerId: id } });
+    await stripCategories(id);
+
     const res = await request(app)
       .delete(`${API}/customers/${id}`)
       .set(bearer(platform));
     expect(res.status).toBe(204);
+  });
 
-    await prisma.ticket.deleteMany({ where: { customerId: id } });
+  it("refuses while the tenant still has categories, and says how many", async () => {
+    // The agreed consequence of counting them, pinned so it cannot be softened
+    // by accident: a customer is created with the starter set, nothing in the
+    // product removes a category, so a brand-new tenant with no work at all
+    // still cannot be archived.
+    const platform = await login(PLATFORM);
+    const made = await create(platform, "CRUD probe — Categorised");
+    const id = made.body.data.id as number;
+
+    const impact = await request(app)
+      .get(`${API}/customers/${id}/archive-impact`)
+      .set(bearer(platform))
+      .expect(200);
+    expect(impact.body.data).toMatchObject({
+      projects: 0,
+      tickets: 0,
+      users: 0,
+      categories: STARTER_CATEGORY_NAMES.length,
+    });
+
+    const refused = await request(app)
+      .delete(`${API}/customers/${id}`)
+      .set(bearer(platform));
+    expect(refused.status).toBe(409);
+    // The number, not just a refusal — it is the only thing that tells a reader
+    // why an apparently empty tenant will not archive.
+    expect(refused.body.error.message).toContain(
+      String(STARTER_CATEGORY_NAMES.length),
+    );
+    expect(refused.body.error.message).toMatch(/categor/i);
+
+    // Still live.
+    const row = await prisma.customer.findUniqueOrThrow({ where: { id } });
+    expect(row.deletedAt).toBeNull();
+  });
+
+  it("archives once the categories are gone, which is the only way through", async () => {
+    const platform = await login(PLATFORM);
+    const made = await create(platform, "CRUD probe — Decategorised");
+    const id = made.body.data.id as number;
+
+    await stripCategories(id);
+    await request(app)
+      .delete(`${API}/customers/${id}`)
+      .set(bearer(platform))
+      .expect(204);
   });
 
   it("shows the dialog the same numbers the guard refuses on", async () => {

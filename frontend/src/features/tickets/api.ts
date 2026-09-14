@@ -179,6 +179,15 @@ export type CreateTicketInput = {
   description: string;
   categoryId: number;
   /**
+   * What the problem actually is, when the chosen category is "Other".
+   *
+   * Optional here because most tickets have nothing to put in it. Whether it is
+   * REQUIRED is the server's answer — it refuses a blank one for that category
+   * and refuses a filled one for any other — and the form asks first so nobody
+   * learns it after the round trip.
+   */
+  categoryOther?: string;
+  /**
    * Which project to file this under, or null for none.
    *
    * Optional the whole way down: the column is nullable, mail and CSV name no

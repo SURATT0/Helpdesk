@@ -411,6 +411,7 @@ model User {
   statusChanges          TicketStatusHistory[]
   refreshTokens          RefreshToken[]
   auditLogs              AuditLog[]
+  grantedPermissions     RolePermission[]      @relation("RolePermissionGrantedBy")
   comments               Comment[]
   notifications          Notification[]
   attachments            Attachment[]
@@ -576,6 +577,22 @@ model Ticket {
   /// indexes: `prisma migrate diff` reports a foreign key it does not know about
   /// as drift and proposes dropping it. See backend/CLAUDE.md.
   category       Category              @relation(fields: [categoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  /// What the problem actually is, when the category is "Other".
+  ///
+  /// Deliberately a column on the TICKET rather than a new category row. Left to
+  /// create rows, free text makes "เน็ตช้า" and "เน็ทช้า" two categories that
+  /// mean one thing, and every report grouping by category splits in half
+  /// without anyone noticing. Promoting a recurring one into a real category is
+  /// a person's decision, taken while looking at all of them at once.
+  ///
+  /// Nullable in the database and required in the domain, for two different
+  /// reasons that both have to hold. Nullable because every ticket filed before
+  /// this existed has none and must still open; required because the rule is
+  /// about a category CODE, and a CHECK constraint here could only see
+  /// `category_id` — an id whose meaning differs per tenant. The rule lives in
+  /// shared/category-other.ts and is enforced at the one place tickets are
+  /// written.
+  categoryOther  String?               @map("category_other")
   /// Which project this ticket belongs to, if any.
   ///
   /// Nullable and staying that way. Not a column waiting to be tightened: mail
@@ -789,6 +806,32 @@ model Notification {
 }
 
 // Append-only audit trail — one row per mutation (create, status change, …).
+/// What each role may do.
+///
+/// This used to be a constant in `shared/auth.ts` and is now a table, because a
+/// super admin has to be able to change it without a deploy. What did NOT move
+/// is the meaning of the strings: each one corresponds to a gate in code, so the
+/// catalogue lives in `shared/permissions.ts` and this table only says who holds
+/// what. A row naming a permission the catalogue does not define gates nothing.
+///
+/// `role` is the existing enum rather than a foreign key to a roles table.
+/// Creating roles is deliberately out of scope: it would mean giving up the
+/// Postgres enum on `users.role`, which every scope query compares against.
+model RolePermission {
+  role       Role
+  permission String
+  /// Who granted it and when. The audit trail carries the full before/after of
+  /// every edit; these two are here so a single row can answer "where did this
+  /// come from" without a search.
+  grantedById Int?     @map("granted_by_id")
+  grantedBy   User?    @relation("RolePermissionGrantedBy", fields: [grantedById], references: [id])
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([role, permission])
+  @@index([role])
+  @@map("role_permissions")
+}
+
 model AuditLog {
   id        Int      @id @default(autoincrement())
   userId    Int?     @map("user_id")

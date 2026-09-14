@@ -13,6 +13,7 @@ import {
   BookOpen,
   ScrollText,
   ShieldCheck,
+  Tag,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -52,17 +53,42 @@ const NAV: Array<{
   // the nav should read the same way the data nests. Same roles — the list is
   // open to anyone authenticated, but a requester has no use for a page of one
   // row they cannot act on.
+  // Customers and the projects under them, on one screen. Top tier only: this is
+  // where tenants are created, renamed and archived, which is a different thing
+  // from the routing table an agent reads.
   {
-    href: "/customers",
+    href: "/admin/customers",
     key: "nav.customers",
     icon: Building2,
-    roles: ["admin", "super_admin"],
+    roles: ["super_admin"],
   },
+  // The routing table, kept for everyone `project:read` reaches. Folding it into
+  // the screen above would have taken it away from an agent working cases, who
+  // needs to see where their queue's work comes from.
+  //
+  // `super_admin` belongs here too, and leaving it off was a bug: the entry
+  // above is NOT the same page for everyone holding that role. Role and reach
+  // are separate axes — a super_admin who belongs to a customer stays inside it
+  // — so a tenant's own super_admin got the tenant-management screen in place of
+  // the routing table and lost the routing table altogether. The top tier sees
+  // both entries, which is the truth: one is where tenants are made, the other
+  // is where a customer's work is routed.
   {
     href: "/projects",
     key: "nav.projects",
     icon: FolderKanban,
     roles: ["admin", "super_admin"],
+  },
+  // Reviewing what people typed under "Other". Top tier only, mirroring the
+  // server's `category:write` — and unlike the entries above it, the READ is
+  // gated too: this is every phrase anybody has typed into a free text box,
+  // which is a more revealing thing than the list of categories they may file
+  // under.
+  {
+    href: "/categories",
+    key: "nav.categories",
+    icon: Tag,
+    roles: ["super_admin"],
   },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },

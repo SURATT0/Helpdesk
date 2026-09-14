@@ -373,6 +373,9 @@ const en: Dict = {
   "composer.saveNote": "Save note",
   "composer.sending": "Sending…",
   "composer.attach": "Attach",
+  // Shown only where the pointer is coarse. The file picker beside it already
+  // reaches the camera roll; this is the shortcut to the camera itself.
+  "composer.takePhoto": "Camera",
   "composer.attaching": "Attaching…",
   "composer.from": "From",
   "composer.to": "To",
@@ -476,12 +479,87 @@ const en: Dict = {
   "create.projectPickCustomerFirst": "Choose a customer first",
   "create.projectNone": "This customer has no projects",
   "create.projectOptional": "No project",
+  "nav.categories": "Categories",
+  "categories.explainer":
+    "What people typed when no category fitted. A phrase that keeps coming back is one the list is missing — promote it and it becomes a category this customer can file under from now on.",
+  "categories.forbidden": "Not your page",
+  "categories.forbiddenNote":
+    "Reviewing what people type into a free text box is kept to platform staff.",
+  "categories.loadError": "Couldn't load what people have typed.",
+  "categories.emptyNote":
+    "When somebody picks Other and describes their problem, it appears here.",
+  "categories.timesUsed": "{n}×",
+  "categories.lastUsed": "last {when}",
+  "categories.andMore": "+{n} more",
+  "categories.promote": "Make it a category",
+  "categories.promoteNote":
+    "This adds the category to {customer} for future tickets. The tickets already filed under Other keep their own words — their category is what the desk actually worked them under, and rewriting it would change what past reports say.",
+  "categories.promoted": "Added as “{name}”",
+  "categories.promoteError": "Couldn't add the category. Try again.",
+  "categories.nameLabel": "Category name",
+  "categories.codeLabel": "Code",
+  "categories.codeHint":
+    "This name has no letters or digits to build a code from, so give one. A code is what reports group by across customers — it stays the same if the name is later renamed or translated.",
+  // --- customers & their projects, on one screen ---------------------------
+  "adminCustomers.newProject": "Add project",
+  "adminCustomers.newProjectTitle": "Add a project",
+  "adminCustomers.editProjectTitle": "Edit project",
+  // Says which customer this lands under. The picker is gone because the answer
+  // is already known; the fact it carried must not go with it.
+  "adminCustomers.projectForCustomer": "For {customer}",
+  "adminCustomers.projectName": "Project name",
+  "adminCustomers.projectDescription": "What it is for",
+  "adminCustomers.projectDescriptionPlaceholder":
+    "What this project covers, who it is for, anything the desk should know",
+  "adminCustomers.projectDescriptionHint":
+    "Markdown. Shown on the project's own page.",
+  "adminCustomers.createProject": "Add project",
+  "adminCustomers.saveProject": "Save project",
+  "adminCustomers.projectSaveError": "Couldn't save the project. Try again.",
+  "adminCustomers.editProjectNamed": "Edit {name}",
+  "adminCustomers.archiveProjectNamed": "Archive {name}",
+  "adminCustomers.new": "Add customer",
+  "adminCustomers.newTitle": "Add a customer",
+  "adminCustomers.renameTitle": "Rename customer",
+  "adminCustomers.nameLabel": "Company name",
+  "adminCustomers.create": "Add customer",
+  "adminCustomers.saveName": "Save name",
+  "adminCustomers.rename": "Rename",
+  "adminCustomers.archive": "Archive",
+  "adminCustomers.search": "Search customers",
+  "adminCustomers.choose": "Choose a customer to see its details and projects.",
+  "adminCustomers.back": "All customers",
+  "adminCustomers.loadError": "Couldn't load the customers.",
+  "adminCustomers.empty": "No customers yet.",
+  "adminCustomers.noMatch": "No customer matches “{q}”.",
+  "adminCustomers.notFound": "That customer is not in this list — it may have been archived.",
+  "adminCustomers.forbidden": "Not your page",
+  "adminCustomers.forbiddenNote":
+    "Creating and archiving tenants is kept to platform staff. The routing table is on the Projects page.",
+  "adminCustomers.projectCount": "{n} projects",
+  "adminCustomers.memberCount": "{n} members",
+  "adminCustomers.projects": "Projects",
+  "adminCustomers.noProjects": "No projects for this customer yet.",
+  "adminCustomers.count.projects": "Projects",
+  "adminCustomers.count.tickets": "Tickets",
+  "adminCustomers.count.users": "Users",
   "create.category": "Category",
+  // The escape hatch, and the words that keep it from becoming a second
+  // category list. The hint says what the text is FOR — it stays on this ticket
+  // — because a person who knows that writes a sentence instead of a label.
+  "create.categoryOther": "What is the problem?",
+  "create.categoryOtherPlaceholder":
+    "Describe what went wrong, in your own words",
+  "create.categoryOtherHint":
+    "This stays on this ticket. The desk can turn a recurring one into a category of its own later.",
+  "create.categoryOtherRequired":
+    "Say what the problem is — that is the whole point of choosing Other.",
   "create.priority": "Priority",
   "create.description": "Description",
   "create.descriptionPlaceholder": "What happens, when it started, what you've tried…",
   "create.dropText": "Drag files here or",
   "create.browse": "browse",
+  "create.takePhoto": "Take a photo",
   "create.dropHint": "· images, PDF, Excel, CSV · max 25 MB each",
   "create.remove": "Remove {name}",
   "create.attachError": "Couldn't attach: {names}",
@@ -756,8 +834,14 @@ const en: Dict = {
   "customers.archiveOpenTickets": "{n} open ticket(s)",
   "customers.archiveProjects": "{n} project(s)",
   "customers.archiveUsers": "{n} active user(s)",
+  "customers.archiveCategories": "{n} categor(y/ies)",
+  // Says plainly that the category line is a dead end, rather than promising an
+  // archive that cannot follow. A customer is created with the starter set and
+  // nothing in the product removes a category, so a tenant that still has them
+  // cannot be archived at all — and a hint that ended "then this can be
+  // archived" would be telling somebody to do something that does not work.
   "customers.archiveBlockedHint":
-    "Close the tickets, archive the projects and deactivate the accounts first — then this can be archived.",
+    "Close the tickets, archive the projects and deactivate the accounts first. Categories cannot be removed from a customer today, so one that still has them cannot be archived yet.",
   "customers.archiveSafe":
     "Nothing is live under this customer. Its tickets, projects and history stay on record; it simply leaves every picker.",
   "customers.archiveCancel": "Cancel",
@@ -973,6 +1057,15 @@ const en: Dict = {
   "error.TICKET_NOT_AWAITING_ANSWER":
     "This ticket is {actual}, so there is nothing to confirm.",
   "error.SAME_ASSIGNEE": "That is the same person the queue is already with.",
+  // Filing a ticket under "Other" without saying what it is, or sending a
+  // description for a category that does not take one. `reason` tells the two
+  // apart in `details`; the field is named so the form can point at it.
+  "error.CATEGORY_DETAIL_REQUIRED":
+    "Say what the problem is — that is the whole point of choosing Other.",
+  "error.PROJECT_HAS_OPEN_TICKETS":
+    "{count} open ticket(s) are still filed under this project. Finish or re-file them first.",
+  "error.PROJECT_NAME_TAKEN":
+    "This customer already has a project called “{name}”.",
   "error.NOT_ASSIGNABLE": "That person cannot be assigned tickets.",
 
   // People, projects, customers.
@@ -1364,6 +1457,7 @@ const th: Dict = {
   "composer.saveNote": "บันทึกโน้ต",
   "composer.sending": "กำลังส่ง…",
   "composer.attach": "แนบไฟล์",
+  "composer.takePhoto": "ถ่ายรูป",
   "composer.attaching": "กำลังแนบ…",
   "composer.from": "จาก",
   "composer.to": "ถึง",
@@ -1460,12 +1554,81 @@ const th: Dict = {
   "create.projectPickCustomerFirst": "เลือกลูกค้าก่อน",
   "create.projectNone": "ลูกค้ารายนี้ยังไม่มีโปรเจกต์",
   "create.projectOptional": "ไม่ระบุโปรเจกต์",
+  "nav.categories": "หมวดหมู่",
+  "categories.explainer":
+    "ข้อความที่ผู้ใช้พิมพ์เมื่อไม่มีหมวดหมู่ไหนตรง ถ้าเรื่องไหนเกิดซ้ำ แปลว่าหมวดหมู่ยังขาดอยู่ — เลื่อนขึ้นเป็นหมวดหมู่แล้วลูกค้ารายนี้จะเลือกได้ตั้งแต่ Ticket ถัดไป",
+  "categories.forbidden": "ไม่ใช่หน้าของคุณ",
+  "categories.forbiddenNote":
+    "การดูข้อความที่ผู้ใช้พิมพ์เข้ามาจำกัดไว้เฉพาะทีมงานระดับแพลตฟอร์ม",
+  "categories.loadError": "โหลดข้อมูลไม่สำเร็จ",
+  "categories.emptyNote":
+    "เมื่อมีผู้เลือก “อื่นๆ” แล้วอธิบายปัญหา ข้อความจะมาแสดงที่นี่",
+  "categories.timesUsed": "{n} ครั้ง",
+  "categories.lastUsed": "ล่าสุด {when}",
+  "categories.andMore": "และอีก {n} รายการ",
+  "categories.promote": "เลื่อนขึ้นเป็นหมวดหมู่",
+  "categories.promoteNote":
+    "จะเพิ่มหมวดหมู่นี้ให้ {customer} สำหรับ Ticket ใหม่ ส่วน Ticket เดิมที่แจ้งไว้ภายใต้ “อื่นๆ” จะยังคงข้อความเดิม — หมวดหมู่ของมันคือสิ่งที่ทีมใช้ทำงานจริง การแก้ย้อนหลังจะทำให้รายงานเก่าเปลี่ยนไป",
+  "categories.promoted": "เพิ่ม “{name}” แล้ว",
+  "categories.promoteError": "เพิ่มหมวดหมู่ไม่สำเร็จ ลองอีกครั้ง",
+  "categories.nameLabel": "ชื่อหมวดหมู่",
+  "categories.codeLabel": "รหัส",
+  "categories.codeHint":
+    "ชื่อนี้ไม่มีตัวอักษรภาษาอังกฤษหรือตัวเลขให้สร้างรหัสได้ กรุณาระบุรหัสเอง — รหัสคือสิ่งที่รายงานใช้จัดกลุ่มข้ามลูกค้า และจะไม่เปลี่ยนแม้ภายหลังจะเปลี่ยนชื่อหรือแปลเป็นภาษาอื่น",
+  // --- ลูกค้าและโปรเจกต์ในหน้าเดียว -----------------------------------------
+  "adminCustomers.newProject": "เพิ่มโปรเจกต์",
+  "adminCustomers.newProjectTitle": "เพิ่มโปรเจกต์ใหม่",
+  "adminCustomers.editProjectTitle": "แก้ไขโปรเจกต์",
+  "adminCustomers.projectForCustomer": "ของ {customer}",
+  "adminCustomers.projectName": "ชื่อโปรเจกต์",
+  "adminCustomers.projectDescription": "โปรเจกต์นี้เกี่ยวกับอะไร",
+  "adminCustomers.projectDescriptionPlaceholder":
+    "ขอบเขตของโปรเจกต์ ใครเกี่ยวข้อง และสิ่งที่ทีมผู้ดูแลควรรู้",
+  "adminCustomers.projectDescriptionHint":
+    "รองรับ Markdown แสดงในหน้าของโปรเจกต์เอง",
+  "adminCustomers.createProject": "เพิ่มโปรเจกต์",
+  "adminCustomers.saveProject": "บันทึกโปรเจกต์",
+  "adminCustomers.projectSaveError": "บันทึกโปรเจกต์ไม่สำเร็จ ลองอีกครั้ง",
+  "adminCustomers.editProjectNamed": "แก้ไข {name}",
+  "adminCustomers.archiveProjectNamed": "เก็บ {name} เข้าคลัง",
+  "adminCustomers.new": "เพิ่มลูกค้า",
+  "adminCustomers.newTitle": "เพิ่มลูกค้าใหม่",
+  "adminCustomers.renameTitle": "เปลี่ยนชื่อลูกค้า",
+  "adminCustomers.nameLabel": "ชื่อบริษัท",
+  "adminCustomers.create": "เพิ่มลูกค้า",
+  "adminCustomers.saveName": "บันทึกชื่อ",
+  "adminCustomers.rename": "เปลี่ยนชื่อ",
+  "adminCustomers.archive": "เก็บเข้าคลัง",
+  "adminCustomers.search": "ค้นหาลูกค้า",
+  "adminCustomers.choose": "เลือกลูกค้าเพื่อดูรายละเอียดและโปรเจกต์",
+  "adminCustomers.back": "รายชื่อลูกค้าทั้งหมด",
+  "adminCustomers.loadError": "โหลดรายชื่อลูกค้าไม่สำเร็จ",
+  "adminCustomers.empty": "ยังไม่มีลูกค้า",
+  "adminCustomers.noMatch": "ไม่พบลูกค้าที่ตรงกับ “{q}”",
+  "adminCustomers.notFound": "ไม่พบลูกค้ารายนี้ในรายการ — อาจถูกเก็บเข้าคลังแล้ว",
+  "adminCustomers.forbidden": "ไม่ใช่หน้าของคุณ",
+  "adminCustomers.forbiddenNote":
+    "การสร้างและเก็บลูกค้าเข้าคลังจำกัดไว้เฉพาะทีมงานระดับแพลตฟอร์ม ส่วนตารางการกระจายงานอยู่ที่หน้าโปรเจกต์",
+  "adminCustomers.projectCount": "{n} โปรเจกต์",
+  "adminCustomers.memberCount": "สมาชิก {n} คน",
+  "adminCustomers.projects": "โปรเจกต์",
+  "adminCustomers.noProjects": "ลูกค้ารายนี้ยังไม่มีโปรเจกต์",
+  "adminCustomers.count.projects": "โปรเจกต์",
+  "adminCustomers.count.tickets": "Ticket",
+  "adminCustomers.count.users": "ผู้ใช้",
   "create.category": "หมวดหมู่",
+  "create.categoryOther": "ปัญหาคืออะไร?",
+  "create.categoryOtherPlaceholder": "อธิบายสิ่งที่เกิดขึ้นด้วยคำพูดของคุณเอง",
+  "create.categoryOtherHint":
+    "ข้อความนี้จะอยู่กับ Ticket นี้เท่านั้น หากเรื่องนี้เกิดซ้ำ ผู้ดูแลระบบสามารถเลื่อนขึ้นเป็นหมวดหมู่จริงได้ภายหลัง",
+  "create.categoryOtherRequired":
+    "กรุณาระบุว่าปัญหาคืออะไร — นี่คือเหตุผลทั้งหมดของการเลือก \"อื่นๆ\"",
   "create.priority": "ความสำคัญ",
   "create.description": "รายละเอียด",
   "create.descriptionPlaceholder": "เกิดอะไรขึ้น เริ่มเมื่อไร ลองแก้อะไรมาแล้วบ้าง…",
   "create.dropText": "ลากไฟล์มาที่นี่ หรือ",
   "create.browse": "เลือกไฟล์",
+  "create.takePhoto": "ถ่ายรูป",
   "create.dropHint": "· รูปภาพ, PDF, Excel, CSV · ไม่เกิน 25 MB ต่อไฟล์",
   "create.remove": "ลบ {name}",
   "create.attachError": "แนบไม่สำเร็จ: {names}",
@@ -1740,8 +1903,9 @@ const th: Dict = {
   "customers.archiveOpenTickets": "Ticket ที่ยังไม่ปิด {n} ใบ",
   "customers.archiveProjects": "โปรเจกต์ {n} รายการ",
   "customers.archiveUsers": "ผู้ใช้ที่ยังใช้งานอยู่ {n} คน",
+  "customers.archiveCategories": "หมวดหมู่ {n} รายการ",
   "customers.archiveBlockedHint":
-    "ปิด Ticket เก็บโปรเจกต์เข้าคลัง และปิดบัญชีผู้ใช้ให้เรียบร้อยก่อน แล้วจึงเก็บลูกค้ารายนี้เข้าคลังได้",
+    "ปิด Ticket เก็บโปรเจกต์เข้าคลัง และปิดบัญชีผู้ใช้ให้เรียบร้อยก่อน ส่วนหมวดหมู่ยังไม่มีวิธีลบออกจากลูกค้าในตอนนี้ ลูกค้าที่ยังมีหมวดหมู่อยู่จึงยังเก็บเข้าคลังไม่ได้",
   "customers.archiveSafe":
     "ไม่มีอะไรค้างอยู่ภายใต้ลูกค้ารายนี้ Ticket โปรเจกต์ และประวัติทั้งหมดยังอยู่ครบ เพียงแต่จะไม่ปรากฏในรายการให้เลือกอีก",
   "customers.archiveCancel": "ยกเลิก",
@@ -1930,6 +2094,12 @@ const th: Dict = {
   "error.TICKET_NOT_AWAITING_ANSWER":
     "Ticket นี้อยู่ในสถานะ {actual} จึงไม่มีอะไรให้ยืนยัน",
   "error.SAME_ASSIGNEE": "เป็นคนเดิมที่ถือคิวนี้อยู่แล้ว",
+  "error.CATEGORY_DETAIL_REQUIRED":
+    "กรุณาระบุว่าปัญหาคืออะไร — นี่คือเหตุผลทั้งหมดของการเลือก “อื่นๆ”",
+  "error.PROJECT_HAS_OPEN_TICKETS":
+    "ยังมี Ticket ที่เปิดอยู่ {count} รายการในโปรเจกต์นี้ กรุณาปิดหรือย้ายก่อน",
+  "error.PROJECT_NAME_TAKEN":
+    "ลูกค้ารายนี้มีโปรเจกต์ชื่อ “{name}” อยู่แล้ว",
   "error.NOT_ASSIGNABLE": "ไม่สามารถมอบหมาย Ticket ให้คนนี้ได้",
 
   "error.LAST_ADMIN":

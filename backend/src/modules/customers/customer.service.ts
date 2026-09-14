@@ -24,16 +24,23 @@ import {
 export const CUSTOMER_ARCHIVE = "customer:archive";
 
 /**
- * May this principal create or rename a customer?
+ * The permission creating or renaming a customer needs.
  *
- * `admin` and above, as agreed. Note what it does NOT confer: an admin who
- * creates a customer cannot see into it (reach is a separate axis) and cannot
- * grant themselves reach (`mayGrantReach` is platform-wide only). So the worst
- * a misuse produces is an empty tenant somebody else has to tidy up, not a way
- * into anyone's data.
+ * It used to be a role comparison here — `admin` or above. Now that the grants
+ * are editable it is a permission like any other, which is what lets somebody
+ * change who may do it without a deploy. The starting grants give it to exactly
+ * the roles the comparison did, so nothing moved on the day of the change.
+ *
+ * Note what it does NOT confer: an admin who creates a customer cannot see into
+ * it (reach is a separate axis) and cannot grant themselves reach
+ * (`mayGrantReach` is platform-wide only, and stays a predicate rather than a
+ * permission for that reason). The worst a misuse produces is an empty tenant
+ * somebody else has to tidy up, not a way into anyone's data.
  */
+export const CUSTOMER_WRITE = "customer:write";
+
 function mayManage(actor: AuthUser): boolean {
-  return actor.role === "admin" || actor.role === "super_admin";
+  return hasPermission(actor, CUSTOMER_WRITE);
 }
 
 function assertMayManage(actor: AuthUser): void {
@@ -157,6 +164,7 @@ export const customerService = {
         projects: impact.projects,
         tickets: Math.max(impact.tickets, 1),
         users: impact.users,
+        categories: impact.categories,
       });
     }
   },

@@ -63,6 +63,12 @@ export const STARTER_CATEGORY_NAMES = [
   "Access",
   "Accounts",
   "Software",
+  // Last, and last on every picker that renders this order: it is the answer for
+  // a ticket none of the six above fit, so offering it before them would invite
+  // it as a first choice. `categoryCode("Other")` is `OTHER`, which is what
+  // shared/category-other.ts keys on — the name is a display decision a tenant
+  // may translate, the code is not.
+  "Other",
 ] as const;
 
 export function categoryLabel(code: string): string {

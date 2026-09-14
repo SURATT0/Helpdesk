@@ -20,6 +20,16 @@ import type { Lang } from "@/features/i18n/dictionary";
 // Roles that may connect/sync external sources (mirrors backend `ticket:import`).
 const CAN_INTEGRATE = new Set(["super_admin", "admin"]);
 
+/**
+ * Roles that can be handed a ticket, and therefore the only ones for whom an
+ * availability switch means anything.
+ *
+ * Mirrors `mayReceiveAssignment` in the API's `ticket.scope.ts`, which refuses a
+ * candidate whose role is `user` before it looks at anything else — so a
+ * requester's flag is never read by routing at all.
+ */
+const CAN_BE_ASSIGNED = new Set(["super_admin", "admin"]);
+
 function Section({
   title,
   note,
@@ -71,6 +81,7 @@ export function SettingsView() {
 
   const trimmed = name.trim();
   const dirty = trimmed.length > 0 && trimmed !== user.name;
+  const canBeAssigned = CAN_BE_ASSIGNED.has(user.role);
 
   async function signOut() {
     await logout();
@@ -134,37 +145,55 @@ export function SettingsView() {
         </div>
       </Section>
 
-      {/* Availability — self-service, so it needs no manager and works for every
-          role (a requester holds no user:write and cannot use the admin path). */}
-      <Section
-        title={t("settings.availability")}
-        note={t("settings.availabilityNote")}
-      >
-        <label className="inline-flex cursor-pointer items-center gap-2 text-control">
-          <input
-            type="checkbox"
-            checked={user.availableForAssignment}
-            disabled={availability.isPending}
-            onChange={(e) =>
-              availability.mutate({ availableForAssignment: e.target.checked })
-            }
-            className="h-4 w-4 cursor-pointer accent-accent"
-          />
-          <span className="font-medium text-ink">
-            {t("settings.acceptingWork")}
-          </span>
-        </label>
-        {!user.availableForAssignment ? (
-          <p className="mt-2 text-body text-status-pending-fg">
-            {t("settings.awayHint")}
-          </p>
-        ) : null}
-        {availability.isError ? (
-          <p className="mt-2 text-body font-medium text-danger">
-            {apiErrorMessage(availability.error, t, "settings.saveError")}
-          </p>
-        ) : null}
-      </Section>
+      {/*
+        Availability — self-service, for the people it means something to.
+
+        Hidden from a requester rather than removed. The flag is load-bearing and
+        is untouched: `resolveRoutedAssignee` reads it to decide whether a
+        project's ticket goes to its owner or falls to the backup, and the user
+        directory keeps its own toggle for an admin to set it on somebody else.
+        What changed is only who is SHOWN the control.
+
+        A requester is the one person for whom it can never do anything —
+        `mayReceiveAssignment` refuses a candidate whose role is `user` before it
+        looks at anything else, so their flag is never read by routing at all. A
+        switch that cannot affect anything is worse than no switch: it invites
+        somebody to flip it and wonder why nothing happened.
+
+        Staff keep it, and keep it self-service. An agent going away should not
+        have to ask an administrator to say so.
+      */}
+      {canBeAssigned ? (
+        <Section
+          title={t("settings.availability")}
+          note={t("settings.availabilityNote")}
+        >
+          <label className="inline-flex cursor-pointer items-center gap-2 text-control">
+            <input
+              type="checkbox"
+              checked={user.availableForAssignment}
+              disabled={availability.isPending}
+              onChange={(e) =>
+                availability.mutate({ availableForAssignment: e.target.checked })
+              }
+              className="h-4 w-4 cursor-pointer accent-accent"
+            />
+            <span className="font-medium text-ink">
+              {t("settings.acceptingWork")}
+            </span>
+          </label>
+          {!user.availableForAssignment ? (
+            <p className="mt-2 text-body text-status-pending-fg">
+              {t("settings.awayHint")}
+            </p>
+          ) : null}
+          {availability.isError ? (
+            <p className="mt-2 text-body font-medium text-danger">
+              {apiErrorMessage(availability.error, t, "settings.saveError")}
+            </p>
+          ) : null}
+        </Section>
+      ) : null}
 
       {/* Preferences. Unlike the topbar toggle, which only changes the current
           browser, this one is saved to the account — so it also decides which

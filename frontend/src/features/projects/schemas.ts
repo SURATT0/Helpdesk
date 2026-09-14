@@ -38,14 +38,23 @@ export const projectListSchema = z.object({
 export const projectEnvelopeSchema = z.object({ data: projectSchema });
 
 /**
- * What deleting a project would disturb.
+ * What archiving a project would disturb. Two different things, counted apart.
  *
- * `members` counts everyone routing through it — its listed members plus the
- * owner and backup owner. Deliberately NOT a ticket count: a ticket carries no
- * project (routing reads the requester's project once, at creation, and keeps
- * only the assignee it picked), so "tickets in this project" is not a question
- * the data can answer. What deletion would break is routing, and membership is
- * what routing reads.
+ * `members` is everyone routing through it — its listed members plus the owner
+ * and backup owner. That is what archiving would break about ROUTING.
+ *
+ * `openTickets` is live work filed under it. This did not exist as a question
+ * for most of the product's life: a ticket carried no project, so "tickets in
+ * this project" had no answer. `tickets.project_id` changed that, and the guard
+ * changed with it.
+ *
+ * OPEN ones only. A project that ran for a year has hundreds of closed tickets
+ * pointing at it and archiving strands none of them — their name still renders,
+ * because the ticket reads the project row without filtering archived ones.
+ * Counting those too would mean a routing project could never be retired.
+ *
+ * Two numbers rather than a total, because the fixes differ: members are moved
+ * to another project, tickets are finished or re-filed.
  */
 export const projectDeletionImpactSchema = z.object({
   data: z.object({
@@ -53,6 +62,8 @@ export const projectDeletionImpactSchema = z.object({
     name: z.string(),
     customerId: z.number(),
     members: z.number(),
+    // Defaulted so a response from an API that predates the field still parses.
+    openTickets: z.number().default(0),
   }),
 });
 
