@@ -90,6 +90,10 @@ test("an empty project can be deleted, but only after the name is typed", async 
   const name = `E2E Scratch ${Date.now()}`;
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByPlaceholder("Project name").fill(name);
+  // The customer has to be named. A project belongs to one, and this account is
+  // platform-wide — it belongs to no tenant, so the form asks instead of
+  // assuming, and Create stays disabled until it is answered.
+  await page.getByLabel("Customer").selectOption({ label: "Acme Corp" });
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByText(name)).toBeVisible();
 

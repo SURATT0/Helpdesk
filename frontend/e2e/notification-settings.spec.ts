@@ -21,7 +21,19 @@ const panel = (page: Page) => page.locator("[data-notification-settings]");
  */
 
 // `login()` signs in as Dana Reyes — the demo agent (role `admin`).
-const TENANT_ADMIN = "morgan.lee@acme.com"; // super_admin of Acme
+const TENANT_ADMIN = "morgan.lee@acme.com"; // super_admin, and platform-wide
+
+/**
+ * Name the tenant whose policy is being edited.
+ *
+ * A policy belongs to one customer, and every super admin belongs to none — so
+ * the panel asks which before it shows anything. There is deliberately no
+ * default: picking one quietly would be a company's settings changed on a screen
+ * that never said whose they were.
+ */
+async function chooseCustomer(page: Page, name = "Acme Corp") {
+  await page.getByLabel("Customer").selectOption({ label: name });
+}
 
 test("an agent's Settings page contains no notification policy at all", async ({
   page,
@@ -40,6 +52,7 @@ test("a super admin gets the panel, on the system defaults to begin with", async
 }) => {
   await loginAs(page, TENANT_ADMIN);
   await page.goto("/settings");
+  await chooseCustomer(page);
 
   await expect(page.getByText("Send an email when…")).toBeVisible();
   // An unconfigured desk says so, rather than looking like somebody chose this.
@@ -54,6 +67,7 @@ test("every event starts switched on, and can be switched off", async ({
 }) => {
   await loginAs(page, TENANT_ADMIN);
   await page.goto("/settings");
+  await chooseCustomer(page);
 
   const slaWarning = page.getByRole("checkbox", {
     name: "A ticket approaches its SLA",
@@ -68,6 +82,7 @@ test("saving stores the policy and offers a way back to the defaults", async ({
 }) => {
   await loginAs(page, TENANT_ADMIN);
   await page.goto("/settings");
+  await chooseCustomer(page);
 
   await page.getByLabel("Warn before SLA (minutes)").fill("90");
   await page.getByLabel("Emails per ticket").fill("5");
@@ -87,6 +102,7 @@ test("saving stores the policy and offers a way back to the defaults", async ({
 test("a value outside its bounds cannot be saved", async ({ page }) => {
   await loginAs(page, TENANT_ADMIN);
   await page.goto("/settings");
+  await chooseCustomer(page);
 
   await page.getByLabel("Emails per ticket").fill("0");
   await expect(

@@ -155,6 +155,13 @@ const en: Dict = {
   "settings.saveError": "Couldn't save",
   // --- notification policy (super admin only) -------------------------------
   "notifySettings.title": "Notifications",
+  // Shown only to staff who belong to no customer. A policy is one tenant's, so
+  // there is nothing to edit until they say whose — and no default, because
+  // guessing would be one company's settings changed from another's screen.
+  "notifySettings.customer": "Customer",
+  "notifySettings.customerPlaceholder": "Choose a customer…",
+  "notifySettings.customerHint":
+    "These settings belong to one customer. You belong to none, so pick whose desk you are configuring.",
   "notifySettings.noteDefaults":
     "Following the system defaults. Saving anything here starts this customer's own policy.",
   "notifySettings.noteConfigured":
@@ -1257,6 +1264,10 @@ const th: Dict = {
   "settings.saveError": "บันทึกไม่สำเร็จ",
   // --- notification policy (super admin only) -------------------------------
   "notifySettings.title": "การแจ้งเตือน",
+  "notifySettings.customer": "ลูกค้า",
+  "notifySettings.customerPlaceholder": "เลือกลูกค้า…",
+  "notifySettings.customerHint":
+    "การตั้งค่านี้เป็นของลูกค้าแต่ละราย คุณไม่ได้สังกัดรายใด จึงต้องเลือกว่ากำลังตั้งค่าให้ใคร",
   "notifySettings.noteDefaults":
     "ใช้ค่าเริ่มต้นของระบบอยู่ เมื่อบันทึกจะเริ่มใช้ค่าเฉพาะของลูกค้ารายนี้",
   "notifySettings.noteConfigured":
