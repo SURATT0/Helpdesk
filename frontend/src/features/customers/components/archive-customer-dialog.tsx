@@ -34,7 +34,10 @@ export function ArchiveCustomerDialog({
 
   const blocking =
     impact != null &&
-    (impact.projects > 0 || impact.tickets > 0 || impact.users > 0);
+    (impact.projects > 0 ||
+      impact.tickets > 0 ||
+      impact.users > 0 ||
+      impact.categories > 0);
 
   function submit() {
     setError(null);
@@ -97,6 +100,15 @@ export function ArchiveCustomerDialog({
               ) : null}
               {impact.users > 0 ? (
                 <li>{t("customers.archiveUsers", { n: impact.users })}</li>
+              ) : null}
+              {/* Last in the list, and the one that never reaches zero on its
+                  own: a customer is created with the starter set. Shown rather
+                  than merely enforced, because a dead end somebody can read is
+                  better than a refusal they cannot explain. */}
+              {impact.categories > 0 ? (
+                <li>
+                  {t("customers.archiveCategories", { n: impact.categories })}
+                </li>
               ) : null}
             </ul>
             <p className="mt-2 pl-[22px] text-caption text-faint">

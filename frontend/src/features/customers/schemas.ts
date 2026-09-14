@@ -9,15 +9,25 @@ export const customerSchema = z.object({
   name: z.string(),
   /**
    * What is live under this tenant right now: live projects, OPEN tickets,
-   * active users. Open rather than all tickets on purpose — a tenant whose work
+   * active users, and the tenant's own categories. Open rather than all tickets
+   * on purpose — a tenant whose work
    * is finished is exactly the one you archive, and counting closed ones would
    * make that impossible forever.
    *
    * Defaulted so a picker response that carries only id and name still parses.
    */
   counts: z
-    .object({ projects: z.number(), tickets: z.number(), users: z.number() })
-    .default({ projects: 0, tickets: 0, users: 0 }),
+    .object({
+      projects: z.number(),
+      tickets: z.number(),
+      users: z.number(),
+      // Defaulted so a response from an API that predates the field still
+      // parses. Never zero in practice: a customer is created with the starter
+      // set, which is exactly why counting it makes archiving impossible until
+      // there is a way to remove categories.
+      categories: z.number().default(0),
+    })
+    .default({ projects: 0, tickets: 0, users: 0, categories: 0 }),
   createdAt: z.string().default(""),
 });
 
@@ -28,6 +38,7 @@ export const archiveImpactSchema = z.object({
   projects: z.number(),
   tickets: z.number(),
   users: z.number(),
+  categories: z.number().default(0),
 });
 
 export const customerListSchema = z.object({ data: z.array(customerSchema) });

@@ -834,8 +834,14 @@ const en: Dict = {
   "customers.archiveOpenTickets": "{n} open ticket(s)",
   "customers.archiveProjects": "{n} project(s)",
   "customers.archiveUsers": "{n} active user(s)",
+  "customers.archiveCategories": "{n} categor(y/ies)",
+  // Says plainly that the category line is a dead end, rather than promising an
+  // archive that cannot follow. A customer is created with the starter set and
+  // nothing in the product removes a category, so a tenant that still has them
+  // cannot be archived at all — and a hint that ended "then this can be
+  // archived" would be telling somebody to do something that does not work.
   "customers.archiveBlockedHint":
-    "Close the tickets, archive the projects and deactivate the accounts first — then this can be archived.",
+    "Close the tickets, archive the projects and deactivate the accounts first. Categories cannot be removed from a customer today, so one that still has them cannot be archived yet.",
   "customers.archiveSafe":
     "Nothing is live under this customer. Its tickets, projects and history stay on record; it simply leaves every picker.",
   "customers.archiveCancel": "Cancel",
@@ -1051,6 +1057,15 @@ const en: Dict = {
   "error.TICKET_NOT_AWAITING_ANSWER":
     "This ticket is {actual}, so there is nothing to confirm.",
   "error.SAME_ASSIGNEE": "That is the same person the queue is already with.",
+  // Filing a ticket under "Other" without saying what it is, or sending a
+  // description for a category that does not take one. `reason` tells the two
+  // apart in `details`; the field is named so the form can point at it.
+  "error.CATEGORY_DETAIL_REQUIRED":
+    "Say what the problem is — that is the whole point of choosing Other.",
+  "error.PROJECT_HAS_OPEN_TICKETS":
+    "{count} open ticket(s) are still filed under this project. Finish or re-file them first.",
+  "error.PROJECT_NAME_TAKEN":
+    "This customer already has a project called “{name}”.",
   "error.NOT_ASSIGNABLE": "That person cannot be assigned tickets.",
 
   // People, projects, customers.
@@ -1888,8 +1903,9 @@ const th: Dict = {
   "customers.archiveOpenTickets": "Ticket ที่ยังไม่ปิด {n} ใบ",
   "customers.archiveProjects": "โปรเจกต์ {n} รายการ",
   "customers.archiveUsers": "ผู้ใช้ที่ยังใช้งานอยู่ {n} คน",
+  "customers.archiveCategories": "หมวดหมู่ {n} รายการ",
   "customers.archiveBlockedHint":
-    "ปิด Ticket เก็บโปรเจกต์เข้าคลัง และปิดบัญชีผู้ใช้ให้เรียบร้อยก่อน แล้วจึงเก็บลูกค้ารายนี้เข้าคลังได้",
+    "ปิด Ticket เก็บโปรเจกต์เข้าคลัง และปิดบัญชีผู้ใช้ให้เรียบร้อยก่อน ส่วนหมวดหมู่ยังไม่มีวิธีลบออกจากลูกค้าในตอนนี้ ลูกค้าที่ยังมีหมวดหมู่อยู่จึงยังเก็บเข้าคลังไม่ได้",
   "customers.archiveSafe":
     "ไม่มีอะไรค้างอยู่ภายใต้ลูกค้ารายนี้ Ticket โปรเจกต์ และประวัติทั้งหมดยังอยู่ครบ เพียงแต่จะไม่ปรากฏในรายการให้เลือกอีก",
   "customers.archiveCancel": "ยกเลิก",
@@ -2078,6 +2094,12 @@ const th: Dict = {
   "error.TICKET_NOT_AWAITING_ANSWER":
     "Ticket นี้อยู่ในสถานะ {actual} จึงไม่มีอะไรให้ยืนยัน",
   "error.SAME_ASSIGNEE": "เป็นคนเดิมที่ถือคิวนี้อยู่แล้ว",
+  "error.CATEGORY_DETAIL_REQUIRED":
+    "กรุณาระบุว่าปัญหาคืออะไร — นี่คือเหตุผลทั้งหมดของการเลือก “อื่นๆ”",
+  "error.PROJECT_HAS_OPEN_TICKETS":
+    "ยังมี Ticket ที่เปิดอยู่ {count} รายการในโปรเจกต์นี้ กรุณาปิดหรือย้ายก่อน",
+  "error.PROJECT_NAME_TAKEN":
+    "ลูกค้ารายนี้มีโปรเจกต์ชื่อ “{name}” อยู่แล้ว",
   "error.NOT_ASSIGNABLE": "ไม่สามารถมอบหมาย Ticket ให้คนนี้ได้",
 
   "error.LAST_ADMIN":

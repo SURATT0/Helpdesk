@@ -228,8 +228,38 @@ test.describe("managing customers", () => {
     // endpoint — the same figures the guard refuses on — so the dialog cannot
     // promise an archive the API then declines.
     await expect(dialog).toContainText(/\d+/);
+    // Categories are counted too, and are the line that never reaches zero: a
+    // customer is created with the starter set and nothing removes one. The
+    // dialog names the number rather than leaving a dead end unexplained.
+    await expect(dialog).toContainText(/categor/i);
+
     const confirm = dialog.getByRole("button", { name: "Archive", exact: true });
     await expect(confirm).toBeDisabled();
+  });
+
+  test("an empty new customer still cannot be archived, because of its categories", async ({
+    page,
+  }) => {
+    // The consequence of counting them, seen from the screen: a tenant with no
+    // work at all is still blocked, and the dialog says by what.
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+
+    const name = `Blocked By Categories ${Date.now()}`;
+    await page.getByRole("button", { name: "Add customer" }).click();
+    await page.getByLabel("Company name").fill(name);
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Add customer" })
+      .click();
+    await expect(page.getByRole("heading", { name })).toBeVisible();
+
+    await page.getByRole("button", { name: "Archive", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(/categor/i);
+    await expect(
+      dialog.getByRole("button", { name: "Archive", exact: true }),
+    ).toBeDisabled();
   });
 });
 

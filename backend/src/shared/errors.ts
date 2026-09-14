@@ -150,11 +150,15 @@ export const CustomerNotEmpty = (counts: {
   projects: number;
   tickets: number;
   users: number;
+  categories: number;
 }) => {
   const parts = [
     counts.tickets > 0 ? `${counts.tickets} open ticket${counts.tickets === 1 ? "" : "s"}` : null,
     counts.projects > 0 ? `${counts.projects} project${counts.projects === 1 ? "" : "s"}` : null,
     counts.users > 0 ? `${counts.users} user${counts.users === 1 ? "" : "s"}` : null,
+    counts.categories > 0
+      ? `${counts.categories} categor${counts.categories === 1 ? "y" : "ies"}`
+      : null,
   ].filter(Boolean);
   return new AppError(
     409,
@@ -523,6 +527,8 @@ export const ERROR_CODES = [
   "LAST_ADMIN",
   "USER_HAS_OPEN_QUEUE",
   "PROJECT_HAS_MEMBERS",
+  "PROJECT_HAS_OPEN_TICKETS",
+  "PROJECT_NAME_TAKEN",
   "CUSTOMER_NOT_EMPTY",
   "CANNOT_DEACTIVATE_SELF",
   "CANNOT_CHANGE_OWN_ACCESS",

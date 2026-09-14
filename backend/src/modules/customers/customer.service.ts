@@ -164,6 +164,7 @@ export const customerService = {
         projects: impact.projects,
         tickets: Math.max(impact.tickets, 1),
         users: impact.users,
+        categories: impact.categories,
       });
     }
   },
