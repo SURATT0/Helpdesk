@@ -148,9 +148,17 @@ test("the dashboard, the detail page and the board all state the same verdict", 
   const state = spoken!.split(",")[0]; // "SLA: Breached, still open" → "SLA: Breached"
 
   await page.goto(href!);
-  // Twice: the header pill and the properties rail, which must not disagree
-  // with each other either.
-  await expect(page.getByLabel(new RegExp(`^${state}`))).toHaveCount(2);
+  // Twice ON SCREEN: the header pill and the properties rail, which must not
+  // disagree with each other either.
+  //
+  // `:visible` matters since the header carries two copies of its pill — one
+  // for the breadcrumb on a phone, one for the title row from `md` up — and
+  // only ever shows one. Counting DOM nodes would make this assertion a test of
+  // the markup rather than of what a reader sees, and it would have to change
+  // again the next time a breakpoint does.
+  await expect(
+    page.locator(`[aria-label^="${state}"]:visible`),
+  ).toHaveCount(2);
 
   await page.goto("/tickets");
   await page.getByRole("button", { name: "Board", exact: true }).click();
