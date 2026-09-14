@@ -40,6 +40,35 @@ function FacetDropdown<T extends string | number>({
   const [open, setOpen] = React.useState(false);
   const count = selected.size;
   const active = count > 0;
+
+  /**
+   * Which edge of the chip the menu hangs from, above `lg`.
+   *
+   * `left-0` alone cannot be right for every chip: the bar's chips march
+   * rightwards, so the ones near the end open past the window no matter how
+   * narrow the menu is — a 240px menu on a chip whose left edge sits at 818 of
+   * 1024 overhangs by 34, and nothing on the page scrolls sideways to reach it.
+   * Below `lg` the menu is a full-width sheet and none of this applies.
+   *
+   * Measured after the menu renders at its default edge, in a layout effect so
+   * the correction lands before the browser paints rather than as a visible
+   * jump. Reset on close, so the next open measures again from a known start
+   * instead of inheriting the last chip's answer.
+   */
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [alignRight, setAlignRight] = React.useState(false);
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setAlignRight(false);
+      return;
+    }
+    const el = panelRef.current;
+    if (!el || !window.matchMedia("(min-width: 1024px)").matches) return;
+    setAlignRight(
+      el.getBoundingClientRect().right > document.documentElement.clientWidth,
+    );
+  }, [open]);
+
   return (
     <div className="relative">
       <button
@@ -83,11 +112,31 @@ function FacetDropdown<T extends string | number>({
             `lg` rather than the `sm` the closed log uses, because 768 is one of the
             widths that failed; it also lines the behaviour up with the sidebar,
             which is a drawer below exactly this breakpoint.
+
+            `max-w` as well as `min-w`, because the menu is shrink-to-fit and the
+            option labels are `truncate` — which is `white-space: nowrap`, so with
+            nothing bounding the menu the label never truncates at all: it widens
+            the menu instead, and `left-0` then pushes the far end off screen.
+            Customer names are the ones long enough to do it, so the facet that
+            failed depended on which tenants happened to exist. A bound is what
+            makes `truncate` mean what it says.
+
+            The bound alone is not enough — see `alignRight` above, which decides
+            which edge of the chip this hangs from. Width and anchor are two
+            separate halves of "stays on screen", and fixing only the width left
+            the rightmost chips overhanging by less.
           */}
           <div
+            ref={panelRef}
             role="dialog"
             aria-label={label}
-            className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-lg border border-line bg-white p-2 shadow-modal lg:absolute lg:inset-x-auto lg:bottom-auto lg:left-0 lg:top-full lg:z-20 lg:mt-1 lg:max-h-none lg:min-w-[190px] lg:rounded-md lg:p-0 lg:py-1 lg:shadow-modal"
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-lg border border-line bg-white p-2 shadow-modal lg:absolute lg:inset-x-auto lg:bottom-auto lg:top-full lg:z-20 lg:mt-1 lg:max-h-none lg:min-w-[190px] lg:max-w-[240px] lg:rounded-md lg:p-0 lg:py-1 lg:shadow-modal",
+              // One or the other, never both in the class string: `cn` joins,
+              // it does not merge, so emitting `lg:left-0` beside `lg:right-0`
+              // would leave the winner to Tailwind's output order.
+              alignRight ? "lg:right-0" : "lg:left-0",
+            )}
           >
             <div className="mb-1 flex items-center justify-between px-1 lg:hidden">
               <span className="text-control font-semibold text-ink">{label}</span>
@@ -244,7 +293,11 @@ export function FilterBar() {
           selected={selectedCustomers}
           onToggle={toggleCustomer}
           renderOption={(id) => (
-            <span className="truncate text-body text-ink">
+            // `min-w-0` beside the `truncate`, the way the assignee option below
+            // already does it: a flex item's automatic minimum is its content,
+            // so without this the name refuses to shrink and overflows the row
+            // instead of ending in an ellipsis.
+            <span className="min-w-0 truncate text-body text-ink">
               {customerName.get(id)}
             </span>
           )}
