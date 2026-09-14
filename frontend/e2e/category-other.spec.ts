@@ -13,12 +13,28 @@ import { loginAs } from "./helpers";
 const AGENT = "dana.reyes@acme.com";
 const SUPER_ADMIN = "sam.rivera@acme.com";
 
-/** Open the create dialog with the category picker ready. */
+/**
+ * Open the create dialog with the category picker READY, which is a later
+ * moment than the dialog being visible.
+ *
+ * The picker is disabled until a customer has resolved, and until then it holds
+ * a single "Choose a customer first" placeholder. A test that read the options
+ * the instant the dialog painted got that placeholder and reported it as the
+ * category list — so "Other is offered last" failed saying the last option was
+ * the placeholder, on some runs and not others.
+ *
+ * Waiting for the "Other" option is the readiness signal these cases want: it is
+ * the one option the API always returns, so its arrival means the real list has
+ * landed. Where it sits in that list is still what each case asserts.
+ */
 async function openForm(page: Page) {
   await page.goto("/tickets");
   await page.getByRole("button", { name: "New ticket" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  return page.getByLabel("Category");
+  const select = page.getByLabel("Category");
+  await expect(select).toBeEnabled();
+  await expect(select.locator("option", { hasText: /^Other$/ })).toHaveCount(1);
+  return select;
 }
 
 test.describe("choosing Other", () => {
