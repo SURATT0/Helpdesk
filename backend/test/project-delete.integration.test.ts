@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 /**
  * Who may delete a routing project, and what a deletion leaves behind.
@@ -28,17 +28,27 @@ async function login(email: string): Promise<string> {
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-const SUPERUSER = "morgan.lee@acme.com"; // super_admin, Acme
+const SUPERUSER = "morgan.lee@acme.com"; // super_admin — platform-wide, like every seeded one
 const AGENT = "dana.reyes@acme.com"; // admin — what the UI calls an agent
 const REQUESTER = "marcus.chen@acme.com"; // user
-const GLOBEX_ADMIN = "nadia.kofi@acme.com"; // super_admin, Globex
+// A super admin confined to Globex is built per case; see `tenantSuperAdmin`.
 
-/** A project nobody routes through, so it is deletable. */
+/**
+ * A project nobody routes through, so it is deletable.
+ *
+ * The customer is named rather than inferred. It used to be left out, and the
+ * create landed in the caller's own tenant — which worked only because the
+ * super admin this suite uses belonged to one. Platform-wide staff belong to no
+ * tenant, so there is no "theirs" to fall back on and the API rightly asks.
+ */
 async function emptyProject(token: string, name = "Scratch"): Promise<number> {
+  const acme = await prisma.customer.findFirstOrThrow({
+    where: { name: "Acme Corp" },
+  });
   const res = await request(app)
     .post(`${API}/projects`)
     .set(bearer(token))
-    .send({ name });
+    .send({ name, customerId: acme.id });
   expect(res.status).toBe(201);
   return res.body.data.id as number;
 }
@@ -110,9 +120,12 @@ describe("DELETE /projects/:id — who may", () => {
     // own super admin holds the permission and still cannot reach Acme's row —
     // and gets a 404, not a 403, so the refusal does not confirm it exists.
     const acmeProject = await projectIdByName("Acme Facilities");
+    // Built rather than seeded: the point of the case is a super admin who is
+    // CONFINED to Globex, and every seeded one reaches everywhere.
+    const globexSuper = await tenantSuperAdmin("Globex Inc");
     const res = await request(app)
       .delete(`${API}/projects/${acmeProject}`)
-      .set(bearer(await login(GLOBEX_ADMIN)));
+      .set(bearer(await login(globexSuper.email)));
     expect(res.status).toBe(404);
 
     const row = await prisma.project.findUniqueOrThrow({ where: { id: acmeProject } });

@@ -3,7 +3,7 @@ import request from "supertest";
 import { createApp } from "../src/app";
 import { hashPassword } from "../src/modules/auth/auth.password";
 import { mailSender } from "../src/modules/integrations/email/mail-sender";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 /**
  * The approval queue and the directory behind it.
@@ -18,7 +18,8 @@ const app = createApp();
 const API = "/api/v1";
 
 const PLATFORM = "sam.rivera@acme.com"; // super_admin, no customer → platform-wide
-const ACME_SUPER = "morgan.lee@acme.com"; // super_admin INSIDE Acme
+// A super admin INSIDE Acme — built per case by `tenantSuperAdmin`, because no
+// seeded account has that shape any more (they are all platform-wide).
 const ACME_AGENT = "dana.reyes@acme.com"; // admin
 const ACME_REQUESTER = "marcus.chen@acme.com"; // user
 const PASSWORD = "password123";
@@ -74,9 +75,10 @@ describe("the queue is the directory, filtered", () => {
 
   it("hides them from a customer's own super admin, who has no tenant to put them in", async () => {
     const applicant = await pendingApplicant();
+    const confined = await tenantSuperAdmin("Acme Corp");
     const res = await request(app)
       .get(`${API}/users?status=pending`)
-      .set(bearer(await login(ACME_SUPER)));
+      .set(bearer(await login(confined.email)));
     expect(res.status).toBe(200);
     // Not a special case in the queue — it falls out of the directory's scope.
     // An applicant belongs to no customer, and a customer-bound principal sees
@@ -220,7 +222,8 @@ describe("approving a registration", () => {
   it("is refused to everyone below a platform super admin", async () => {
     const applicant = await pendingApplicant();
     const acme = await acmeId();
-    for (const who of [ACME_SUPER, ACME_AGENT, ACME_REQUESTER]) {
+    const confined = await tenantSuperAdmin("Acme Corp");
+    for (const who of [confined.email, ACME_AGENT, ACME_REQUESTER]) {
       const res = await request(app)
         .post(`${API}/users/${applicant.id}/approve`)
         .set(bearer(await login(who)))

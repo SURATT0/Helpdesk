@@ -11,7 +11,7 @@ import {
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { emailOutboxService } from "../src/modules/emails/email-outbox.service";
 import { authService } from "../src/modules/auth/auth.service";
-import { prisma, resetDb } from "./db";
+import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 const app = createApp();
 const API = "/api/v1";
@@ -351,11 +351,19 @@ describe("duplicates answer 409, not 500", () => {
   const acmeOwner = () =>
     prisma.user.findUniqueOrThrow({ where: { email: "dana.reyes@acme.com" } });
 
+  // The customer is named, not inferred. It used to be left out and taken from
+  // the caller's own tenant, which worked only while the super admin making
+  // these calls belonged to one. They are all platform-wide now, and platform
+  // staff have no "theirs" — the API asks which, and rightly.
   const create = async (token: string, name: string) =>
     request(app)
       .post(`${API}/projects`)
       .set(bearer(token))
-      .send({ name, ownerId: (await acmeOwner()).id });
+      .send({
+        name,
+        ownerId: (await acmeOwner()).id,
+        customerId: (await acmeOwner()).customerId,
+      });
 
   it("refuses a second project with a name already used in that customer", async () => {
     const morgan = await login("morgan.lee@acme.com");
@@ -416,7 +424,9 @@ describe("projects — permission level and row scope", () => {
     res.body.data.map((p) => p.name);
 
   it("lets a manager read their own customer's projects, and no others", async () => {
-    const morgan = await login("morgan.lee@acme.com"); // manager, Acme
+    // A manager here means a super admin CONFINED to one tenant — built, because
+    // every seeded one is platform-wide and would read everything by design.
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     const res = await list(morgan);
     expect(res.status).toBe(200);
     expect(namesOf(res)).toEqual(
@@ -435,7 +445,7 @@ describe("projects — permission level and row scope", () => {
   });
 
   it("scopes a manager of another customer to their own", async () => {
-    const nadia = await login("nadia.kofi@acme.com"); // manager, Globex
+    const nadia = await login((await tenantSuperAdmin("Globex Inc")).email);
     const res = await list(nadia);
     expect(namesOf(res)).toEqual(["Globex Rollout"]);
   });
@@ -483,7 +493,7 @@ describe("projects — permission level and row scope", () => {
   });
 
   it("404s another customer's project for a manager instead of leaking it", async () => {
-    const morgan = await login("morgan.lee@acme.com"); // Acme
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     await detail(morgan, 3).expect(404); // Globex Rollout
   });
 
@@ -1259,8 +1269,10 @@ describe("tickets — assignee identity and filter", () => {
     expect(refused.status).toBe(403);
 
     // Acme's own super admin passes that gate — and then row scope is what keeps
-    // Globex out, which is the property this test has always been about.
-    const morgan = await login("morgan.lee@acme.com"); // Acme, super_admin
+    // Globex out, which is the property this test has always been about. Built,
+    // not seeded: a platform-wide one reaches Globex by design and would pass
+    // this case for the wrong reason.
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     const scoped = await request(app)
       .get(`${API}/tickets?assigneeId=${owen.id}`)
       .set(bearer(morgan));
@@ -1595,8 +1607,8 @@ describe("tickets — SLA alert sweep", () => {
   });
 
   // An unassigned ticket is exactly where a breach goes unnoticed, so it falls
-  // to that customer's managers rather than nobody.
-  it("falls back to the customer's managers when unassigned", async () => {
+  // to that customer's own staff rather than nobody.
+  it("falls back to the customer's own staff when unassigned", async () => {
     await prisma.ticket.update({
       where: { id: 1044 }, // Acme, new, assignee null
       data: { dueAt: inHours(-1) },
@@ -1604,19 +1616,48 @@ describe("tickets — SLA alert sweep", () => {
     const res = await ticketService.sweepSlaAlerts(now);
     expect(res.breached).toBe(1);
 
+    // Acme has no super admin of its own — none of them belong to a tenant any
+    // more — so its ADMINS are who this reaches. Before the fallback existed the
+    // list came back empty and the alert was sent to nobody at all, which is the
+    // one outcome this case is here to prevent.
     const notes = await slaNotifications(1044);
-    const morgan = await prisma.user.findUniqueOrThrow({
-      where: { email: "morgan.lee@acme.com" }, // Acme manager
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" }, // admin, Acme
     });
-    expect(notes.map((n) => n.userId)).toContain(morgan.id);
+    expect(notes.map((n) => n.userId)).toContain(dana.id);
 
-    // Not the other customer's manager, and not the requester.
-    const nadia = await prisma.user.findUniqueOrThrow({
-      where: { email: "nadia.kofi@acme.com" }, // Globex manager
+    // Not the other customer's staff, and not the requester.
+    const owen = await prisma.user.findUniqueOrThrow({
+      where: { email: "owen.park@acme.com" }, // admin, Globex
     });
-    expect(notes.map((n) => n.userId)).not.toContain(nadia.id);
+    expect(notes.map((n) => n.userId)).not.toContain(owen.id);
     const t = await prisma.ticket.findUniqueOrThrow({ where: { id: 1044 } });
     expect(notes.map((n) => n.userId)).not.toContain(t.requesterId);
+
+    // And platform staff stay out of it: they span every tenant and would be
+    // told about every breach anywhere.
+    const sam = await prisma.user.findUniqueOrThrow({
+      where: { email: "sam.rivera@acme.com" },
+    });
+    expect(notes.map((n) => n.userId)).not.toContain(sam.id);
+  });
+
+  it("prefers a customer's own super admin over its admins", async () => {
+    // Seniority, not everybody: an alert that reaches the whole desk each time
+    // stops being an alert. The admins are the fallback, not the default.
+    const confined = await tenantSuperAdmin("Acme Corp");
+    await prisma.ticket.update({
+      where: { id: 1044 },
+      data: { dueAt: inHours(-1) },
+    });
+    await ticketService.sweepSlaAlerts(now);
+
+    const told = (await slaNotifications(1044)).map((n) => n.userId);
+    expect(told).toContain(confined.id);
+    const dana = await prisma.user.findUniqueOrThrow({
+      where: { email: "dana.reyes@acme.com" },
+    });
+    expect(told).not.toContain(dana.id);
   });
 
   it("counts tickets, not notification rows, when several managers are told", async () => {
@@ -1826,7 +1867,7 @@ describe("tickets — delete (super admin only, soft)", () => {
 
   it("does not let a customer-bound super admin reach another tenant's ticket", async () => {
     const id = await anAcmeTicket(); // Acme
-    const nadia = await login("nadia.kofi@acme.com"); // super_admin, customer 2
+    const nadia = await login((await tenantSuperAdmin("Globex Inc")).email);
     const res = await request(app).delete(`${API}/tickets/${id}`).set(bearer(nadia));
     expect(res.status).toBe(404); // out of scope reads as absent, not forbidden
 
@@ -2250,12 +2291,25 @@ describe("users — deactivation", () => {
    * proves nothing about `isActive` — a requester is turned away on their role
    * alone, whether their account is open or shut.
    */
-  const spareStaff = () =>
-    prisma.user.findUniqueOrThrow({ where: { email: "morgan.lee@acme.com" } });
+  /**
+   * Somebody retirable who BELONGS to a customer.
+   *
+   * Both halves are load-bearing. A tenant, because one of these cases hands the
+   * account a routing project and a project needs one — Morgan used to supply it
+   * and has no customer any more, so the create answered 400 "name the customer"
+   * instead of the 403 the case is about. And the top role, because the
+   * last-administrator guard counts admins per customer: retiring an ordinary
+   * admin trips THAT rule instead, and the case fails 409 for a reason it was
+   * never testing.
+   *
+   * So: the same shape Morgan had, built here. `keepAnAdminBehind` below is what
+   * makes them retirable.
+   */
+  const spareStaff = () => tenantSuperAdmin("Acme Corp");
 
   /**
-   * Morgan is also Acme's only super admin in the seed, so the last-admin guard
-   * would refuse to retire them before any of this got a chance to fail for the
+   * The retiree is their customer's only super admin, so the last-admin guard
+   * would refuse to let them go before any of this got a chance to fail for the
    * reason under test. Promoting Kai first is the order the product asks for
    * anyway: someone else holds the role, then the leaver can go.
    */
@@ -2469,9 +2523,35 @@ describe("users — the last administrator", () => {
   const byEmail = (email: string) =>
     prisma.user.findUniqueOrThrow({ where: { email } });
 
+  /**
+   * Retire the spare platform admins, leaving Sam alone in that group.
+   *
+   * The guard fires on the LAST member of a group, and the seed now puts three
+   * accounts in the platform one — Morgan and Nadia joined it when they stopped
+   * belonging to a tenant. So "the only platform-wide super admin" is a state
+   * these cases have to create; with spares standing by there is nothing for the
+   * guard to refuse, and the case would pass or fail on the wrong thing.
+   *
+   * Retiring them is allowed precisely because Sam remains, which is the guard
+   * working rather than a way around it.
+   */
+  async function leaveSamAlonePlatformSide(): Promise<void> {
+    const sam = await login("sam.rivera@acme.com");
+    for (const email of ["morgan.lee@acme.com", "nadia.kofi@acme.com"]) {
+      const spare = await byEmail(email);
+      expect(
+        (await patch(sam, spare.id, { isActive: false })).status,
+        `retiring ${email}`,
+      ).toBe(200);
+    }
+  }
+
   it("refuses to deactivate the only platform-wide super admin", async () => {
+    await leaveSamAlonePlatformSide();
     const sam = await byEmail("sam.rivera@acme.com"); // platform-wide
-    const morgan = await login("morgan.lee@acme.com");
+    // A tenant's own super admin as the actor, so the refusal cannot be the
+    // self-edit guard answering instead.
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     const res = await patch(morgan, sam.id, { isActive: false });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("LAST_ADMIN");
@@ -2481,6 +2561,7 @@ describe("users — the last administrator", () => {
 
   it("refuses to demote them, which costs the same thing", async () => {
     // Keying on the field sent rather than the effect would have missed this.
+    await leaveSamAlonePlatformSide();
     const sam = await byEmail("sam.rivera@acme.com");
     const token = await login("sam.rivera@acme.com");
     const res = await patch(token, sam.id, { role: "admin" });
@@ -2490,7 +2571,9 @@ describe("users — the last administrator", () => {
   });
 
   it("refuses to deactivate a customer's only super admin", async () => {
-    const morgan = await byEmail("morgan.lee@acme.com"); // super_admin, Acme
+    // Built: Acme has no super admin of its own in the seed any more, and a
+    // group with no members is not a group this guard has anything to say about.
+    const morgan = await tenantSuperAdmin("Acme Corp");
     const sam = await login("sam.rivera@acme.com");
     const res = await patch(sam, morgan.id, { isActive: false });
     expect(res.status).toBe(409);
@@ -2515,7 +2598,7 @@ describe("users — the last administrator", () => {
     // `customerId: null` is its own group, not a wildcard: Globex having a super
     // admin says nothing about Acme, and neither covers the platform.
     const sam = await login("sam.rivera@acme.com");
-    const nadia = await byEmail("nadia.kofi@acme.com"); // super_admin, Globex
+    const nadia = await tenantSuperAdmin("Globex Inc");
     const res = await patch(sam, nadia.id, { isActive: false });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("LAST_ADMIN");
@@ -2587,8 +2670,19 @@ describe("users — customer-bound super admin", () => {
     return (await prisma.user.findUniqueOrThrow({ where: { email } })).id;
   }
 
+  /**
+   * The subject of this whole block, built rather than seeded.
+   *
+   * "Customer-bound super admin" is a shape the seed no longer hands out — every
+   * seeded one is platform-wide — and it is precisely the shape these guards
+   * exist to confine, so it has to come from somewhere. Substituting a
+   * platform-wide account would turn every case here green while proving the
+   * opposite of what each one claims.
+   */
+  const acmeSuper = async () => login((await tenantSuperAdmin("Acme Corp")).email);
+
   it("scopes their directory to their own customer", async () => {
-    const morgan = await login("morgan.lee@acme.com"); // super_admin, Acme
+    const morgan = await acmeSuper();
     const res = await request(app).get(`${API}/users`).set(bearer(morgan));
     expect(res.status).toBe(200);
     const names: string[] = res.body.data.map((u: { name: string }) => u.name);
@@ -2597,7 +2691,7 @@ describe("users — customer-bound super admin", () => {
   });
 
   it("edits a user in their own customer", async () => {
-    const morgan = await login("morgan.lee@acme.com");
+    const morgan = await acmeSuper();
     const kaiId = await userId("kai.t@acme.com"); // Acme
     const res = await request(app)
       .patch(`${API}/users/${kaiId}`)
@@ -2607,7 +2701,7 @@ describe("users — customer-bound super admin", () => {
   });
 
   it("404s on a user in another customer rather than leaking them", async () => {
-    const morgan = await login("morgan.lee@acme.com");
+    const morgan = await acmeSuper();
     const owenId = await userId("owen.park@acme.com"); // Globex
     await request(app)
       .patch(`${API}/users/${owenId}`)
@@ -2619,7 +2713,7 @@ describe("users — customer-bound super admin", () => {
   // The escalation guard, and the whole reason granting keys on reach rather than
   // role: without it a customer's own super admin could promote past their tenant.
   it("cannot grant the super admin role", async () => {
-    const morgan = await login("morgan.lee@acme.com");
+    const morgan = await acmeSuper();
     const kaiId = await userId("kai.t@acme.com");
     await request(app)
       .patch(`${API}/users/${kaiId}`)
@@ -3014,9 +3108,11 @@ describe("tickets — CSV import (importMany)", () => {
   });
 
   it("keys on reach, not on the role name", async () => {
-    // Morgan Lee is a super_admin who belongs to Acme. The top role must not let
-    // them out of their own customer.
-    const morgan = await login("morgan.lee@acme.com");
+    // A super_admin who belongs to Acme. The top role must not let them out of
+    // their own customer — which is why the account is built here rather than
+    // taken from the seed, where every super admin is platform-wide and would
+    // be allowed out by design.
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     const res = await request(app)
       .post(`${API}/tickets/import`)
       .set(bearer(morgan))
@@ -3957,7 +4053,8 @@ describe("audit trail read", () => {
   // derived from the actor. A manager must not see another customer's activity.
   it("confines a manager to their own customer's entries", async () => {
     await makeCrossCustomerActivity();
-    const morgan = await login("morgan.lee@acme.com"); // Acme manager
+    // A manager confined to Acme — built, since no seeded super admin is.
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     const res = await request(app).get(ENDPOINT).set(bearer(morgan));
     expect(res.status).toBe(200);
     expect(entityIds(res)).toContain(1042);
@@ -3966,7 +4063,7 @@ describe("audit trail read", () => {
 
   it("shows the other side of the boundary to the other customer's manager", async () => {
     await makeCrossCustomerActivity();
-    const nadia = await login("nadia.kofi@acme.com"); // Globex manager
+    const nadia = await login((await tenantSuperAdmin("Globex Inc")).email);
     const res = await request(app).get(ENDPOINT).set(bearer(nadia));
     expect(entityIds(res)).toContain(2001);
     expect(entityIds(res)).not.toContain(1042);
@@ -4021,7 +4118,7 @@ describe("audit trail read", () => {
   // Filters are AND-ed with the scope clause, so no filter can widen visibility.
   it("cannot widen scope through a filter", async () => {
     await makeCrossCustomerActivity();
-    const morgan = await login("morgan.lee@acme.com"); // Acme
+    const morgan = await login((await tenantSuperAdmin("Acme Corp")).email);
     const res = await request(app)
       .get(`${ENDPOINT}?entity=ticket&entityId=2001`)
       .set(bearer(morgan));
