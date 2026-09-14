@@ -173,35 +173,33 @@ describe("a role cannot do what it may not", () => {
   });
 
   /**
-   * Wider than the permission matrix this work was specified against, and
-   * deliberately so — asked and answered rather than assumed.
+   * Back in line with the permission matrix this work was specified against,
+   * which said an agent may not create a customer.
    *
-   * The matrix said an agent may not create a customer. The shipped rule allows
-   * `admin` and above, with its own reasoning (customer-crud.integration.test.ts:
-   * "safe because it confers none — an admin who creates a tenant cannot see into
-   * it and cannot grant themselves the reach to"), and archiving one is still
-   * refused to them. Raised as a conflict; the shipped rule was kept.
+   * It shipped wider than that for a while — `admin` and above — on the argument
+   * that creating confers no reach and is therefore harmless: the worst it makes
+   * is an empty tenant somebody else tidies up. The argument held; what it
+   * overlooked is who does the tidying and what the creator sees. Nothing grants
+   * a creator reach into what they created, so an admin got a 201 for a row they
+   * could not list, open or rename, and the screen sent them to its page, which
+   * answered 404. It read as "creating a customer is broken", and every retry
+   * left another orphan behind.
    *
-   * So this is the intended behaviour, not a gap — and the second half of the
-   * case is the part that must never regress, because it is what makes the first
-   * half safe.
+   * So creating now asks for platform reach as well as the permission, and the
+   * two halves of this case become one: refused, and nothing written.
    */
-  it("lets an agent create a customer, and grants them no reach into it", async () => {
+  it("refuses an agent the right to create a customer", async () => {
     const res = await request(app)
       .post(`${API}/customers`)
       .set(bearer(acme.agent))
       .send({ name: "Agent Tenant Probe" });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(403);
 
-    // The half that makes it defensible, and the half that must not regress:
-    // creating a tenant grants no reach into it.
-    const created = res.body.data.id as number;
-    const list = await request(app).get(`${API}/customers`).set(bearer(acme.agent));
-    expect((list.body.data as { id: number }[]).some((c) => c.id === created)).toBe(false);
-
-    await prisma.category.deleteMany({ where: { customerId: created } });
-    await prisma.auditLog.deleteMany({ where: { entity: "customer", entityId: created } });
-    await prisma.customer.delete({ where: { id: created } });
+    // Nothing on the way to the refusal — no half-made tenant to find later.
+    const row = await prisma.customer.findFirst({
+      where: { name: "Agent Tenant Probe" },
+    });
+    expect(row).toBeNull();
   });
 
   it("refuses an AGENT the right to create a project", async () => {

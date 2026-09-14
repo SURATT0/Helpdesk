@@ -65,11 +65,19 @@ export function CustomersAdminView({
   const router = useRouter();
 
   /**
-   * Mirrors the server's `customer:write` — the grant this screen's actions are
-   * gated on. The API refuses regardless of what this returns; this only decides
-   * whether to render a page that would be all refusals.
+   * Mirrors the server's gate on this screen's actions: `customer:write` AND
+   * platform reach. The API refuses regardless of what this returns; this only
+   * decides whether to render a page that would be all refusals.
+   *
+   * Reach, not the role name alone, and the difference is the whole bug this
+   * replaced. Role and reach are separate axes: a super admin who BELONGS to a
+   * customer is not platform-wide, and a customer they create lands outside
+   * everyone's reach — so they were shown the full screen, told their new tenant
+   * was created, and sent to a page that answered 404. `platformWide` is the
+   * server's own word for it, carried on the session user, so the two sides
+   * cannot drift apart the way a role comparison here already had.
    */
-  const canRead = user?.role === "super_admin";
+  const canRead = user?.platformWide === true;
 
   const customers = useCustomers({ enabled: canRead });
   // One request for every project, filtered per customer below, rather than one
@@ -102,6 +110,9 @@ export function CustomersAdminView({
    * than compared against a role name here — the same arrangement
    * `project:delete` uses, and deliberately stricter than creating. Both are
    * enforced by the API; these only decide whether a button is in the document.
+   *
+   * The API asks for platform reach here too, which this does not repeat: every
+   * use of it is below the `canRead` guard, and that is where reach is settled.
    */
   const canArchive = user != null && holds(user.role, "customer:archive");
 

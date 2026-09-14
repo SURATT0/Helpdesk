@@ -30,12 +30,19 @@ import { cn } from "@/lib/utils";
  * `roles` restricts who sees the entry. Omitted = everyone. This only hides
  * links that would be refused anyway — the API permission check is the real
  * gate, and the page itself also handles the forbidden case for a direct visit.
+ *
+ * `platformWide` narrows it further, to staff who belong to no customer of their
+ * own. Role and reach are separate axes, so a role list alone cannot express
+ * "tenant management": a super admin who belongs to a customer holds the top
+ * role and has no business creating or ending tenants — the API refuses them
+ * now, and an entry that led straight to that refusal was worse than no entry.
  */
 const NAV: Array<{
   href: string;
   key: string;
   icon: typeof LayoutDashboard;
   roles?: readonly Role[];
+  platformWide?: true;
 }> = [
   { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   { href: "/tickets", key: "nav.tickets", icon: Ticket },
@@ -53,14 +60,16 @@ const NAV: Array<{
   // the nav should read the same way the data nests. Same roles — the list is
   // open to anyone authenticated, but a requester has no use for a page of one
   // row they cannot act on.
-  // Customers and the projects under them, on one screen. Top tier only: this is
-  // where tenants are created, renamed and archived, which is a different thing
-  // from the routing table an agent reads.
+  // Customers and the projects under them, on one screen. Top tier AND platform
+  // reach: this is where tenants are created, renamed and archived, which is a
+  // different thing from the routing table an agent reads — and a different
+  // thing again from what a super admin inside one customer should be doing.
   {
     href: "/admin/customers",
     key: "nav.customers",
     icon: Building2,
     roles: ["super_admin"],
+    platformWide: true,
   },
   // The routing table, kept for everyone `project:read` reaches. Folding it into
   // the screen above would have taken it away from an agent working cases, who
@@ -134,7 +143,9 @@ export function Sidebar() {
 
       <nav className="flex flex-col gap-0.5">
         {NAV.filter(
-          ({ roles }) => !roles || (user != null && roles.includes(user.role)),
+          ({ roles, platformWide }) =>
+            (!roles || (user != null && roles.includes(user.role))) &&
+            (!platformWide || user?.platformWide === true),
         ).map(({ href, key, icon: Icon }) => {
           const active =
             pathname === href || pathname.startsWith(href + "/");

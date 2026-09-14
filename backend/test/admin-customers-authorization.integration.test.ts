@@ -54,10 +54,20 @@ beforeEach(async () => {
 /**
  * Every write this screen can make, and who the API lets through.
  *
- * `customer:write` reaches admin — it did as a role comparison before the grants
- * became editable, and moving it must not quietly demote anyone. Everything else
- * here is top tier: archiving ends a tenant, and the routing table decides where
- * a customer's work lands.
+ * `customer:write` still reaches admin — it did as a role comparison before the
+ * grants became editable, and moving it must not quietly demote anyone — but the
+ * permission is no longer the whole gate for CREATING one. That asks for
+ * platform reach too, because a new tenant lands outside every reach and nothing
+ * grants the creator access to it: an admin's create was a 201 for a row they
+ * could not then see, and the screen walked them straight into its 404.
+ * Renaming is unaffected, being scoped to what the caller already reaches.
+ *
+ * The `super_admin` tier here is sam.rivera, who is platform-wide. A super admin
+ * who BELONGS to a customer is a different case and lives in
+ * customer-crud.integration.test.ts, where the difference is the point.
+ *
+ * Everything else here is top tier: archiving ends a tenant, and the routing
+ * table decides where a customer's work lands.
  */
 const WRITES: Array<{
   what: string;
@@ -66,7 +76,8 @@ const WRITES: Array<{
 }> = [
   {
     what: "create a customer",
-    allowed: ["super_admin", "admin"],
+    // Platform reach as well as `customer:write`, so admin no longer gets through.
+    allowed: ["super_admin"],
     call: async (token) =>
       request(app)
         .post(`${API}/customers`)
