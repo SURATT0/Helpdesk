@@ -28,7 +28,10 @@ import { useCustomers } from "@/features/customers/queries";
 import { ArchiveCustomerDialog } from "@/features/customers/components/archive-customer-dialog";
 import { useProjects } from "@/features/projects/queries";
 import type { Customer } from "@/features/customers/schemas";
+import { DeleteProjectDialog } from "@/features/projects/components/delete-project-dialog";
+import type { Project } from "@/features/projects/schemas";
 import { CustomerFormModal } from "./customer-form-modal";
+import { ProjectFormModal } from "./project-form-modal";
 
 /**
  * Customers and their projects, on one screen.
@@ -85,6 +88,14 @@ export function CustomersAdminView({
    */
   const [editing, setEditing] = React.useState<Customer | "new" | null>(null);
   const [archiving, setArchiving] = React.useState<Customer | null>(null);
+  /** The project form: `"new"` to add one to the selected customer, or the one
+   *  being edited. Same shape as `editing` above, for the same reason. */
+  const [editingProject, setEditingProject] = React.useState<Project | "new" | null>(
+    null,
+  );
+  const [archivingProject, setArchivingProject] = React.useState<Project | null>(
+    null,
+  );
 
   /**
    * Archiving is its own grant, read through the shared permission table rather
@@ -220,6 +231,9 @@ export function CustomersAdminView({
               canArchive={canArchive}
               onRename={() => setEditing(selected)}
               onArchive={() => setArchiving(selected)}
+              onAddProject={() => setEditingProject("new")}
+              onEditProject={setEditingProject}
+              onArchiveProject={setArchivingProject}
             />
           ) : selectedId != null && !customers.isLoading ? (
             // A customer that is not in the list: archived, or an id somebody
@@ -251,6 +265,25 @@ export function CustomersAdminView({
         // in a list they have just made longer.
         onCreated={(id) => router.push(`/admin/customers/${id}`)}
       />
+
+      {/* Both project dialogs need a selected customer, which is the only state
+          in which either can be opened. */}
+      {selected ? (
+        <ProjectFormModal
+          open={editingProject != null}
+          customerId={selected.id}
+          customerName={selected.name}
+          project={editingProject === "new" ? null : editingProject}
+          onClose={() => setEditingProject(null)}
+        />
+      ) : null}
+
+      {archivingProject ? (
+        <DeleteProjectDialog
+          project={archivingProject}
+          onClose={() => setArchivingProject(null)}
+        />
+      ) : null}
 
       {archiving ? (
         <ArchiveCustomerDialog
@@ -331,13 +364,19 @@ function CustomerDetail({
   canArchive,
   onRename,
   onArchive,
+  onAddProject,
+  onEditProject,
+  onArchiveProject,
 }: {
   customer: Customer;
-  projects: { id: number; name: string; members: number }[];
+  projects: Project[];
   projectsLoading: boolean;
   canArchive: boolean;
   onRename: () => void;
   onArchive: () => void;
+  onAddProject: () => void;
+  onEditProject: (project: Project) => void;
+  onArchiveProject: (project: Project) => void;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -387,9 +426,18 @@ function CustomerDetail({
         </dl>
       </Card>
 
-      <h2 className="mb-2 text-section font-semibold text-ink">
-        {t("adminCustomers.projects")}
-      </h2>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-section font-semibold text-ink">
+          {t("adminCustomers.projects")}
+        </h2>
+        {/* The customer is already chosen, so adding a project asks for a name
+            and nothing else — see ProjectFormModal. A customer may run as many
+            as it likes; nothing here caps them. */}
+        <Button onClick={onAddProject} className="gap-1.5">
+          <Plus size={14} strokeWidth={2.5} />
+          {t("adminCustomers.newProject")}
+        </Button>
+      </div>
       {projectsLoading ? (
         <LoadingRow />
       ) : projects.length === 0 ? (
@@ -397,12 +445,19 @@ function CustomerDetail({
       ) : (
         <ul className="overflow-hidden rounded-lg border border-line bg-panel">
           {projects.map((p) => (
-            <li key={p.id} className="border-b border-hairline last:border-b-0">
+            <li
+              key={p.id}
+              className="flex items-center gap-1 border-b border-hairline pr-2 last:border-b-0"
+            >
+              {/* The row opens the project's own page — where its description
+                  and the tickets filed under it live. That page is deliberately
+                  kept rather than folded in here: a list of tickets and a CRUD
+                  pane are two different jobs. */}
               <button
                 type="button"
                 onClick={() => router.push(`/projects/${p.id}`)}
                 className={cn(
-                  "flex w-full items-center gap-2 px-3.5 py-2.5 text-left hover:bg-app",
+                  "flex min-w-0 flex-1 items-center gap-2 px-3.5 py-2.5 text-left hover:bg-app",
                   TOUCH_TARGET,
                 )}
               >
@@ -415,6 +470,30 @@ function CustomerDetail({
                 </span>
                 <ChevronRight size={14} className="flex-none text-faint" />
               </button>
+              <button
+                type="button"
+                onClick={() => onEditProject(p)}
+                aria-label={t("adminCustomers.editProjectNamed", { name: p.name })}
+                className={cn(
+                  "grid flex-none place-items-center rounded-md text-faint hover:bg-app hover:text-ink",
+                  TOUCH_TARGET,
+                )}
+              >
+                <Pencil size={13} strokeWidth={2} />
+              </button>
+              {canArchive ? (
+                <button
+                  type="button"
+                  onClick={() => onArchiveProject(p)}
+                  aria-label={t("adminCustomers.archiveProjectNamed", { name: p.name })}
+                  className={cn(
+                    "grid flex-none place-items-center rounded-md text-faint hover:bg-danger-bg hover:text-danger",
+                    TOUCH_TARGET,
+                  )}
+                >
+                  <Archive size={13} strokeWidth={2} />
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

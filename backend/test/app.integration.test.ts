@@ -328,9 +328,18 @@ describe("tickets — closed history log", () => {
 /**
  * A name already in use is the client's mistake, and the API has to say which
  * one. Every unique constraint in the schema used to escape as a 500 with
- * "Something went wrong" and the real reason buried in the server log — the
- * middleware now maps Prisma's P2002. Projects are where it is reachable through
- * the API, so they are where it is asserted.
+ * "Something went wrong" and the real reason buried in the server log; the
+ * middleware maps Prisma's P2002, which is what stopped that.
+ *
+ * Projects have since gone one better. The middleware's answer is derived from
+ * the constraint, so it names the COLUMNS that collided — "a project with the
+ * same customerId and name already exists" — which is accurate and is not a
+ * sentence anybody can act on. The service now checks before the insert and says
+ * which project already has the name.
+ *
+ * The P2002 mapping is still the floor, and still matters: it covers every other
+ * constraint in the schema, and it covers this one if two requests race past the
+ * pre-check. What changed is only what the common path answers.
  */
 describe("duplicates answer 409, not 500", () => {
   /**
@@ -355,11 +364,13 @@ describe("duplicates answer 409, not 500", () => {
 
     const second = await create(morgan, "Duplicate check");
     expect(second.status).toBe(409);
-    expect(second.body.error.code).toBe("CONFLICT");
-    // Names the columns that collided, camelCased as the client sent them.
-    expect(second.body.error.details.fields).toEqual(["customerId", "name"]);
-    // And says something a person can act on.
-    expect(second.body.error.message).toMatch(/already exists/i);
+    expect(second.body.error.code).toBe("PROJECT_NAME_TAKEN");
+    // Names the PROJECT, not the columns. The constraint-derived answer said
+    // "customerId and name", which is true and useless: the person is looking
+    // at a form, not at a schema.
+    expect(second.body.error.details).toEqual({ name: "Duplicate check" });
+    expect(second.body.error.message).toContain("Duplicate check");
+    expect(second.body.error.message).not.toMatch(/customerId|constraint/i);
   });
 
   it("refuses a rename onto an existing name", async () => {
@@ -372,7 +383,9 @@ describe("duplicates answer 409, not 500", () => {
       .set(bearer(morgan))
       .send({ name: "Acme Migration" }); // seeded, same customer
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("CONFLICT");
+    // A rename collides the same way a create does, and says so the same way.
+    expect(res.body.error.code).toBe("PROJECT_NAME_TAKEN");
+    expect(res.body.error.message).toContain("Acme Migration");
   });
 
   it("allows the same name in a different customer", async () => {

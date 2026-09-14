@@ -5,6 +5,8 @@ import {
   NotFound,
   NotYoursToManage,
   ProjectHasMembers,
+  ProjectHasOpenTickets,
+  ProjectNameTaken,
 } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
 import { mayReceiveAssignment } from "../tickets/ticket.scope";
@@ -130,6 +132,12 @@ export const projectService = {
       );
     }
     await assertOwnersAssignable(actor, [input.ownerId, input.backupOwnerId]);
+    // Checked here so the refusal names the project rather than a constraint.
+    // The partial unique index is still what guarantees it — this only decides
+    // what the caller is told, and what they are told decides whether they can
+    // fix it.
+    const clash = await projectRepository.findLiveByName(customerId, input.name);
+    if (clash) throw ProjectNameTaken(clash.name);
     return projectRepository.create(
       {
         name: input.name,
@@ -149,8 +157,19 @@ export const projectService = {
   ): Promise<ProjectDto> {
     // Row scope first, so an out-of-scope project 404s before we start
     // validating owners against it.
-    await this.get(id, actor);
+    const current = await this.get(id, actor);
     await assertOwnersAssignable(actor, [input.ownerId, input.backupOwnerId]);
+    // A rename collides the same way a create does, and must say so the same
+    // way. Skipped when the name is not changing — including a change of case
+    // on the same project, which is a rename somebody is entitled to make and
+    // which a case-insensitive check would otherwise refuse against itself.
+    if (input.name != null && input.name.trim() !== current.name) {
+      const clash = await projectRepository.findLiveByName(
+        current.customerId,
+        input.name,
+      );
+      if (clash && clash.id !== id) throw ProjectNameTaken(clash.name);
+    }
     const updated = await projectRepository.update(id, input, actor);
     if (!updated) throw NotFound(`Project #${id} not found`);
     return updated;
@@ -181,22 +200,38 @@ export const projectService = {
    * from one for a project that does not exist, and nothing about the row leaks
    * through timing or through a 404-vs-403 difference.
    *
-   * Then row scope (404), then the member guard (409). Deleting is refused while
-   * anyone still routes through the project, in the same shape account closure
-   * refuses while a queue is unfinished — see `HasOpenQueue`. Both say the
-   * request will succeed once the thing it would strand has been moved.
+   * Then row scope (404), then the two guards (409). Archiving is refused while
+   * anyone still routes through the project, and while live work is still filed
+   * under it — the same shape account closure refuses while a queue is
+   * unfinished (see `HasOpenQueue`). All of them say the request will succeed
+   * once the thing it would strand has been dealt with.
+   *
+   * The ticket guard counts OPEN ones only. A project that ran for a year has
+   * hundreds of closed tickets pointing at it and archiving strands none of
+   * them: their name still renders, because the ticket DTO reads the project row
+   * without filtering `deletedAt`. Counting those too would mean a routing
+   * project could never be retired — which is the opposite of what a soft delete
+   * is for.
    */
   async remove(id: number, actor: AuthUser): Promise<void> {
     assertMayDelete(actor, id);
 
     const impact = await projectRepository.findDeletionImpact(id, actor);
     if (!impact) throw NotFound(`Project #${id} not found`);
+    // Members first: moving people is the cheaper fix, so it is the one to
+    // name when both are true.
     if (impact.members > 0) throw ProjectHasMembers(impact.members);
+    if (impact.openTickets > 0) throw ProjectHasOpenTickets(impact.openTickets);
 
     const deleted = await projectRepository.softDelete(id, actor, impact);
-    // False means the guarded UPDATE matched nothing — someone joined the
-    // project between the count above and the write. Reported as the same 409,
-    // because it is the same situation and the caller's next step is the same.
-    if (!deleted) throw ProjectHasMembers(impact.members || 1);
+    // False means the guarded UPDATE matched nothing — somebody joined the
+    // project, or filed a ticket under it, between the counts above and the
+    // write. Reported as the same 409s, because it is the same situation and the
+    // caller's next step is the same.
+    if (!deleted) {
+      throw impact.members > 0
+        ? ProjectHasMembers(impact.members)
+        : ProjectHasOpenTickets(impact.openTickets || 1);
+    }
   },
 };

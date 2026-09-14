@@ -131,11 +131,12 @@ describe("the migration that filled the table", () => {
    * replaced had allowed — a silent demotion dressed as a refactor. Neither was
    * visible by reading either file on its own.
    */
+  // Resolved from the working directory rather than from `import.meta.url`:
+  // this package's tsconfig targets CommonJS, where that meta-property is a
+  // compile error even though the test runner transpiles it happily. Vitest runs
+  // from the package root, which is what this path is relative to.
   const sql = readFileSync(
-    new URL(
-      "../../prisma/migrations/20260911155000_role_permissions/migration.sql",
-      import.meta.url,
-    ),
+    "prisma/migrations/20260911155000_role_permissions/migration.sql",
     "utf8",
   );
 

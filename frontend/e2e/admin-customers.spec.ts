@@ -52,8 +52,11 @@ test.describe("on a desktop", () => {
     ).toBeVisible();
 
     // Globex runs one project; Acme's must not appear under it.
-    await expect(page.getByRole("button", { name: /Globex Rollout/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Acme Migration/ })).toHaveCount(0);
+    //
+    // Anchored, because each row now carries "Edit <name>" and "Archive <name>"
+    // buttons beside the row itself — only the row STARTS with the name.
+    await expect(page.getByRole("button", { name: /^Globex Rollout/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Acme Migration/ })).toHaveCount(0);
   });
 
   test("filters the list as you type", async ({ page }) => {
@@ -163,7 +166,7 @@ test.describe("managing customers", () => {
     // Landed on the new one rather than left to find it in a longer list.
     await expect(page).toHaveURL(/\/admin\/customers\/\d+$/);
     await expect(page.getByRole("heading", { name })).toBeVisible();
-    await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(`^${name}`) })).toBeVisible();
   });
 
   test("says which kind of name collision it is", async ({ page }) => {
@@ -215,7 +218,9 @@ test.describe("managing customers", () => {
     await page.goto("/admin/customers");
     await page.getByRole("link", { name: /Acme Corp/ }).click();
 
-    await page.getByRole("button", { name: "Archive" }).click();
+    // Exact: every project row now carries an "Archive <name>" button too, so an
+    // inexact match finds the customer's control and one per project.
+    await page.getByRole("button", { name: "Archive", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
@@ -223,7 +228,7 @@ test.describe("managing customers", () => {
     // endpoint — the same figures the guard refuses on — so the dialog cannot
     // promise an archive the API then declines.
     await expect(dialog).toContainText(/\d+/);
-    const confirm = dialog.getByRole("button", { name: /Archive/ });
+    const confirm = dialog.getByRole("button", { name: "Archive", exact: true });
     await expect(confirm).toBeDisabled();
   });
 });
@@ -232,6 +237,133 @@ test("the old customers route redirects rather than 404s", async ({ page }) => {
   await loginAs(page, SUPER_ADMIN);
   await page.goto("/customers");
   // Bookmarks, history and pasted links all still work.
-  await expect(page).toHaveURL(/\/admin\/customers$/);
+  //
+  // A longer wait than the default, for a reason specific to this case: `next
+  // dev` compiles a route on first request, and this is the only test in the
+  // suite that visits `/customers` — so it always pays that cost, and on a cold
+  // cache that has been more than ten seconds of it. Nothing here is slow in
+  // production; the redirect is server-side and immediate.
+  await expect(page).toHaveURL(/\/admin\/customers$/, { timeout: 30_000 });
   await expect(page.getByPlaceholder("Search customers")).toBeVisible();
+});
+
+test.describe("managing a customer's projects", () => {
+  test("adds one without asking which customer, and binds it to the open one", async ({
+    page,
+  }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+    await page.getByRole("link", { name: /Globex Inc/ }).click();
+    await expect(page.getByRole("heading", { name: "Globex Inc" })).toBeVisible();
+
+    const name = `Globex Probe ${Date.now()}`;
+    await page.getByRole("button", { name: "Add project" }).click();
+
+    const dialog = page.getByRole("dialog");
+    // No customer picker — the answer is already known, and a picker whose
+    // answer is known is a place to get it wrong. The fact it carried is still
+    // said out loud.
+    await expect(dialog).toContainText("For Globex Inc");
+    await expect(dialog.getByLabel("Customer")).toHaveCount(0);
+
+    await dialog.getByLabel("Project name").fill(name);
+    await dialog
+      .getByLabel("What it is for")
+      .fill("## Scope\n\nRaised by the admin-customers suite.");
+    await dialog.getByRole("button", { name: "Add project" }).click();
+
+    await expect(dialog).toBeHidden();
+    // Under Globex, where it was added.
+    await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+
+    // And not under the other customer.
+    await page.getByRole("link", { name: /Acme Corp/ }).click();
+    await expect(page.getByRole("heading", { name: "Acme Corp" })).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(0);
+  });
+
+  test("says which project already has the name, rather than naming a constraint", async ({
+    page,
+  }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+    await page.getByRole("link", { name: /Acme Corp/ }).click();
+
+    await page.getByRole("button", { name: "Add project" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Project name").fill("Acme Migration");
+    await dialog.getByRole("button", { name: "Add project" }).click();
+
+    await expect(dialog.getByRole("alert")).toContainText("Acme Migration");
+    await expect(dialog.getByRole("alert")).not.toContainText(/constraint|unique/i);
+    // Open, with what was typed still in it.
+    await expect(dialog.getByLabel("Project name")).toHaveValue("Acme Migration");
+  });
+
+  test("edits a project's name and description", async ({ page }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+    await page.getByRole("link", { name: /Globex Inc/ }).click();
+
+    const name = `Editable ${Date.now()}`;
+    await page.getByRole("button", { name: "Add project" }).click();
+    let dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Project name").fill(name);
+    await dialog.getByRole("button", { name: "Add project" }).click();
+    await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+
+    await page.getByRole("button", { name: `Edit ${name}` }).click();
+    dialog = page.getByRole("dialog");
+    const renamed = `${name} v2`;
+    await dialog.getByLabel("Project name").fill(renamed);
+    await dialog.getByLabel("What it is for").fill("Now it has a description.");
+    await dialog.getByRole("button", { name: "Save project" }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: new RegExp(`^${renamed}`) })).toBeVisible();
+  });
+
+  test("an archived project leaves the new-ticket dropdown but stays on old tickets", async ({
+    page,
+  }) => {
+    await loginAs(page, SUPER_ADMIN);
+    await page.goto("/admin/customers");
+    await page.getByRole("link", { name: /Globex Inc/ }).click();
+
+    const name = `Retirable ${Date.now()}`;
+    await page.getByRole("button", { name: "Add project" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Project name").fill(name);
+    await dialog.getByRole("button", { name: "Add project" }).click();
+    await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+
+    // The row button, the Edit button and the Archive button all carry the
+    // project's name; only the row button STARTS with it, which is what the
+    // anchored patterns above pick out.
+
+    // It is on offer when raising a ticket for that customer...
+    await page.goto("/tickets");
+    await page.getByRole("button", { name: "New ticket" }).click();
+    await page.getByLabel("Customer").selectOption({ label: "Globex Inc" });
+    await expect(
+      page.getByLabel("Project").locator("option", { hasText: name }),
+    ).toHaveCount(1);
+    await page.keyboard.press("Escape");
+
+    // ...and gone once it is archived.
+    await page.goto("/admin/customers");
+    await page.getByRole("link", { name: /Globex Inc/ }).click();
+    await page.getByRole("button", { name: `Archive ${name}` }).click();
+    const confirm = page.getByRole("dialog");
+    await confirm.getByLabel(/type|name/i).first().fill(name);
+    await confirm.getByRole("button", { name: /Delete|Archive/ }).last().click();
+    await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(0);
+
+    await page.goto("/tickets");
+    await page.getByRole("button", { name: "New ticket" }).click();
+    await page.getByLabel("Customer").selectOption({ label: "Globex Inc" });
+    await expect(
+      page.getByLabel("Project").locator("option", { hasText: name }),
+    ).toHaveCount(0);
+  });
 });

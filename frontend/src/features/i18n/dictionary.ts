@@ -501,6 +501,23 @@ const en: Dict = {
   "categories.codeHint":
     "This name has no letters or digits to build a code from, so give one. A code is what reports group by across customers — it stays the same if the name is later renamed or translated.",
   // --- customers & their projects, on one screen ---------------------------
+  "adminCustomers.newProject": "Add project",
+  "adminCustomers.newProjectTitle": "Add a project",
+  "adminCustomers.editProjectTitle": "Edit project",
+  // Says which customer this lands under. The picker is gone because the answer
+  // is already known; the fact it carried must not go with it.
+  "adminCustomers.projectForCustomer": "For {customer}",
+  "adminCustomers.projectName": "Project name",
+  "adminCustomers.projectDescription": "What it is for",
+  "adminCustomers.projectDescriptionPlaceholder":
+    "What this project covers, who it is for, anything the desk should know",
+  "adminCustomers.projectDescriptionHint":
+    "Markdown. Shown on the project's own page.",
+  "adminCustomers.createProject": "Add project",
+  "adminCustomers.saveProject": "Save project",
+  "adminCustomers.projectSaveError": "Couldn't save the project. Try again.",
+  "adminCustomers.editProjectNamed": "Edit {name}",
+  "adminCustomers.archiveProjectNamed": "Archive {name}",
   "adminCustomers.new": "Add customer",
   "adminCustomers.newTitle": "Add a customer",
   "adminCustomers.renameTitle": "Rename customer",
@@ -1544,6 +1561,21 @@ const th: Dict = {
   "categories.codeHint":
     "ชื่อนี้ไม่มีตัวอักษรภาษาอังกฤษหรือตัวเลขให้สร้างรหัสได้ กรุณาระบุรหัสเอง — รหัสคือสิ่งที่รายงานใช้จัดกลุ่มข้ามลูกค้า และจะไม่เปลี่ยนแม้ภายหลังจะเปลี่ยนชื่อหรือแปลเป็นภาษาอื่น",
   // --- ลูกค้าและโปรเจกต์ในหน้าเดียว -----------------------------------------
+  "adminCustomers.newProject": "เพิ่มโปรเจกต์",
+  "adminCustomers.newProjectTitle": "เพิ่มโปรเจกต์ใหม่",
+  "adminCustomers.editProjectTitle": "แก้ไขโปรเจกต์",
+  "adminCustomers.projectForCustomer": "ของ {customer}",
+  "adminCustomers.projectName": "ชื่อโปรเจกต์",
+  "adminCustomers.projectDescription": "โปรเจกต์นี้เกี่ยวกับอะไร",
+  "adminCustomers.projectDescriptionPlaceholder":
+    "ขอบเขตของโปรเจกต์ ใครเกี่ยวข้อง และสิ่งที่ทีมผู้ดูแลควรรู้",
+  "adminCustomers.projectDescriptionHint":
+    "รองรับ Markdown แสดงในหน้าของโปรเจกต์เอง",
+  "adminCustomers.createProject": "เพิ่มโปรเจกต์",
+  "adminCustomers.saveProject": "บันทึกโปรเจกต์",
+  "adminCustomers.projectSaveError": "บันทึกโปรเจกต์ไม่สำเร็จ ลองอีกครั้ง",
+  "adminCustomers.editProjectNamed": "แก้ไข {name}",
+  "adminCustomers.archiveProjectNamed": "เก็บ {name} เข้าคลัง",
   "adminCustomers.new": "เพิ่มลูกค้า",
   "adminCustomers.newTitle": "เพิ่มลูกค้าใหม่",
   "adminCustomers.renameTitle": "เปลี่ยนชื่อลูกค้า",

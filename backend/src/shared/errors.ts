@@ -561,3 +561,44 @@ export const CategoryDetailRequired = (
     field: "categoryOther",
     reason,
   });
+
+/**
+ * Thrown when archiving a project that still has live work filed under it.
+ *
+ * Beside `ProjectHasMembers` rather than folded into it: they are different
+ * situations with different next steps. Members are moved to another project;
+ * tickets are finished or re-filed. Telling somebody "move the members first"
+ * when the members are already gone and the problem is eleven open tickets is
+ * how a clear refusal becomes a confusing one.
+ *
+ * OPEN tickets only — see `ProjectDeletionImpact.openTickets`. A project's
+ * closed history keeps pointing at it and keeps rendering its name, so archiving
+ * takes nothing away from it.
+ */
+export const ProjectHasOpenTickets = (count: number) =>
+  new AppError(
+    409,
+    "PROJECT_HAS_OPEN_TICKETS",
+    `This project still has ${count} open ticket${count === 1 ? "" : "s"} filed under it — finish or re-file them first`,
+    { count },
+  );
+
+/**
+ * Thrown when a customer already runs a project under this name.
+ *
+ * Checked before the insert rather than left to the unique index, so the answer
+ * names the project instead of naming a constraint. The index stays as the thing
+ * that actually guarantees it — two layers saying the same thing, one of them a
+ * rule somebody can forget and the other not.
+ *
+ * Per customer, never global: two companies may each run a "Migration", and
+ * that is the whole reason the index is on (customer_id, name) rather than on
+ * the name alone.
+ */
+export const ProjectNameTaken = (name: string) =>
+  new AppError(
+    409,
+    "PROJECT_NAME_TAKEN",
+    `This customer already has a project called "${name}"`,
+    { name },
+  );
