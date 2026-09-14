@@ -119,8 +119,15 @@ These are load-bearing invariants — get them right in whatever layer you touch
   Reach rides the access token, so a grant or revocation bites at the next sign-in or refresh.
   **A grant is not platform-wide reach** and the two must stay distinct: covering every customer that
   exists today is a list, while `isPlatformWide` also follows the platform to the customer created
-  tomorrow. Granting reach is platform-wide only (`mayGrantReach`) — an `admin` may create a customer,
-  so letting them also grant reach would let them make a tenant and walk into it unreviewed.
+  tomorrow. Granting reach is platform-wide only (`mayGrantReach`), so that nobody can make a tenant
+  and walk into it unreviewed.
+  **Tenant management is platform-wide too** — creating and archiving a customer ask for
+  `isPlatformWide` on top of `customer:write` / `customer:archive`. That follows from the rule above
+  rather than adding to it: a new customer lands outside every reach, and nothing grants the creator
+  access to it, so a creator who is not platform-wide gets a row they cannot list, open or rename.
+  An `admin` used to be allowed to create one and this is what they got — a 201, then a 404 on the
+  page the screen sent them to, and an orphan tenant per attempt. A permission alone cannot express
+  this, so the two catalogue entries say it in their descriptions.
   Permission checks are middleware, but **row-level scope is enforced in the repository (WHERE
   clause)**: users see only their own tickets; staff see everything within the customers they reach
   (across all departments); a platform-wide super_admin sees every customer. The user
