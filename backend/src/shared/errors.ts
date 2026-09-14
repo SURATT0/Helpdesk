@@ -152,13 +152,15 @@ export const CustomerNotEmpty = (counts: {
   users: number;
   categories: number;
 }) => {
+  // Categories are NOT listed, though they travel in `details` for the dialog to
+  // show alongside. They are not in anyone's way: nothing in the product removes
+  // a category, so naming one here would tell the reader to go and do something
+  // that cannot be done — which is what this message said for every tenant the
+  // app created, each of which starts life with the full starter set.
   const parts = [
     counts.tickets > 0 ? `${counts.tickets} open ticket${counts.tickets === 1 ? "" : "s"}` : null,
     counts.projects > 0 ? `${counts.projects} project${counts.projects === 1 ? "" : "s"}` : null,
     counts.users > 0 ? `${counts.users} user${counts.users === 1 ? "" : "s"}` : null,
-    counts.categories > 0
-      ? `${counts.categories} categor${counts.categories === 1 ? "y" : "ies"}`
-      : null,
   ].filter(Boolean);
   return new AppError(
     409,

@@ -38,35 +38,49 @@ function reachWhere(actor: AuthUser): Prisma.CustomerWhereInput {
   return { id: { in: reach } };
 }
 
+/**
+ * What is live under a tenant right now.
+ *
+ * Three of the four are what the archive refuses on; the fourth is context. The
+ * split matters, so it is stated once here rather than at each call site.
+ */
+export type CustomerCounts = {
+  projects: number;
+  tickets: number;
+  users: number;
+  /**
+   * The tenant's own categories. **Reported, never refused on.**
+   *
+   * It was refused on, and that made archiving impossible rather than strict:
+   * `create` writes the starter set in the same transaction as the customer, so
+   * this is never zero for a tenant the app made, and nothing in the product
+   * removes a category — `category.routes.ts` has no delete, by design. The only
+   * way past it was to reach into the database by hand, which is not a step
+   * anybody using Deskly can take.
+   *
+   * It could not be fixed by clearing them on the way out either: `Category` has
+   * no `deletedAt`, and a CLOSED ticket still points at its row through
+   * `(category_id, customer_id)` — the archive deliberately allows closed
+   * tickets, so deleting the categories would strand them.
+   *
+   * So they ride along with the tenant. A soft delete leaves every row and every
+   * foreign key where it is; what changes is that the customer stops appearing
+   * in pickers, and its categories go quiet with it because a category is only
+   * ever reached through its customer. The number stays in the DTO because the
+   * archive dialog is a good place to say what is coming along.
+   */
+  categories: number;
+};
+
 export type CustomerDto = {
   id: number;
   name: string;
   /**
    * What is live under this tenant right now. Read by the archive dialog so the
-   * number a person is shown is the number the guard refuses on, and by the list
+   * numbers a person is shown are the ones the guard refuses on, and by the list
    * so "empty" is visible before anyone tries.
    */
-  counts: {
-    projects: number;
-    tickets: number;
-    users: number;
-    /**
-     * The tenant's own categories.
-     *
-     * Counted, and the consequence is deliberate and permanent: every customer
-     * is created with the starter set, so this is never zero and a tenant can
-     * therefore never be archived while it still has them. That was the choice —
-     * a category belongs to exactly one customer and carries the codes its
-     * reports group by, so archiving the customer out from under it would leave
-     * rows nothing owns.
-     *
-     * Making a tenant archivable again means giving somebody a way to remove its
-     * categories first. There is no such path today, which is why this number is
-     * shown rather than merely enforced: a dialog that says "7 categories" is a
-     * dead end somebody can see, and a refusal with no number is one they cannot.
-     */
-    categories: number;
-  };
+  counts: CustomerCounts;
   createdAt: string;
 };
 
@@ -304,10 +318,28 @@ export const customerRepository = {
    * guarded write is what makes the check meaningful rather than advisory —
    * same shape as the project soft delete.
    *
-   * Returns false when the re-count no longer agrees, which the service reports
-   * as the same 409.
+   * Returns the counts it refused on rather than a bare `false`, so the 409 the
+   * service raises says what this transaction actually saw. It used to return a
+   * boolean and the service invented `tickets: max(impact.tickets, 1)` to have
+   * something to put in the message — which told the reader a brand-new tenant
+   * had one open ticket when it had none at all.
+   *
+   * **Categories are counted for the answer but never refused on**, and the
+   * three that are refused on are exactly the three the service pre-checks. The
+   * two disagreeing is what made archiving impossible: `create` writes the
+   * starter categories in the same transaction as the customer, nothing in the
+   * product removes one (`category.routes.ts` has no delete), and a closed
+   * ticket keeps pointing at the row through `(category_id, customer_id)` — so
+   * they cannot be cleared before archiving and must not be cleared by it.
+   * Counting them meant every tenant the app has ever created was unarchivable
+   * from the moment it existed. They ride along with the tenant instead, which
+   * is what a soft delete is for: the rows stay, the foreign keys stay, and the
+   * customer leaves the pickers.
    */
-  async archive(id: number, actor: AuthUser): Promise<boolean> {
+  async archive(
+    id: number,
+    actor: AuthUser,
+  ): Promise<{ ok: true } | { ok: false; blocking: CustomerCounts }> {
     return prisma.$transaction(async (tx) => {
       const [projects, tickets, users, categories] = await Promise.all([
         tx.project.count({ where: { customerId: id, deletedAt: null } }),
@@ -317,15 +349,20 @@ export const customerRepository = {
         tx.user.count({ where: { customerId: id, isActive: true } }),
         tx.category.count({ where: { customerId: id } }),
       ]);
-      if (projects > 0 || tickets > 0 || users > 0 || categories > 0) {
-        return false;
+      const counts = { projects, tickets, users, categories };
+      if (projects > 0 || tickets > 0 || users > 0) {
+        return { ok: false as const, blocking: counts };
       }
 
       const done = await tx.customer.updateMany({
         where: { id, deletedAt: null },
         data: { deletedAt: new Date(), deletedById: actor.id },
       });
-      if (done.count === 0) return false;
+      // Already archived by somebody else between the read and here. Nothing is
+      // blocking it — the work is simply done — but reporting zeroes would read
+      // as "archivable" to a caller that just failed to archive it, so the row
+      // being gone is what the service is told.
+      if (done.count === 0) return { ok: false as const, blocking: counts };
 
       await auditRepository.record(
         {
@@ -337,7 +374,7 @@ export const customerRepository = {
         },
         tx,
       );
-      return true;
+      return { ok: true as const };
     });
   },
 };

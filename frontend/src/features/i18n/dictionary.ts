@@ -835,13 +835,19 @@ const en: Dict = {
   "customers.archiveProjects": "{n} project(s)",
   "customers.archiveUsers": "{n} active user(s)",
   "customers.archiveCategories": "{n} categor(y/ies)",
-  // Says plainly that the category line is a dead end, rather than promising an
-  // archive that cannot follow. A customer is created with the starter set and
-  // nothing in the product removes a category, so a tenant that still has them
-  // cannot be archived at all — and a hint that ended "then this can be
-  // archived" would be telling somebody to do something that does not work.
+  // Shown in the SAFE branch, not the blocked one: the categories are not in the
+  // way, they come along. Worth saying because they are the one thing nobody can
+  // clear out first, so a reader who expected to tidy up before archiving should
+  // be told there is nothing to tidy.
+  "customers.archiveCarriesCategories":
+    "Its {n} categories are archived with it, and stay on the tickets filed under them.",
+  // Every line above this one is something the reader can go and act on, which is
+  // what the hint sends them off to do. It used to end by saying a customer with
+  // categories could not be archived "yet" — which was true and permanent, since
+  // nothing in the product removes a category, so it was an instruction to do
+  // something impossible. Categories no longer block, so it no longer says it.
   "customers.archiveBlockedHint":
-    "Close the tickets, archive the projects and deactivate the accounts first. Categories cannot be removed from a customer today, so one that still has them cannot be archived yet.",
+    "Close the tickets, archive the projects and deactivate the accounts first.",
   "customers.archiveSafe":
     "Nothing is live under this customer. Its tickets, projects and history stay on record; it simply leaves every picker.",
   "customers.archiveCancel": "Cancel",
@@ -1904,8 +1910,10 @@ const th: Dict = {
   "customers.archiveProjects": "โปรเจกต์ {n} รายการ",
   "customers.archiveUsers": "ผู้ใช้ที่ยังใช้งานอยู่ {n} คน",
   "customers.archiveCategories": "หมวดหมู่ {n} รายการ",
+  "customers.archiveCarriesCategories":
+    "หมวดหมู่ {n} รายการจะถูกเก็บเข้าคลังไปพร้อมกัน และยังคงอยู่บน Ticket ที่เคยใช้หมวดหมู่นั้น",
   "customers.archiveBlockedHint":
-    "ปิด Ticket เก็บโปรเจกต์เข้าคลัง และปิดบัญชีผู้ใช้ให้เรียบร้อยก่อน ส่วนหมวดหมู่ยังไม่มีวิธีลบออกจากลูกค้าในตอนนี้ ลูกค้าที่ยังมีหมวดหมู่อยู่จึงยังเก็บเข้าคลังไม่ได้",
+    "ปิด Ticket เก็บโปรเจกต์เข้าคลัง และปิดบัญชีผู้ใช้ให้เรียบร้อยก่อน",
   "customers.archiveSafe":
     "ไม่มีอะไรค้างอยู่ภายใต้ลูกค้ารายนี้ Ticket โปรเจกต์ และประวัติทั้งหมดยังอยู่ครบ เพียงแต่จะไม่ปรากฏในรายการให้เลือกอีก",
   "customers.archiveCancel": "ยกเลิก",

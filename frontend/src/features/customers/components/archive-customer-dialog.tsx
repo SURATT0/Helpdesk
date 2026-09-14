@@ -32,12 +32,17 @@ export function ArchiveCustomerDialog({
   const archive = useArchiveCustomer();
   const [error, setError] = React.useState<string | null>(null);
 
+  /**
+   * The three the API refuses on — categories deliberately not among them.
+   *
+   * This list has to match `customerService.archive` exactly. When it did not,
+   * the dialog refused a tenant the API would have archived: every customer is
+   * created with the starter categories, nothing in the product removes one, so
+   * counting them here meant the button was never offered for anything.
+   */
   const blocking =
     impact != null &&
-    (impact.projects > 0 ||
-      impact.tickets > 0 ||
-      impact.users > 0 ||
-      impact.categories > 0);
+    (impact.projects > 0 || impact.tickets > 0 || impact.users > 0);
 
   function submit() {
     setError(null);
@@ -101,15 +106,11 @@ export function ArchiveCustomerDialog({
               {impact.users > 0 ? (
                 <li>{t("customers.archiveUsers", { n: impact.users })}</li>
               ) : null}
-              {/* Last in the list, and the one that never reaches zero on its
-                  own: a customer is created with the starter set. Shown rather
-                  than merely enforced, because a dead end somebody can read is
-                  better than a refusal they cannot explain. */}
-              {impact.categories > 0 ? (
-                <li>
-                  {t("customers.archiveCategories", { n: impact.categories })}
-                </li>
-              ) : null}
+              {/* No category line here. Every entry in this list is something
+                  the reader is being asked to go and deal with, and categories
+                  are the one thing they cannot: nothing in the product removes
+                  one. They are named in the safe branch instead, as something
+                  that comes along rather than something in the way. */}
             </ul>
             <p className="mt-2 pl-[22px] text-caption text-faint">
               {t("customers.archiveBlockedHint")}
@@ -121,6 +122,16 @@ export function ArchiveCustomerDialog({
                 hide: the row and its history stay, and the tenant simply
                 stops appearing anywhere new work can be filed. */}
             {t("customers.archiveSafe")}
+            {/* And what comes with it. The starter categories are always there
+                and can never be cleared first, so a person about to archive
+                should be told they travel rather than left to wonder. */}
+            {impact != null && impact.categories > 0 ? (
+              <p className="mt-1.5 text-dense text-faint">
+                {t("customers.archiveCarriesCategories", {
+                  n: impact.categories,
+                })}
+              </p>
+            ) : null}
           </div>
         )}
 
