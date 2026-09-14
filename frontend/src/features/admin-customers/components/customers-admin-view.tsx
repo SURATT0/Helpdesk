@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
-import { TOUCH_TARGET } from "@/components/ui/touch";
+import { TOUCH_HEIGHT, TOUCH_TARGET } from "@/components/ui/touch";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -157,7 +157,7 @@ export function CustomersAdminView({
           <div className="flex-none border-b border-hairline p-3">
             <Button
               onClick={() => setEditing("new")}
-              className="mb-2 w-full gap-1.5"
+              className={cn("mb-2 w-full gap-1.5", TOUCH_HEIGHT)}
             >
               <Plus size={14} strokeWidth={2.5} />
               {t("adminCustomers.new")}
@@ -392,12 +392,20 @@ function CustomerDetail({
           <span className="min-w-0 break-words">{customer.name}</span>
         </h1>
         <div className="flex flex-none items-center gap-2">
-          <Button variant="secondary" onClick={onRename} className="gap-1.5">
+          <Button
+            variant="secondary"
+            onClick={onRename}
+            className={cn("gap-1.5", TOUCH_HEIGHT)}
+          >
             <Pencil size={13} strokeWidth={2} />
             {t("adminCustomers.rename")}
           </Button>
           {canArchive ? (
-            <Button variant="secondary" onClick={onArchive} className="gap-1.5">
+            <Button
+              variant="secondary"
+              onClick={onArchive}
+              className={cn("gap-1.5", TOUCH_HEIGHT)}
+            >
               <Archive size={13} strokeWidth={2} />
               {t("adminCustomers.archive")}
             </Button>
@@ -433,7 +441,7 @@ function CustomerDetail({
         {/* The customer is already chosen, so adding a project asks for a name
             and nothing else — see ProjectFormModal. A customer may run as many
             as it likes; nothing here caps them. */}
-        <Button onClick={onAddProject} className="gap-1.5">
+        <Button onClick={onAddProject} className={cn("gap-1.5", TOUCH_HEIGHT)}>
           <Plus size={14} strokeWidth={2.5} />
           {t("adminCustomers.newProject")}
         </Button>

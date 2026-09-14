@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
+import { TOUCH_HEIGHT } from "@/components/ui/touch";
 import { ApiError } from "@/lib/api-client";
 import { TEXT_MAX } from "@/lib/domain";
 import { cn } from "@/lib/utils";
@@ -177,10 +178,16 @@ export function ProjectFormModal({
         </div>
 
         <div className="flex flex-none flex-col-reverse gap-2 border-t border-hairline px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            disabled={busy}
+            className={TOUCH_HEIGHT}
+          >
             {t("common.cancel")}
           </Button>
-          <Button type="submit" disabled={!ready} className="gap-1.5">
+          <Button type="submit" disabled={!ready} className={cn("gap-1.5", TOUCH_HEIGHT)}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : null}
             {editing
               ? t("adminCustomers.saveProject")
