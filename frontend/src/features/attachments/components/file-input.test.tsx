@@ -107,8 +107,34 @@ describe("choosing files", () => {
     ]);
 
     expect(onFiles).toHaveBeenCalledTimes(1);
-    const picked = onFiles.mock.calls[0][0] as FileList;
-    expect([...picked].map((f) => f.name)).toEqual(["a.png", "b.pdf"]);
+    const picked = onFiles.mock.calls[0][0] as File[];
+    expect(picked.map((f) => f.name)).toEqual(["a.png", "b.pdf"]);
+  });
+
+  /**
+   * The list handed over must still hold the files LATER, not only during the
+   * call — which is what decides whether an attachment survives at all.
+   *
+   * `input.files` is a live view of the input, and this component clears the
+   * input so the same file can be chosen twice in a row. A caller that reads the
+   * list after the handler returns — `setFiles(prev => [...prev, ...list])` does
+   * exactly that, because React runs an updater when it gets to it rather than
+   * at once — then found it empty, and the file vanished with no error anywhere.
+   * It failed perhaps one time in six, always under load, which is the shape of
+   * every bug of this kind.
+   */
+  it("hands over a snapshot that survives the input being cleared", async () => {
+    const onFiles = vi.fn();
+    render(<FileInput onFiles={onFiles}>pick</FileInput>);
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+
+    await userEvent.upload(input, new File(["a"], "a.png", { type: "image/png" }));
+
+    // Read only now, with the input already cleared — the caller's position.
+    expect(input.files).toHaveLength(0);
+    const picked = onFiles.mock.calls[0][0] as File[];
+    expect(Array.isArray(picked)).toBe(true);
+    expect(picked.map((f) => f.name)).toEqual(["a.png"]);
   });
 
   it("clears itself, so picking the same file twice still fires", async () => {

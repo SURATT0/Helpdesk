@@ -210,17 +210,32 @@ export function CreateTicketModal({
   const suggest = useKbSuggest(subject, subject.trim().length >= 3);
   const suggestions = suggest.data ?? [];
 
-  function addFiles(list: FileList | null) {
-    if (!list || list.length === 0) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+  // A settled array, never a live FileList: the updater below runs whenever
+  // React gets to it, and a FileList can be empty by then. See FileInput.
+  function addFiles(picked: File[]) {
+    if (picked.length === 0) return;
+    setFiles((prev) => [...prev, ...picked]);
   }
   function removeFile(idx: number) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  // Reset the form each time the modal opens.
+  /**
+   * Empty the form on the way OUT, so the next open finds it already clean.
+   *
+   * It used to reset on the way in, and that is a race rather than a tidy-up: an
+   * effect runs after paint, so the dialog is on screen and taking input for a
+   * frame before the reset lands. Anything done in that frame is thrown away —
+   * a file picked the instant the dialog appeared was added and then wiped, and
+   * the person got an empty attachment row with no hint why. It showed up first
+   * as an e2e case that passed or failed depending on the machine, which is what
+   * a race looks like from the outside.
+   *
+   * Nothing can race a closed dialog, so doing it here has no such window. The
+   * first mount needs no reset either — the initial state IS the empty form.
+   */
   React.useEffect(() => {
-    if (!open) return;
+    if (open) return;
     setSubject("");
     setDescription("");
     setPriority("medium");
@@ -229,7 +244,7 @@ export function CreateTicketModal({
     setProjectId(null);
     // Leave the customer alone: with one it is already right, and with several
     // the person is about to choose. Resetting it here would clear a preselect
-    // this same render just made.
+    // the next open is about to make.
     setFiles([]);
     setAttaching(false);
     setAttachError(null);
@@ -610,7 +625,7 @@ export function CreateTicketModal({
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                addFiles(e.dataTransfer.files);
+                addFiles(Array.from(e.dataTransfer.files));
               }}
               className={cn(
                 "flex flex-wrap items-center justify-center gap-1.5 rounded-tile border-[1.5px] border-dashed px-4 py-[18px] text-body transition-colors",

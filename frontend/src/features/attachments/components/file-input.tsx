@@ -38,9 +38,23 @@ export function FileInput({
   children,
   ...rest
 }: {
-  /** Called with whatever was picked. The input is cleared afterwards, so
-   *  choosing the same file twice in a row still fires. */
-  onFiles: (files: FileList | null) => void;
+  /**
+   * Called with whatever was picked, as a plain array.
+   *
+   * An array and not the `FileList`, which is LIVE: it is a view onto the
+   * input, so clearing the input empties the list the caller is holding. This
+   * component does clear the input — that is what lets the same file be chosen
+   * twice in a row — so handing over the FileList was handing over something
+   * that could go empty underneath a caller who had not finished reading it.
+   *
+   * Which is what happened. `setFiles(prev => [...prev, ...Array.from(list)])`
+   * reads the list inside an updater, and React runs an updater eagerly only
+   * while nothing else is queued on that component; with another render already
+   * pending — a query resolving as the dialog opens, say — it runs later, by
+   * which time the list was empty and the attachment silently vanished. The
+   * snapshot is taken here so no caller has to know any of that.
+   */
+  onFiles: (files: File[]) => void;
   multiple?: boolean;
   /**
    * Ask for the device camera rather than its files.
@@ -85,9 +99,12 @@ export function FileInput({
         disabled={disabled}
         className="sr-only"
         onChange={(e) => {
-          onFiles(e.target.files);
+          // Snapshot BEFORE clearing — see `onFiles` above for why the order
+          // here is the whole point.
+          const picked = Array.from(e.target.files ?? []);
           // So picking the same file again still fires a change event.
           e.target.value = "";
+          onFiles(picked);
         }}
       />
     </label>

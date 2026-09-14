@@ -91,9 +91,11 @@ export function Composer({
     setError(null);
   }
 
-  function addFiles(list: FileList | null) {
-    if (!list || list.length === 0) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+  // A settled array, never a live FileList — the updater runs whenever React
+  // gets to it, and by then the list can be empty. See FileInput.
+  function addFiles(picked: File[]) {
+    if (picked.length === 0) return;
+    setFiles((prev) => [...prev, ...picked]);
   }
   function removeFile(idx: number) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));

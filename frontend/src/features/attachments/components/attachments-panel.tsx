@@ -356,8 +356,8 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
    * panel already renders each row as it lands, so serialising them would only
    * make a batch of photos feel slower than it is.
    */
-  function onPick(list: FileList | null) {
-    for (const file of Array.from(list ?? [])) upload.mutate(file);
+  function onPick(picked: File[]) {
+    for (const file of picked) upload.mutate(file);
   }
 
   // Download/view hit an authed binary endpoint that can fail (e.g. the file is
