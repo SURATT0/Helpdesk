@@ -1,18 +1,60 @@
-import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import type {
   AssetKind,
   AssetStatus,
   PrismaClient,
   Role,
 } from "@prisma/client";
+import { hashPassword } from "../src/modules/auth/auth.password";
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
 import { categoryCode } from "../src/modules/categories/category.code";
 import { INITIAL_ROLE_PERMISSIONS } from "../src/shared/permissions";
 import { KB_ARTICLES } from "./kb-seed-data";
 
-// Every seeded user shares this demo password. Log in as e.g. dana.reyes@acme.com.
-export const DEMO_PASSWORD = "password123";
+/**
+ * The password every seeded account gets — read from the environment, never
+ * written down here.
+ *
+ * A password in the repository is a password in every clone, every fork and
+ * every CI log, and it stays valid long after anyone remembers it is there. So
+ * `SEED_PASSWORD` decides, and when nothing decides, this GENERATES one and
+ * prints it once. A generated password that was never displayed is a database
+ * nobody can sign into, which is why the printing is not optional.
+ *
+ * Everywhere that needs a KNOWN password sets the variable rather than relying
+ * on a default here:
+ *
+ *   - `docker-compose.yml` (api) — the demo stack, and the E2E job that seeds
+ *     through it
+ *   - `vitest.integration.config.ts` — the suites that call `seedDatabase`
+ *     in-process
+ *   - `backend/.env` — a developer's own machine, documented in `.env.example`
+ *
+ * `NODE_ENV` is deliberately not consulted. Both the compose API and the
+ * integration config run as `production`, so it cannot tell "real deployment"
+ * from "test rig" here, and a guess that is wrong in that direction hands a
+ * fixed password to a live system.
+ *
+ * Memoised, so one run uses one password and announces it once however many
+ * times it is asked.
+ */
+let memoisedPassword: string | null = null;
+
+export function seedPassword(): string {
+  if (memoisedPassword != null) return memoisedPassword;
+  const fromEnv = process.env.SEED_PASSWORD?.trim();
+  if (fromEnv) {
+    memoisedPassword = fromEnv;
+    return memoisedPassword;
+  }
+  // URL-safe, and long enough that the printed line is the only way back to it.
+  memoisedPassword = randomBytes(18).toString("base64url");
+  console.log(
+    `\n  SEED_PASSWORD was not set, so the seeded accounts share a generated one:\n\n      ${memoisedPassword}\n\n  Shown once. Set SEED_PASSWORD to choose your own.\n`,
+  );
+  return memoisedPassword;
+}
 
 const emailFor = (name: string) =>
   `${name
@@ -345,7 +387,11 @@ function closureAt(now: Date, closure: Closure): Date {
  */
 export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   const now = new Date();
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  // `hashPassword`, not bcrypt directly. It is the function the login flow
+  // verifies against, and it owns the cost factor — calling bcrypt here with a
+  // number of our own is how a seeded account ends up hashed one way and checked
+  // another, which shows up as "the password is wrong" and nothing else.
+  const passwordHash = await hashPassword(seedPassword());
 
   const customerIds = new Map<string, number>();
   for (const name of CUSTOMERS) {
