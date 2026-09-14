@@ -438,3 +438,40 @@ describe("a reset link works once, then closes every door behind it", () => {
     expect((await reset(token)).status).toBe(200);
   });
 });
+
+describe("the API writes no UI copy", () => {
+  const reset = (token: string | null) =>
+    request(app)
+      .post(`${API}/auth/reset-password`)
+      .send({
+        token,
+        password: NEW_PASSWORD,
+        confirmPassword: NEW_PASSWORD,
+      });
+
+  /**
+   * These three replies used to carry an English sentence, which the pages
+   * showed verbatim — so a person filling in the Thai form was told what had
+   * happened in English. The API is never told which language the reader has,
+   * so the sentence belongs to the page and the reply carries nothing to show.
+   *
+   * Asserted per endpoint rather than trusted to review, because putting a
+   * friendly sentence back in a controller is a one-line change that reads as an
+   * improvement.
+   */
+  it("answers register, forgot-password and reset-password with nothing to display", async () => {
+    const NEWCOMER = newcomer();
+    const registered = await register(NEWCOMER);
+    expect(registered.status).toBe(202);
+    expect(registered.body.data).toEqual({});
+
+    const email = await makeApprovedUser();
+    const asked = await forgot(email);
+    expect(asked.status).toBe(200);
+    expect(asked.body.data).toEqual({});
+
+    const done = await reset(tokenFor(email));
+    expect(done.status).toBe(200);
+    expect(done.body.data).toEqual({});
+  });
+});

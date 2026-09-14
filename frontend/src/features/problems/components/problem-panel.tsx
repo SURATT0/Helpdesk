@@ -10,7 +10,7 @@ import {
   Loader2,
   Pencil,
 } from "lucide-react";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import type { Ticket } from "@/features/tickets/schemas";
@@ -51,7 +51,7 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
     setError(null);
     unlink.mutate(ticket.id, {
       onError: (err) =>
-        setError(err instanceof ApiError ? err.message : t("problem.error")),
+        setError(apiErrorMessage(err, t, "problem.error")),
     });
   }
 

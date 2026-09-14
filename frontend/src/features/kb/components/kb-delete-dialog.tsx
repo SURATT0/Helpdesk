@@ -4,7 +4,7 @@ import * as React from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { useI18n } from "@/features/i18n/context";
 import { useDeleteArticle } from "../queries";
 
@@ -35,7 +35,7 @@ export function KbDeleteDialog({
     remove.mutate(id, {
       onSuccess: () => onDeleted(),
       onError: (err) =>
-        setError(err instanceof ApiError ? err.message : t("kb.deleteError")),
+        setError(apiErrorMessage(err, t, "kb.deleteError")),
     });
   }
 

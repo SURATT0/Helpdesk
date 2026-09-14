@@ -4,7 +4,7 @@ import * as React from "react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
 import { toMinutes } from "../api";
@@ -211,9 +211,7 @@ export function NotificationsPanel({ canManage }: { canManage: boolean }) {
         ) : null}
         {save.isError ? (
           <span className="text-caption font-medium text-danger">
-            {save.error instanceof ApiError
-              ? save.error.message
-              : t("settings.saveError")}
+            {apiErrorMessage(save.error, t, "settings.saveError")}
           </span>
         ) : null}
       </div>

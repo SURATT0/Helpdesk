@@ -230,10 +230,15 @@ test("a stale second screen is refused with the server's reason, not a silent no
     await screenB.getByRole("button", { name: /^Pending$/ }).click();
     // The exact sentence, so this cannot pass on some other error appearing:
     // the 409 has to name the transition the stale screen actually attempted.
+    //
+    // The page's own words, not the API's. The server answers with the code
+    // `ILLEGAL_TRANSITION` and `{from, to}` in `details`; the sentence is built
+    // here from the dictionary, because the API is never told what language the
+    // reader has. What still has to hold — and is what this case is for — is
+    // that BOTH statuses survive the trip, so a stale screen is told which move
+    // was refused rather than just that something was.
     await expect(
-      screenB
-        .getByText('Cannot move ticket from "closed" to "pending"')
-        .first(),
+      screenB.getByText("A ticket cannot go from closed to pending.").first(),
     ).toBeVisible({ timeout: 10_000 });
   } finally {
     await a.close();

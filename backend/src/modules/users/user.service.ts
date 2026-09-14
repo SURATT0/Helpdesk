@@ -1,9 +1,11 @@
 import {
   BadRequest,
+  CannotActOnSelf,
   Forbidden,
   HasOpenQueue,
   LastAdmin,
   NotFound,
+  PlatformStaffOnly,
 } from "../../shared/errors";
 import {
   customerReach,
@@ -56,10 +58,10 @@ export const userService = {
     actor: AuthUser,
   ): Promise<UserDto> {
     if (!mayApproveRegistration(actor)) {
-      throw Forbidden("Only a platform super admin can approve a registration");
+      throw PlatformStaffOnly("approve_registration");
     }
     if (data.role === "super_admin" && !isPlatformWide(actor)) {
-      throw Forbidden("Only a platform super admin can grant the super admin role");
+      throw PlatformStaffOnly("grant_super_admin");
     }
     const customer = await userRepository.findCustomerById(data.customerId);
     if (!customer) throw BadRequest(`Unknown customer #${data.customerId}`);
@@ -84,7 +86,7 @@ export const userService = {
     actor: AuthUser,
   ): Promise<UserDto> {
     if (!mayApproveRegistration(actor)) {
-      throw Forbidden("Only a platform super admin can decide a registration");
+      throw PlatformStaffOnly("decide_registration");
     }
     const result = await userRepository.rejectRegistration(id, reason, actor);
     if (result === null) throw NotFound(`User #${id} not found`);
@@ -123,14 +125,14 @@ export const userService = {
     // it that way now that a customer's own manager shares the super_admin role:
     // otherwise they could promote themselves past their own tenant.
     if (data.role === "super_admin" && !isPlatformWide(actor)) {
-      throw Forbidden("Only a platform super admin can grant the super admin role");
+      throw PlatformStaffOnly("grant_super_admin");
     }
     // Closing your own account is never the intent — it is a locked-out
     // administrator and a support call. Answered first because it is the most
     // specific thing wrong with the request: true whoever you are, and actionable
     // without knowing anything about who else holds the role.
     if (data.isActive === false && id === actor.id) {
-      throw BadRequest("You cannot deactivate your own account");
+      throw CannotActOnSelf("deactivate");
     }
 
     /**
@@ -216,7 +218,7 @@ export const userService = {
       );
     }
     if (id === actor.id) {
-      throw Forbidden("You cannot change your own customer access");
+      throw CannotActOnSelf("customer_access");
     }
 
     const wanted = [...new Set(customerIds)];

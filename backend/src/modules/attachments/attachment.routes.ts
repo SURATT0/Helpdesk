@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { asyncHandler } from "../../middlewares";
 import { requirePermission } from "../../middlewares/auth";
-import { BadRequest } from "../../shared/errors";
+import { UnsupportedFileType } from "../../shared/errors";
 import { attachmentController } from "./attachment.controller";
 import { ALLOWED_TYPES } from "./attachment.service";
 
@@ -22,7 +22,7 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_TYPES.has(file.mimetype)) return cb(null, true);
-    cb(BadRequest(`Unsupported file type: ${file.mimetype}`));
+    cb(UnsupportedFileType(file.mimetype));
   },
 });
 

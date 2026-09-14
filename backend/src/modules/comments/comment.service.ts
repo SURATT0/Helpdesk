@@ -1,4 +1,8 @@
-import { Forbidden, NotFound } from "../../shared/errors";
+import {
+  CannotDeleteComment,
+  InternalNotesAreForAgents,
+  NotFound,
+} from "../../shared/errors";
 import { hasPermission, type AuthUser } from "../../shared/auth";
 import { isInternalThread } from "../../shared/domain";
 import { bus } from "../../shared/events";
@@ -39,7 +43,7 @@ export const commentService = {
   ): Promise<CommentDto> {
     const ticket = await ticketService.get(ticketId, user); // must see the ticket
     if (input.internal && !hasPermission(user, "ticket:write")) {
-      throw Forbidden("Only agents can add internal notes");
+      throw InternalNotesAreForAgents();
     }
     // A ticket raised by staff has no external side (see isInternalThread), so a
     // public comment on one has no audience a note doesn't already reach: the row
@@ -112,7 +116,7 @@ export const commentService = {
     // the same line as before, when it was manager-or-admin. An admin working the
     // case can still delete their own.
     const mayModerate = user.role === "super_admin";
-    if (!isOwner && !mayModerate) throw Forbidden("Cannot delete this comment");
+    if (!isOwner && !mayModerate) throw CannotDeleteComment();
 
     await ticketService.get(comment.ticketId, user); // ticket must be in scope
     await commentRepository.softDelete(id, user.id);

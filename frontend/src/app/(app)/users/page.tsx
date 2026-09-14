@@ -19,6 +19,7 @@ import { HandoverQueueModal } from "@/features/users/components/handover-queue-m
 import { ProjectSelect } from "@/features/users/components/project-select";
 import { SuspensionToggle } from "@/features/users/components/suspension-toggle";
 import { useI18n } from "@/features/i18n/context";
+import { apiErrorMessage } from "@/lib/api-error";
 import type {
   User,
   UserFilters,
@@ -119,16 +120,18 @@ export default function UsersPage() {
         {/* A refused edit has to be readable. Closing an account that still holds
             tickets comes back with the count and "hand the queue over first" —
             the one message on this page a reader has to act on, and it used to go
-            nowhere because nothing rendered `update.error`. */}
+            nowhere because nothing rendered `update.error`.
+
+            Through `apiErrorMessage`, so the count arrives in `details` and the
+            sentence around it is written here rather than by the API, which is
+            not told what language the reader has. */}
         {update.isError ? (
           <div
             role="alert"
             className="mb-4 flex max-w-[70ch] items-start gap-2 rounded-md border border-danger-edge bg-danger-bg px-3 py-2.5 text-body font-medium text-danger-ink"
           >
             <Info size={14} className="mt-[2px] flex-none" />
-            {update.error instanceof Error
-              ? update.error.message
-              : t("users.updateError")}
+            {apiErrorMessage(update.error, t, "users.updateError")}
           </div>
         ) : null}
 

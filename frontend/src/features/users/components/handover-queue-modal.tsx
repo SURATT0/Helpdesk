@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { toneForName } from "@/features/tickets/data";
 import { useReassignTickets } from "@/features/tickets/queries";
@@ -55,7 +55,7 @@ export function HandoverQueueModal({
         onSuccess: (r) => setResult(r),
         onError: (err) =>
           setError(
-            err instanceof ApiError ? err.message : t("handover.error"),
+            apiErrorMessage(err, t, "handover.error"),
           ),
       },
     );

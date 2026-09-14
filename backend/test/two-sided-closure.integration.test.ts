@@ -239,9 +239,13 @@ describe("when a closure can be answered", () => {
       .set(bearer(marcus));
 
     expect(res.status).toBe(400);
-    // The message names the state it is actually in, so the reader knows whether
-    // to wait or to chase someone.
-    expect(res.body.error.message).toMatch(/not waiting to be confirmed/);
+    // The CODE, and the state in `details` — not the English sentence, which is
+    // the API's own and never reaches a screen. What the reader needs is which
+    // state the ticket is actually in, so they know whether to wait or to chase
+    // someone, and that has to arrive as a value the client can put into its own
+    // translation rather than as prose it would have to parse.
+    expect(res.body.error.code).toBe("TICKET_NOT_AWAITING_ANSWER");
+    expect(res.body.error.details).toEqual({ actual: "in_progress" });
   });
 
   it("cannot be answered twice", async () => {

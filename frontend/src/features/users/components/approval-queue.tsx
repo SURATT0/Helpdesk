@@ -4,7 +4,7 @@ import * as React from "react";
 import { Check, Loader2, MailWarning, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useCustomers } from "@/features/customers/queries";
 import { useI18n } from "@/features/i18n/context";
@@ -86,7 +86,7 @@ function ApplicantRow({ applicant }: { applicant: User }) {
       { id: applicant.id, customerId, role },
       {
         onError: (err) =>
-          setError(err instanceof ApiError ? err.message : t("approvals.error")),
+          setError(apiErrorMessage(err, t, "approvals.error")),
       },
     );
   }
@@ -97,7 +97,7 @@ function ApplicantRow({ applicant }: { applicant: User }) {
       { id: applicant.id },
       {
         onError: (err) =>
-          setError(err instanceof ApiError ? err.message : t("approvals.error")),
+          setError(apiErrorMessage(err, t, "approvals.error")),
       },
     );
   }

@@ -11,7 +11,7 @@ import {
   AuthSubmit,
 } from "@/features/auth/components/auth-shell";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 
 /**
  * Ask for a reset link.
@@ -30,16 +30,17 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [done, setDone] = React.useState<string | null>(null);
+  const [done, setDone] = React.useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      setDone(await requestPasswordReset(email));
+      await requestPasswordReset(email);
+      setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("forgot.error"));
+      setError(apiErrorMessage(err, t, "forgot.error"));
     } finally {
       setSubmitting(false);
     }
@@ -49,7 +50,7 @@ export default function ForgotPasswordPage() {
     return (
       <AuthShell title={t("forgot.sentTitle")}>
         <div className="flex flex-col gap-4">
-          <AuthNotice tone="success">{done}</AuthNotice>
+          <AuthNotice tone="success">{t("forgot.sent")}</AuthNotice>
           <AuthNotice>{t("forgot.checkSpam")}</AuthNotice>
           <div className="text-center">
             <AuthLink href="/login">{t("register.backToSignIn")}</AuthLink>

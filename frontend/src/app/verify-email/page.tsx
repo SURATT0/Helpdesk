@@ -10,7 +10,7 @@ import {
   AuthShell,
 } from "@/features/auth/components/auth-shell";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import type { UserStatus } from "@/features/auth/schemas";
 
 /**
@@ -63,7 +63,7 @@ function VerifyEmail() {
       } catch (err) {
         setState({
           kind: "failed",
-          message: err instanceof ApiError ? err.message : t("verify.error"),
+          message: apiErrorMessage(err, t, "verify.error"),
         });
       }
     })();

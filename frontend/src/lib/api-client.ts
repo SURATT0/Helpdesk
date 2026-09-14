@@ -18,11 +18,25 @@ import { tokenStore } from "@/features/auth/token-store";
  */
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
+/**
+ * A refusal from the API.
+ *
+ * `message` is the API's own English sentence. It belongs in a log and in a
+ * developer's console; it must never be rendered, because the API is not told
+ * which language the reader has. `code` is what a screen is built from — pass it
+ * through `apiErrorMessage` in `lib/api-error.ts`, which is the one place that
+ * turns a code into a sentence in the reader's own language.
+ *
+ * `details` carries the values that sentence needs — a count, a status, a
+ * permission name — because a translation cannot pick "4" back out of "still has
+ * 4 unfinished tickets".
+ */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -110,11 +124,16 @@ export async function apiRequest(
   const body = (await res.json().catch(() => null)) as Json | null;
 
   if (!res.ok) {
-    const err = (body?.error ?? {}) as { code?: string; message?: string };
+    const err = (body?.error ?? {}) as {
+      code?: string;
+      message?: string;
+      details?: Record<string, unknown>;
+    };
     const apiError = new ApiError(
       res.status,
       err.code ?? "UNKNOWN",
       err.message ?? res.statusText,
+      err.details,
     );
     logger.warn(`${res.status} ${init.method ?? "GET"} ${path}`, apiError.code);
     throw apiError;

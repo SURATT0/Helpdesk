@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Loader2, Mail, MessageSquare, Paperclip, X } from "lucide-react";
 import { FIELD_TEXT, FIELD_TEXT_12 } from "@/components/ui/input";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -161,7 +161,7 @@ export function Composer({
       // moment later, so "on its way" is the strongest true thing to say here.
       setSentInfo(t("composer.mailQueued", { to: recipient }));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("composer.postError"));
+      setError(apiErrorMessage(err, t, "composer.postError"));
     } finally {
       setSending(false);
     }

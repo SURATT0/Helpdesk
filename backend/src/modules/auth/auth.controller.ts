@@ -1,6 +1,6 @@
 import type { CookieOptions, Request, Response } from "express";
 import { env } from "../../config/env";
-import { Unauthorized } from "../../shared/errors";
+import { SessionExpired, Unauthorized } from "../../shared/errors";
 import { authService } from "./auth.service";
 import {
   forgotPasswordBody,
@@ -55,16 +55,20 @@ export const authController = {
    * not create anything usable — the account is `pending` and cannot sign in.
    * "Accepted" is the honest code for "your request was taken, a person will
    * decide".
+   *
+   * The body is empty, and the sentence the person reads is the page's own. This
+   * endpoint used to answer with English prose, which then appeared verbatim in
+   * the middle of a Thai form — the API has no business writing UI copy in a
+   * language it was never told. What must not follow is a client that branches:
+   * there is exactly ONE success response here whatever the address turns out to
+   * be, and that uniformity is the whole reason the public form cannot be used
+   * to ask who has an account. A single fixed string on the page keeps it; a
+   * lookup table keyed on outcome would be how it is lost.
    */
   async register(req: Request, res: Response) {
     const body = registerBody.parse(req.body);
     await authService.register(body);
-    res.status(202).json({
-      data: {
-        message:
-          "Check your email for a confirmation link. After you confirm, an administrator has to approve the account before you can sign in.",
-      },
-    });
+    res.status(202).json({ data: {} });
   },
 
   async verifyEmail(req: Request, res: Response) {
@@ -79,20 +83,15 @@ export const authController = {
    * Begin a password reset.
    *
    * Same single response as `register`, for the same reason and with the same
-   * care: this sentence is returned when a link was sent, when the address has
-   * no account, when the account has no password to reset, and when it was
+   * care: this one is returned when a link was sent, when the address has no
+   * account, when the account has no password to reset, and when it was
    * rejected. `requestPasswordReset` also does its work without being awaited by
    * the mailer, so the four cases do not differ in timing either.
    */
   async forgotPassword(req: Request, res: Response) {
     const { email } = forgotPasswordBody.parse(req.body);
     await authService.requestPasswordReset(email);
-    res.json({
-      data: {
-        message:
-          "If that address has an account, a reset link is on its way. Check your inbox.",
-      },
-    });
+    res.json({ data: {} });
   },
 
   async resetPassword(req: Request, res: Response) {
@@ -101,17 +100,12 @@ export const authController = {
     // Deliberately does NOT sign them in. The reset just revoked every session
     // this account had, and handing back a new one here would undo the half of
     // the guarantee that matters — that whoever prompted the reset is out.
-    res.json({
-      data: {
-        message:
-          "Your password has been changed and every other session was signed out. Sign in with your new password.",
-      },
-    });
+    res.json({ data: {} });
   },
 
   async refresh(req: Request, res: Response) {
     const raw = req.cookies?.[REFRESH_COOKIE];
-    if (!raw) throw Unauthorized("No session");
+    if (!raw) throw SessionExpired("No session");
     const session = await authService.refresh(raw);
     respondWithSession(res, session);
   },

@@ -12,7 +12,7 @@ import {
   AuthSubmit,
 } from "@/features/auth/components/auth-shell";
 import { useI18n } from "@/features/i18n/context";
-import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 
 /**
  * Set a new password from a mailed link.
@@ -36,7 +36,7 @@ function ResetPasswordForm() {
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [done, setDone] = React.useState<string | null>(null);
+  const [done, setDone] = React.useState(false);
 
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
@@ -46,9 +46,10 @@ function ResetPasswordForm() {
     setError(null);
     setSubmitting(true);
     try {
-      setDone(await resetPassword({ token, password, confirmPassword }));
+      await resetPassword({ token, password, confirmPassword });
+      setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("reset.error"));
+      setError(apiErrorMessage(err, t, "reset.error"));
     } finally {
       setSubmitting(false);
     }
@@ -73,7 +74,7 @@ function ResetPasswordForm() {
     return (
       <AuthShell title={t("reset.doneTitle")}>
         <div className="flex flex-col gap-4">
-          <AuthNotice tone="success">{done}</AuthNotice>
+          <AuthNotice tone="success">{t("reset.done")}</AuthNotice>
           <button
             type="button"
             onClick={() => router.replace("/login")}
