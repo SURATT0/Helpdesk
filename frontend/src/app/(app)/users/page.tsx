@@ -36,8 +36,26 @@ const ROLE_STYLE: Record<UserRole, ColourPair> = {
   user: BADGE.slate,
 };
 
+/*
+ * `minmax(0, …fr)` on the two flexible tracks, not a bare `1.2fr`.
+ *
+ * An `fr` track's automatic minimum is `min-content`, so a cell holding
+ * something that cannot wrap sets a floor the ratio has to honour — and the
+ * OTHER flexible track pays for it. The "Add customer access" control under the
+ * name is exactly that: its label does not break, its min-content came out at
+ * ~162px, and with only ~210px of free space to share that left the email
+ * column 16px wide. Six characters and an ellipsis.
+ *
+ * It appeared the day the seeded super admins stopped belonging to a tenant:
+ * granting reach is platform-wide only, so before that the control rendered on
+ * no row at all and the floor never existed. The table had simply never been
+ * asked to lay out with it.
+ *
+ * `minmax(0, …)` lets the tracks keep their 1.2 : 1.5 ratio and hands the
+ * overflow to the `truncate` inside each cell, which is what it is there for.
+ */
 const COLS =
-  "grid-cols-[1.2fr_1.5fr_110px_140px_170px_120px_110px_120px_130px]";
+  "grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_140px_170px_120px_110px_120px_130px]";
 
 /**
  * Width floor for the horizontal scroller, and it has to move with the columns.
