@@ -3,6 +3,7 @@ import { MockSource } from "./sources/mock.source";
 import { JiraSource } from "./sources/jira.source";
 import { ZendeskSource } from "./sources/zendesk.source";
 import { ImapEmailSource } from "./sources/imap-email.source";
+import { GraphEmailSource } from "./sources/graph-email.source";
 
 /**
  * Central registry of external ticket sources. Adding a provider is a one-line
@@ -10,6 +11,10 @@ import { ImapEmailSource } from "./sources/imap-email.source";
  */
 const sources: ITicketSource[] = [
   new MockSource(),
+  // Above IMAP deliberately: on Microsoft 365 this is the one that works.
+  // Basic auth for IMAP is switched off there, so the adapter below cannot
+  // reach a 365 mailbox whatever is put in its host/user/password.
+  new GraphEmailSource(),
   new ImapEmailSource(),
   new JiraSource(),
   new ZendeskSource(),
