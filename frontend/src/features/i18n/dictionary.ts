@@ -625,6 +625,17 @@ const en: Dict = {
   "detail.loadError": "Couldn't load ticket",
   "detail.loadingConversation": "Loading conversation…",
   "detail.internalNote": "INTERNAL NOTE",
+  // The requester's own correction. Offered only while the desk has not answered
+  // — see `mayEditOwnWording` — and refused by the API on the same two grounds
+  // if somebody replies while the dialog is open.
+  "editTicket.action": "Edit",
+  "editTicket.title": "Edit your ticket",
+  "editTicket.subject": "Subject",
+  "editTicket.description": "Description",
+  "editTicket.save": "Save changes",
+  "editTicket.saving": "Saving…",
+  "editTicket.cancel": "Cancel",
+  "editTicket.error": "Could not save your changes.",
 
   "rail.properties": "Properties",
   "rail.resolutionDue": "Resolution due",
@@ -1067,6 +1078,15 @@ const en: Dict = {
     "This ticket was closed more than 30 days ago. Raise a new one instead.",
   "error.NOT_YOUR_TICKET_TO_ANSWER":
     "Only the person who raised a ticket can answer its closure.",
+  "error.NOT_YOUR_TICKET_TO_EDIT":
+    "Only the person who raised a ticket can edit it.",
+  // Three separate sentences on purpose. Each names a different next move — say
+  // it in a comment, raise a new ticket, you are on somebody else's ticket — and
+  // one shared "you do not have permission" would be wrong about all three.
+  "error.DESK_ALREADY_STARTED":
+    "The desk has started on this ticket. Add a comment instead of editing it.",
+  "error.TICKET_CLOSED_FOR_EDITING":
+    "This ticket is closed and can no longer be edited.",
   "error.TICKET_NOT_AWAITING_ANSWER":
     "This ticket is {actual}, so there is nothing to confirm.",
   "error.SAME_ASSIGNEE": "That is the same person the queue is already with.",
@@ -1703,6 +1723,14 @@ const th: Dict = {
   "detail.loadError": "โหลด Ticket ไม่สำเร็จ",
   "detail.loadingConversation": "กำลังโหลดบทสนทนา…",
   "detail.internalNote": "โน้ตภายใน",
+  "editTicket.action": "แก้ไข",
+  "editTicket.title": "แก้ไข Ticket ของคุณ",
+  "editTicket.subject": "หัวข้อ",
+  "editTicket.description": "รายละเอียด",
+  "editTicket.save": "บันทึกการแก้ไข",
+  "editTicket.saving": "กำลังบันทึก…",
+  "editTicket.cancel": "ยกเลิก",
+  "editTicket.error": "บันทึกการแก้ไขไม่สำเร็จ",
 
   "rail.properties": "คุณสมบัติ",
   "rail.resolutionDue": "ครบกำหนดแก้ไข",
@@ -2110,6 +2138,11 @@ const th: Dict = {
     "Ticket นี้ปิดไปนานกว่า 30 วันแล้ว กรุณาเปิด Ticket ใหม่แทน",
   "error.NOT_YOUR_TICKET_TO_ANSWER":
     "เฉพาะผู้แจ้ง Ticket เท่านั้นที่ยืนยันการปิดได้",
+  "error.NOT_YOUR_TICKET_TO_EDIT":
+    "เฉพาะผู้แจ้ง Ticket เท่านั้นที่แก้ไขได้",
+  "error.DESK_ALREADY_STARTED":
+    "ผู้ดูแลเริ่มดำเนินการแล้ว กรุณาเพิ่มความคิดเห็นแทนการแก้ไข",
+  "error.TICKET_CLOSED_FOR_EDITING": "Ticket ปิดแล้ว แก้ไขไม่ได้",
   "error.TICKET_NOT_AWAITING_ANSWER":
     "Ticket นี้อยู่ในสถานะ {actual} จึงไม่มีอะไรให้ยืนยัน",
   "error.SAME_ASSIGNEE": "เป็นคนเดิมที่ถือคิวนี้อยู่แล้ว",

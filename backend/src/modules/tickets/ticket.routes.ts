@@ -81,6 +81,21 @@ router.patch(
 router.post("/:id/closure/confirm", asyncHandler(ticketController.confirmClosure));
 router.post("/:id/closure/reject", asyncHandler(ticketController.rejectClosure));
 
+/**
+ * The requester correcting their own subject and description.
+ *
+ * No `requirePermission`, for the same reason as the two above: the right comes
+ * from being the person who raised the row, which a middleware that only sees a
+ * role cannot check. `ticketService.editOwnWording` checks it, and the decision
+ * is taken again inside the write's transaction — an agent replying between the
+ * check and the save must win.
+ *
+ * Deliberately not reachable by staff. An agent who wants different words has
+ * the thread; rewriting somebody else's account of their own problem is not an
+ * edit, it is a different ticket.
+ */
+router.patch("/:id", asyncHandler(ticketController.editOwn));
+
 // Affected parties are replace-the-whole-set (PUT), which is what a multi-select
 // picker produces. Sending an empty array clears the field — both are optional.
 router.put(

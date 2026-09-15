@@ -222,3 +222,16 @@ export const setAffectedUsersBody = z.object({
 export const setAffectedAssetsBody = z.object({
   assetIds: z.array(z.number().int().positive()).max(50),
 });
+
+/**
+ * The requester's own edit. Subject and description only.
+ *
+ * Deliberately not priority or category: both feed `dueAt` through the SLA
+ * policy at creation, and letting a requester move their own deadline is a
+ * different decision from letting them fix a typo. Same bounds as the create
+ * form, so a wording that was acceptable to raise stays acceptable to correct.
+ */
+export const editOwnTicketBody = z.object({
+  subject: freeText({ min: 3, max: TEXT_MAX.SUBJECT }),
+  description: freeText({ max: TEXT_MAX.BODY }),
+});

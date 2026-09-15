@@ -10,6 +10,7 @@ import {
   listTicketsQuery,
   setAffectedAssetsBody,
   setAffectedUsersBody,
+  editOwnTicketBody,
   ticketIdParam,
   reassignBody,
   updateAssigneeBody,
@@ -137,6 +138,14 @@ export const ticketController = {
     const { id } = ticketIdParam.parse(req.params);
     const { status } = updateStatusBody.parse(req.body);
     const ticket = await ticketService.changeStatus(id, status, currentUser(req));
+    res.json({ data: ticket });
+  },
+
+  /** The requester correcting their own wording, before the desk has answered. */
+  async editOwn(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    const body = editOwnTicketBody.parse(req.body);
+    const ticket = await ticketService.editOwnWording(id, body, currentUser(req));
     res.json({ data: ticket });
   },
 

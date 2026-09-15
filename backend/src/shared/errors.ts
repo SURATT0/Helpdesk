@@ -322,6 +322,41 @@ export const TicketNotAwaitingAnswer = (actual: string) =>
     { actual },
   );
 
+/**
+ * The three ways a requester's edit is refused, kept apart on purpose.
+ *
+ * One "you cannot do that" would be the easy thing to write and the wrong thing
+ * to read: the reasons call for different actions. "Somebody is working on it"
+ * means say it in a comment instead; "it is closed" means raise a new ticket;
+ * "it is not yours" means you are on the wrong ticket entirely. A single code
+ * would leave the page guessing which sentence to show, and it would guess by
+ * re-deriving state the server had already decided.
+ */
+export const NotYourTicketToEdit = () =>
+  new AppError(
+    403,
+    "NOT_YOUR_TICKET_TO_EDIT",
+    "Only the person who raised a ticket can edit it",
+  );
+
+/**
+ * The desk has answered, so the wording is not editable any more.
+ *
+ * Covers both shapes of "started": a public reply from the desk, and a ticket
+ * that has moved out of `new` at all. Changing the words underneath somebody
+ * who has already replied to them rewrites the question their answer was to.
+ */
+export const DeskAlreadyStarted = () =>
+  new AppError(
+    409,
+    "DESK_ALREADY_STARTED",
+    "The desk has started on this ticket — add a comment instead of editing it",
+  );
+
+/** Closed. Editing is over; the next move is a new ticket, not an edit. */
+export const TicketClosedForEditing = () =>
+  new AppError(409, "TICKET_CLOSED_FOR_EDITING", "This ticket is closed and cannot be edited");
+
 /** A handover whose source and target are the same person. */
 export const SameAssignee = () =>
   new AppError(400, "SAME_ASSIGNEE", "Source and target assignee are the same");
@@ -521,6 +556,9 @@ export const ERROR_CODES = [
   "CONCURRENT_STATUS_CHANGE",
   "REOPEN_WINDOW_EXPIRED",
   "NOT_YOUR_TICKET_TO_ANSWER",
+  "NOT_YOUR_TICKET_TO_EDIT",
+  "DESK_ALREADY_STARTED",
+  "TICKET_CLOSED_FOR_EDITING",
   "TICKET_NOT_AWAITING_ANSWER",
   "SAME_ASSIGNEE",
   "CATEGORY_DETAIL_REQUIRED",
