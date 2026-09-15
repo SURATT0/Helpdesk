@@ -186,7 +186,27 @@ async function mintSession(user: UserRow, familyId: string): Promise<Session> {
 
 export const authService = {
   async login(email: string, password: string): Promise<Session> {
-    const user = await authRepository.findUserByEmail(email);
+    /*
+     * Normalised the same way `register` normalises it, because it has to be the
+     * same question. Registration stores `Surat@example.com` as
+     * `surat@example.com`, and the lookup below is a `findUnique` on the column
+     * — so somebody who signed up with a capital letter and typed their address
+     * back exactly as they wrote it was told their password was wrong. Nothing
+     * about the message could tell them otherwise, and the one thing they would
+     * never think to change is the one thing that mattered.
+     *
+     * Safe against every stored row: all four paths that write a user's address
+     * lowercase it first — `register` here, the email intake's
+     * `ensureRequester`, `prisma/create-super-admin.ts`, and the seed's
+     * `emailFor`. There is no account this can now fail to find that it found
+     * before.
+     *
+     * `trim` as well, because a pasted address carries a space more often than
+     * anyone would guess, and a leading one fails a lookup just as silently.
+     */
+    const user = await authRepository.findUserByEmail(
+      email.trim().toLowerCase(),
+    );
     // Uniform error + always-compare guards against user enumeration / timing.
     // `verifyPassword` spends bcrypt's time even when there is no stored hash,
     // so an address with no account and an address whose account has no password

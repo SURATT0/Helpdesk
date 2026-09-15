@@ -99,6 +99,34 @@ beforeEach(() => {
   sent = [];
 });
 
+describe("signing in does not care how the address was typed", () => {
+  /**
+   * The trap this closes: registration lowercases the address before storing
+   * it, and signing in used to look the column up exactly as typed. So somebody
+   * who signed up as `Dana@acme.com` and typed it back the same way was told
+   * their password was wrong — by the one message that gives no hint which of
+   * the two fields is at fault, about the field nobody thinks to doubt.
+   */
+  it("finds the account however the capitals fall", async () => {
+    const seeded = "dana.reyes@acme.com";
+    for (const typed of [
+      seeded,
+      seeded.toUpperCase(),
+      "Dana.Reyes@Acme.com",
+      `  ${seeded}  `, // pasted, with the spaces that come along
+    ]) {
+      const res = await login(typed, "password123");
+      expect(res.status, `signing in as ${JSON.stringify(typed)}`).toBe(200);
+    }
+  });
+
+  it("still refuses the wrong password, whatever the casing", async () => {
+    // The normalisation must not have turned into a way past the check.
+    const res = await login("DANA.REYES@ACME.COM", "not-the-password");
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("registering is not a way to ask who has an account here", () => {
   it("takes a new address, lands it pending, and mails a confirmation", async () => {
     const NEWCOMER = newcomer();
