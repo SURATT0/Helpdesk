@@ -382,14 +382,38 @@ export const userRepository = {
     return prisma.$transaction(async (tx) => {
       const existing = await tx.user.findFirst({
         where: { id, ...scopeWhere(actor) },
-        select: { status: true },
+        select: { status: true, emailVerifiedAt: true },
       });
       if (!existing) return null;
       if (existing.status !== "pending") return "not_pending";
 
       const updated = await tx.user.update({
         where: { id },
-        data: { status: "active", customerId: data.customerId, role: data.role },
+        data: {
+          status: "active",
+          customerId: data.customerId,
+          role: data.role,
+          /**
+           * Approving also settles the address.
+           *
+           * Sign-in checks verification BEFORE it checks approval, and the two
+           * were separate gates: an approved account whose owner had not clicked
+           * the link still could not sign in, and nothing on the admin's screen
+           * could move it. If mail cannot be delivered — a wrong address, a
+           * filter, a deployment with no SMTP — the account is stuck for good,
+           * and the person who could vouch for it has already vouched for it.
+           *
+           * That is what an approval IS here: a named administrator read the
+           * address and decided this person belongs. The link proves control of
+           * a mailbox; the approval proves something stronger, by someone
+           * accountable. Requiring both left the weaker one able to veto.
+           *
+           * Only when it is unset, so an address verified the ordinary way keeps
+           * the timestamp of the day its owner proved it rather than the day
+           * somebody happened to approve them.
+           */
+          emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+        },
         include: userInclude,
       });
       await auditRepository.record(

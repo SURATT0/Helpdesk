@@ -35,14 +35,25 @@ async function login(email: string): Promise<string> {
 }
 
 /** Somebody who has registered and confirmed, waiting on a decision. */
-async function pendingApplicant(email = "applicant@example.com") {
+/**
+ * Somebody waiting to be let in.
+ *
+ * `emailVerifiedAt` defaults to SET, which is the tidy case and not the common
+ * one — a real applicant has just registered and usually has not clicked the
+ * link yet. Pass `verified: false` for that shape; the case below uses it, and
+ * it is the one that caught an approved account still unable to sign in.
+ */
+async function pendingApplicant(
+  email = "applicant@example.com",
+  { verified = true }: { verified?: boolean } = {},
+) {
   return prisma.user.create({
     data: {
       name: "Ada Applicant",
       email,
       role: "user",
       status: "pending",
-      emailVerifiedAt: new Date(),
+      emailVerifiedAt: verified ? new Date() : null,
       // No customer — nobody has decided which one yet. This is what makes the
       // row invisible to every customer-bound principal.
       customerId: null,
@@ -128,6 +139,54 @@ describe("the queue is the directory, filtered", () => {
 });
 
 describe("approving a registration", () => {
+  /**
+   * The gap this closes: sign-in checks the address BEFORE it checks approval,
+   * so an approved account whose owner had never clicked the link was still
+   * refused — and nothing on the admin's screen could move it. Where mail
+   * cannot be delivered at all, that account is stuck for good.
+   *
+   * Every other case here starts from an applicant who has already verified,
+   * which is the tidy shape and not the usual one. This starts from the usual
+   * one.
+   */
+  it("settles the address too, so approval is enough to sign in", async () => {
+    const applicant = await pendingApplicant("unverified@example.com", {
+      verified: false,
+    });
+    expect(applicant.emailVerifiedAt).toBeNull();
+
+    await request(app)
+      .post(`${API}/users/${applicant.id}/approve`)
+      .set(bearer(await login(PLATFORM)))
+      .send({ customerId: await acmeId(), role: "user" })
+      .expect(200);
+
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: applicant.id } });
+    expect(after.emailVerifiedAt).not.toBeNull();
+
+    const signIn = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: applicant.email, password: PASSWORD });
+    expect(signIn.status, "an approved account must be able to sign in").toBe(200);
+  });
+
+  it("keeps the day an address was proved, when it already was", async () => {
+    // An approval must not overwrite a verification that happened on its own —
+    // the timestamp says when the owner proved the mailbox, not when somebody
+    // got round to approving them.
+    const applicant = await pendingApplicant("verified@example.com");
+    const before = applicant.emailVerifiedAt!;
+
+    await request(app)
+      .post(`${API}/users/${applicant.id}/approve`)
+      .set(bearer(await login(PLATFORM)))
+      .send({ customerId: await acmeId(), role: "user" })
+      .expect(200);
+
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: applicant.id } });
+    expect(after.emailVerifiedAt!.getTime()).toBe(before.getTime());
+  });
+
   it("gives the account a tenant, a role, and the right to sign in", async () => {
     const sent: string[] = [];
     const spy = vi
