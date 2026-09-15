@@ -1123,6 +1123,81 @@ export const ticketRepository = {
    * persist `open → resolved` and then `resolved → pending`, appending an
    * illegal row to `ticket_status_history`.
    */
+  /**
+   * The requester's own edit of the wording, guarded INSIDE the transaction.
+   *
+   * The service checks the same conditions before calling, and that check is
+   * advisory — between reading it and writing here, an agent can reply. This
+   * re-reads under the write and refuses on what it finds, which is the same
+   * shape `customerRepository.archive` uses and the only version that is not a
+   * race. A requester pressing Save at the moment the desk answers must lose,
+   * because the answer was to the words as they were.
+   *
+   * Returns a reason rather than null-for-everything: the caller turns each one
+   * into a different sentence, and collapsing them here would throw away the
+   * distinction the transaction just established.
+   */
+  async updateOwnWording(
+    id: number,
+    requesterId: number,
+    data: { subject: string; description: string },
+  ): Promise<
+    | { ok: true; ticket: Ticket }
+    | { ok: false; reason: "gone" | "not_yours" | "closed" | "started" }
+  > {
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.ticket.findFirst({
+        where: { id, deletedAt: null },
+        select: { id: true, status: true, requesterId: true },
+      });
+      if (!current) return { ok: false as const, reason: "gone" as const };
+      if (current.requesterId !== requesterId) {
+        return { ok: false as const, reason: "not_yours" as const };
+      }
+      if (current.status === "closed") {
+        return { ok: false as const, reason: "closed" as const };
+      }
+      // Anything other than `new` means the desk moved it — `pending` is the
+      // desk saying the work is done. Assignment is NOT a move: a ticket sitting
+      // assigned and untouched is still `new`, and still the requester's to
+      // correct, which is the whole point of not keying this on the assignee.
+      if (current.status !== "new") {
+        return { ok: false as const, reason: "started" as const };
+      }
+      // The same question SLA's first-response clock asks, asked of one ticket:
+      // a PUBLIC comment whose author is not the requester tier. Reusing the
+      // definition rather than storing a second copy of it is what keeps the two
+      // from drifting — see `firstDeskReplies` in reports.repository.ts.
+      const deskReply = await tx.comment.findFirst({
+        where: {
+          ticketId: id,
+          internal: false,
+          deletedAt: null,
+          author: { role: { not: "user" } },
+        },
+        select: { id: true },
+      });
+      if (deskReply) return { ok: false as const, reason: "started" as const };
+
+      const updated = await tx.ticket.update({
+        where: { id },
+        data: { subject: data.subject, description: data.description },
+        include: ticketInclude,
+      });
+      await auditRepository.record(
+        {
+          userId: requesterId,
+          action: "ticket.edit",
+          entity: "ticket",
+          entityId: id,
+          meta: { subject: data.subject },
+        },
+        tx,
+      );
+      return { ok: true as const, ticket: toTicketDto(updated) };
+    });
+  },
+
   async updateStatus(
     id: number,
     status: TicketStatus,

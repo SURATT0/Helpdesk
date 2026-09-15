@@ -8,13 +8,16 @@ import { maySeeWorkloadOf, type AuthUser } from "../../shared/auth";
 import {
   AppError,
   BadRequest,
+  DeskAlreadyStarted,
   IllegalTransition,
   NotAssignable,
   NotFound,
   NotYourTicketToAnswer,
+  NotYourTicketToEdit,
   NotYoursToRead,
   ReopenWindowExpired,
   SameAssignee,
+  TicketClosedForEditing,
   TicketNotAwaitingAnswer,
 } from "../../shared/errors";
 import { auditRepository } from "../audit/audit.repository";
@@ -498,6 +501,41 @@ export const ticketService = {
    * because `get` has already established that the caller can see the ticket;
    * hiding it a second time would be a lie about which of the two facts failed.
    */
+  /**
+   * The requester correcting their own words, before anyone has answered them.
+   *
+   * Two conditions, and the second is not "unassigned". A ticket can sit
+   * assigned to somebody who has not looked at it yet, and correcting a typo
+   * then is exactly when it helps; what closes the door is the desk having
+   * ANSWERED — a public reply, or the ticket having moved out of `new` at all.
+   * Editing the words after a reply rewrites the question that reply was to.
+   *
+   * `get()` first for row scope, so a ticket out of reach is 404 and not a
+   * confirmation that it exists. The real decision is then taken again inside
+   * the write's own transaction, because between here and there an agent can
+   * reply — see `updateOwnWording`. This pre-check exists to give a clean answer
+   * in the ordinary case, not to be the guard.
+   */
+  async editOwnWording(
+    id: number,
+    data: { subject: string; description: string },
+    user: AuthUser,
+  ): Promise<Ticket> {
+    await this.get(id, user); // row scope → 404 before anything else
+    const result = await ticketRepository.updateOwnWording(id, user.id, data);
+    if (result.ok) return result.ticket;
+    switch (result.reason) {
+      case "gone":
+        throw NotFound(`Ticket #${id} not found`);
+      case "not_yours":
+        throw NotYourTicketToEdit();
+      case "closed":
+        throw TicketClosedForEditing();
+      case "started":
+        throw DeskAlreadyStarted();
+    }
+  },
+
   async requireOwnPendingTicket(id: number, user: AuthUser): Promise<Ticket> {
     const ticket = await this.get(id, user); // row scope → 404 if out of reach
     if (ticket.requesterId !== user.id) {
