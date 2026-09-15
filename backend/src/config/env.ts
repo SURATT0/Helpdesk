@@ -184,6 +184,62 @@ export const env = {
       password: process.env.IMAP_PASSWORD || undefined,
       tls: process.env.IMAP_TLS !== "false",
     },
+    /**
+     * Microsoft 365, read through the Graph API (pull model).
+     *
+     * App-only OAuth2 — the client-credentials flow — rather than a password.
+     * Microsoft disabled basic auth for IMAP on 365, so a host/user/password
+     * adapter cannot reach these mailboxes at all any more; this is the
+     * supported way in.
+     *
+     * `mailbox` names WHOSE inbox to read, because an app-only token is not
+     * anybody's: it belongs to the registered application and can address any
+     * mailbox the tenant granted it. A UPN (`support@contoso.com`) or the user's
+     * object id both work. Without it there is no default — reading "the
+     * tenant's mail" is not a thing, and guessing one would be reading somebody
+     * in particular without being told to.
+     *
+     * The secret is read from the environment and never logged. All four values
+     * must be present for `isConfigured()`, so a half-filled `.env` reads as
+     * off rather than failing at the first call.
+     */
+    graph: {
+      tenantId: process.env.GRAPH_TENANT_ID || undefined,
+      clientId: process.env.GRAPH_CLIENT_ID || undefined,
+      clientSecret: process.env.GRAPH_CLIENT_SECRET || undefined,
+      mailbox: process.env.GRAPH_MAILBOX || undefined,
+      /** How many messages one sync pulls. Graph's own page cap is 1000. */
+      pageSize: Math.min(Number(process.env.GRAPH_PAGE_SIZE ?? 25), 1000),
+      /**
+       * Mark each ingested message read, so the next sync skips it.
+       *
+       * `ingest()` already refuses a Message-ID it has seen, so this is the
+       * second line rather than the first — but without it every sync re-reads
+       * and re-parses the whole unread backlog to discard it again.
+       */
+      markAsRead: process.env.GRAPH_MARK_AS_READ !== "false",
+      /**
+       * Also SEND through this mailbox, not just read from it.
+       *
+       * OPT-IN, and the default is the point. Reading a mailbox and sending as
+       * it are two decisions, and this used to infer the second from the first:
+       * configure the four values to pull mail in, and outbound silently
+       * stopped using the log transport and started dialling Microsoft.
+       *
+       * That is not hypothetical — it turned the integration suite red the
+       * first time it ran on a machine whose `.env` had the Graph values, because
+       * `dotenv` loads that file into the test process too. Mail that had gone
+       * to the log for years tried to go to the internet instead, and a test
+       * about delivering a queued notification failed for a reason nothing in
+       * it mentioned.
+       *
+       * Sending also needs `Mail.Send` on the app registration, a SEPARATE
+       * permission from the `Mail.ReadWrite` reading uses — so inferring it is
+       * wrong twice over: a tenant that granted only the read permission would
+       * have every outbound mail 403 while the config looked complete.
+       */
+      send: process.env.GRAPH_SEND === "true",
+    },
   },
   // Outbound ticket notifications (see src/modules/emails). Every value here is
   // destined for the system-settings surface a later change adds; until then env
