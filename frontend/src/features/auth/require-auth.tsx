@@ -12,15 +12,31 @@ import { useAuth } from "./context";
  * so protected data queries never fire without a token.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
 
+  /**
+   * An account still holding the password an administrator chose for it goes to
+   * the form that replaces it, and nowhere else.
+   *
+   * Here rather than on each page for the same reason the sign-in redirect is
+   * here: this component wraps the entire authenticated shell, so one condition
+   * covers every route inside it and the next page added is covered without its
+   * author doing anything. The API refuses those routes anyway — this is what
+   * stops the person watching a dashboard fill with error states to find out.
+   */
+  const mustChangePassword = status === "authenticated" && user?.mustChangePassword === true;
+
   React.useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
-  }, [status, router]);
+    else if (mustChangePassword) router.replace("/change-password");
+  }, [status, mustChangePassword, router]);
 
-  if (status !== "authenticated") {
+  // Held on the loader rather than rendered: the redirect above happens after
+  // paint, and a frame of the real shell would fire every query on the page —
+  // each of which the API answers with PASSWORD_CHANGE_REQUIRED.
+  if (status !== "authenticated" || mustChangePassword) {
     return (
       <div className="grid h-dvh place-items-center bg-app">
         <LoadingRow label={t("common.loading")} />

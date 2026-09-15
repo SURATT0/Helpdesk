@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -239,6 +240,23 @@ export function SettingsView() {
 
       {/* Integrations — external ticket sources (import-capable roles only) */}
       {CAN_INTEGRATE.has(user.role) ? <IntegrationsPanel /> : null}
+
+      {/* Password — the ordinary way to change it, which the desk had no route
+          for at all before administrators could hand one over. The emailed reset
+          link was the only path, and it is no use to somebody whose mail the
+          deployment cannot deliver. */}
+      <Section
+        title={t("changePassword.settingsTitle")}
+        note={t("changePassword.settingsBody")}
+      >
+        <Link
+          href="/change-password"
+          className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3.5 py-2 text-control font-semibold text-ink hover:bg-app"
+        >
+          <KeyRound size={14} strokeWidth={2} />
+          {t("changePassword.settingsAction")}
+        </Link>
+      </Section>
 
       {/* Session */}
       <Section title={t("settings.session")}>

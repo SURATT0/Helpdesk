@@ -85,3 +85,17 @@ export const resetPasswordBody = withConfirmation({
 export const verifyEmailBody = z.object({
   token: z.string().min(1),
 });
+
+/**
+ * Changing your own password: prove you know the current one, then choose a new
+ * one twice.
+ *
+ * `currentPassword` is deliberately NOT run through the strength rules the new
+ * one is. It is a secret being checked against a stored hash, not one being
+ * created, and validating its shape would refuse — with a 400, before any
+ * comparison — every account whose existing password predates those rules,
+ * which is exactly the account most in need of this endpoint.
+ */
+export const changePasswordBody = withConfirmation({
+  currentPassword: z.string().min(1, "Enter your current password"),
+});

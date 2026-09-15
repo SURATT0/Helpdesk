@@ -14,9 +14,11 @@ import {
   mayGrantReach,
   type AuthUser,
 } from "../../shared/auth";
+import { Prisma } from "@prisma/client";
 import type { Role, UserStatus } from "../../shared/domain";
 import type { Lang } from "../../shared/i18n";
 import { authMail } from "../auth/auth.mail";
+import { hashPassword } from "../auth/auth.password";
 import { userRepository, type UserDto } from "./user.repository";
 
 export const userService = {
@@ -30,6 +32,71 @@ export const userService = {
     } = {},
   ): Promise<UserDto[]> {
     return userRepository.findMany(actor, filters);
+  },
+
+  /**
+   * Create an account on somebody's behalf, with a password chosen here.
+   *
+   * The gates are `approve`'s, and deliberately the same ones: creating an
+   * account and approving a registration are the same decision arrived at from
+   * different directions — both end with a named person inside a chosen tenant
+   * holding a chosen role. A create endpoint with a laxer gate would be a way
+   * round the approval one, so the two must not drift; that is why this reads
+   * `mayApproveRegistration` rather than a predicate of its own.
+   *
+   * What it does NOT do is mail anybody. There is nothing to send that is safe
+   * to send: the password is the credential, and putting it in an email is how
+   * a temporary password becomes a permanent one sitting in a mailbox. The
+   * administrator hands it over themselves, by whatever means they trust, and
+   * the account cannot do anything until the person replaces it.
+   */
+  async create(
+    input: {
+      name: string;
+      email: string;
+      password: string;
+      role: Role;
+      customerId: number;
+    },
+    actor: AuthUser,
+  ): Promise<UserDto> {
+    if (!mayApproveRegistration(actor)) {
+      throw PlatformStaffOnly("create_user");
+    }
+    if (input.role === "super_admin" && !isPlatformWide(actor)) {
+      throw PlatformStaffOnly("grant_super_admin");
+    }
+    const customer = await userRepository.findCustomerById(input.customerId);
+    if (!customer) throw BadRequest(`Unknown customer #${input.customerId}`);
+
+    // Normalised exactly as `register` and the email intake normalise it, or an
+    // address created here with a capital letter could not be signed in with —
+    // `login` looks up the lowercased form. See auth.service.login.
+    const email = input.email.trim().toLowerCase();
+    try {
+      return await userRepository.createByAdmin(
+        {
+          name: input.name.trim(),
+          email,
+          passwordHash: await hashPassword(input.password),
+          role: input.role,
+          customerId: input.customerId,
+        },
+        actor,
+      );
+    } catch (cause) {
+      if (
+        cause instanceof Prisma.PrismaClientKnownRequestError &&
+        cause.code === "P2002"
+      ) {
+        // Named, unlike the sign-up form's uniform answer: this endpoint is
+        // reachable only by platform-wide staff, who can already list every
+        // account, so there is nothing here to leak — and an administrator who
+        // is not told will simply try again.
+        throw BadRequest(`${email} already has an account`);
+      }
+      throw cause;
+    }
   },
 
   /**

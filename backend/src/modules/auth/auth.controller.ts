@@ -3,6 +3,7 @@ import { env } from "../../config/env";
 import { SessionExpired, Unauthorized } from "../../shared/errors";
 import { authService } from "./auth.service";
 import {
+  changePasswordBody,
   forgotPasswordBody,
   loginBody,
   registerBody,
@@ -101,6 +102,27 @@ export const authController = {
     // this account had, and handing back a new one here would undo the half of
     // the guarantee that matters — that whoever prompted the reset is out.
     res.json({ data: {} });
+  },
+
+  /**
+   * Change your own password.
+   *
+   * Signs them straight back in, unlike `resetPassword` above — and the
+   * difference is the point rather than an inconsistency. A reset is prompted by
+   * somebody who may not be the account holder, so ending every session is the
+   * guarantee; a change is typed by a person who has just proved they know the
+   * current password, in a browser they are sitting at, so sending them to the
+   * sign-in form would be a step that protects nobody. The other sessions still
+   * end — see `replacePassword`.
+   */
+  async changePassword(req: Request, res: Response) {
+    const { currentPassword, password } = changePasswordBody.parse(req.body);
+    const session = await authService.changePassword(
+      req.user!.id,
+      currentPassword,
+      password,
+    );
+    respondWithSession(res, session);
   },
 
   async refresh(req: Request, res: Response) {

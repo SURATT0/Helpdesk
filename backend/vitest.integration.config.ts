@@ -51,6 +51,24 @@ export default defineConfig({
       // exercised with a real address instead of falling back; SMTP_HOST stays
       // unset, so delivery still goes to the "log" transport.
       SMTP_FROM: "Deskly Support <helpdesk@deskly.test>",
+      /*
+       * And the transport is pinned, rather than left to be whatever the
+       * developer's `.env` happens to say.
+       *
+       * The line above claims delivery goes to the log transport because
+       * SMTP_HOST is unset. That stopped being enough the moment Graph became a
+       * second way out: `dotenv/config` at the top of this file loads
+       * `backend/.env` into the test process, so a machine configured to send
+       * through Microsoft 365 made the mail-queue suites dial Microsoft — and
+       * fail, because the mailbox refuses an app that has not been consented.
+       *
+       * Two tests went red that way, on a machine where the only thing that had
+       * changed was a line in a file vitest is not supposed to be reading. The
+       * opt-in default on GRAPH_SEND was meant to prevent exactly this and
+       * cannot: a developer who legitimately opts in cannot also be expected to
+       * remember it breaks their test run.
+       */
+      GRAPH_SEND: "false",
     },
     fileParallelism: false, // one shared DB — run files serially
     hookTimeout: 30_000,

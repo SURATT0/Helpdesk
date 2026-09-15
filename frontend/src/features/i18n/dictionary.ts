@@ -988,6 +988,43 @@ const en: Dict = {
     "The message can take a minute to arrive. Check your spam folder if you do not see it.",
   "forgot.error": "Couldn't send the link. Try again.",
 
+  // --- create user ---------------------------------------------------------
+  "createUser.open": "Add person",
+  "createUser.close": "Close",
+  "createUser.title": "Add a person to the desk",
+  "createUser.blurb":
+    "For somebody who has not signed up. They get the password you set here, and must replace it before they can use the desk.",
+  "createUser.name": "Full name",
+  "createUser.email": "Work email",
+  "createUser.tempPassword": "Temporary password",
+  "createUser.tooShort": "At least 10 characters.",
+  "createUser.handoverNotice":
+    "Nothing is emailed. Hand this password over yourself — the only thing it can be used for is setting their own.",
+  "createUser.submit": "Create account",
+  "createUser.submitting": "Creating…",
+  "createUser.error": "Couldn't create the account. Try again.",
+
+  // --- change password -----------------------------------------------------
+  "changePassword.title": "Choose your own password",
+  "changePassword.subtitle": "You will need your current password to change it.",
+  "changePassword.forcedSubtitle":
+    "Do this before you can use the desk.",
+  "changePassword.forcedNotice":
+    "The password you signed in with was set by an administrator, so somebody other than you has known it. Choose one only you know.",
+  "changePassword.current": "Current password",
+  "changePassword.new": "New password",
+  "changePassword.sameAsCurrent":
+    "The new password must be different from your current one.",
+  "changePassword.signOutNotice":
+    "Changing your password signs this account out on every other device.",
+  "changePassword.submit": "Save new password",
+  "changePassword.submitting": "Saving…",
+  "changePassword.error": "Couldn't change the password. Try again.",
+  "changePassword.settingsTitle": "Password",
+  "changePassword.settingsBody":
+    "Change the password you sign in with.",
+  "changePassword.settingsAction": "Change password",
+
   // --- reset password ------------------------------------------------------
   "reset.title": "Choose a new password",
   "reset.subtitle": "Pick something you have not used on this account before.",
@@ -2064,6 +2101,40 @@ const th: Dict = {
   "forgot.checkSpam":
     "อีเมลอาจใช้เวลาสักครู่ หากไม่พบกรุณาตรวจสอบในโฟลเดอร์อีเมลขยะ",
   "forgot.error": "ส่งลิงก์ไม่สำเร็จ ลองอีกครั้ง",
+
+  // --- create user ---------------------------------------------------------
+  "createUser.open": "เพิ่มผู้ใช้",
+  "createUser.close": "ปิด",
+  "createUser.title": "เพิ่มผู้ใช้เข้าระบบ",
+  "createUser.blurb":
+    "สำหรับคนที่ยังไม่ได้สมัครเอง เขาจะได้รหัสผ่านที่คุณตั้งไว้ตรงนี้ และต้องเปลี่ยนรหัสก่อนจึงจะใช้งานระบบได้",
+  "createUser.name": "ชื่อ-นามสกุล",
+  "createUser.email": "อีเมลที่ทำงาน",
+  "createUser.tempPassword": "รหัสผ่านชั่วคราว",
+  "createUser.tooShort": "อย่างน้อย 10 ตัวอักษร",
+  "createUser.handoverNotice":
+    "ระบบไม่ส่งอีเมล กรุณาแจ้งรหัสผ่านนี้ให้เจ้าตัวด้วยตนเอง — สิ่งเดียวที่รหัสนี้ทำได้คือใช้ตั้งรหัสผ่านของเขาเอง",
+  "createUser.submit": "สร้างบัญชี",
+  "createUser.submitting": "กำลังสร้าง…",
+  "createUser.error": "สร้างบัญชีไม่สำเร็จ ลองอีกครั้ง",
+
+  // --- change password -----------------------------------------------------
+  "changePassword.title": "ตั้งรหัสผ่านของคุณเอง",
+  "changePassword.subtitle": "ต้องใช้รหัสผ่านปัจจุบันเพื่อเปลี่ยน",
+  "changePassword.forcedSubtitle": "ต้องทำก่อนจึงจะใช้งานระบบได้",
+  "changePassword.forcedNotice":
+    "รหัสผ่านที่คุณใช้เข้าสู่ระบบเป็นรหัสที่ผู้ดูแลระบบตั้งให้ แปลว่ามีคนอื่นรู้รหัสนี้ด้วย กรุณาตั้งรหัสที่มีคุณคนเดียวรู้",
+  "changePassword.current": "รหัสผ่านปัจจุบัน",
+  "changePassword.new": "รหัสผ่านใหม่",
+  "changePassword.sameAsCurrent": "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านปัจจุบัน",
+  "changePassword.signOutNotice":
+    "เมื่อเปลี่ยนรหัสผ่าน ระบบจะออกจากการใช้งานบัญชีนี้ในอุปกรณ์อื่นทั้งหมด",
+  "changePassword.submit": "บันทึกรหัสผ่านใหม่",
+  "changePassword.submitting": "กำลังบันทึก…",
+  "changePassword.error": "เปลี่ยนรหัสผ่านไม่สำเร็จ ลองอีกครั้ง",
+  "changePassword.settingsTitle": "รหัสผ่าน",
+  "changePassword.settingsBody": "เปลี่ยนรหัสผ่านที่ใช้เข้าสู่ระบบ",
+  "changePassword.settingsAction": "เปลี่ยนรหัสผ่าน",
 
   // --- reset password ------------------------------------------------------
   "reset.title": "ตั้งรหัสผ่านใหม่",

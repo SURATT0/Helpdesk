@@ -252,6 +252,22 @@ export const AccountPendingApproval = () =>
 export const AccountNotActive = () =>
   new AppError(403, "ACCOUNT_NOT_ACTIVE", "This account is not active");
 
+/**
+ * The account is signed in on a password an administrator chose for it, and
+ * must replace that password before it may do anything else. See `requireAuth`.
+ *
+ * 403 rather than 401 for the same reason `AccountNotActive` is: the token is
+ * genuine and refreshing it would change nothing. The web app reads the code and
+ * sends the person to the change-password form, so the message is what somebody
+ * reading a raw API response needs, and names the way out.
+ */
+export const PasswordChangeRequired = () =>
+  new AppError(
+    403,
+    "PASSWORD_CHANGE_REQUIRED",
+    "Choose your own password before continuing — the one you signed in with was set by an administrator",
+  );
+
 /* ------------------------------------------------------------------------- *
  * Sessions and links
  * ------------------------------------------------------------------------- */
@@ -392,7 +408,11 @@ export const CannotActOnSelf = (act: "deactivate" | "customer_access") =>
  * is what a support conversation needs, not a different sentence.
  */
 export const PlatformStaffOnly = (
-  act: "approve_registration" | "decide_registration" | "grant_super_admin",
+  act:
+    | "approve_registration"
+    | "decide_registration"
+    | "grant_super_admin"
+    | "create_user",
 ) =>
   new AppError(
     403,
@@ -401,7 +421,9 @@ export const PlatformStaffOnly = (
       ? "Only a platform super admin can grant the super admin role"
       : act === "approve_registration"
         ? "Only a platform super admin can approve a registration"
-        : "Only a platform super admin can decide a registration",
+        : act === "create_user"
+          ? "Only a platform super admin can create an account"
+          : "Only a platform super admin can decide a registration",
     { act },
   );
 

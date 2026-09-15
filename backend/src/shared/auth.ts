@@ -50,6 +50,21 @@ export type AuthUser = {
    * this field existed still behaves.
    */
   customerIds: number[];
+  /**
+   * The password this session was opened with was chosen by somebody else, and
+   * has not been replaced yet — see `User.mustChangePasswordAt`.
+   *
+   * Carried on the token for the same reason `status` above it is: the
+   * middleware that acts on it stays a signature check with no query behind it.
+   * The same 15-minute lag applies and does not matter here, because the flag
+   * only ever goes from true to false and the act that clears it — changing the
+   * password — mints a fresh session anyway.
+   *
+   * Optional on the TYPE only, for tokens minted before this claim existed.
+   * `verifyAccessToken` defaults those to false, which is what every account
+   * holding one was: nobody had been handed a password.
+   */
+  mustChangePassword: boolean;
   permissions: string[];
 };
 

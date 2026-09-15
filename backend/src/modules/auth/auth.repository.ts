@@ -218,13 +218,47 @@ export const authRepository = {
       if (claimed.count === 0) return false;
       await tx.user.update({
         where: { id: data.userId },
-        data: { passwordHash: data.passwordHash },
+        data: {
+          passwordHash: data.passwordHash,
+          // Whatever the password used to be, this one was chosen by whoever
+          // holds the mailbox — so the hand-over is over. An account created by
+          // an administrator that goes the forgot-password route instead of the
+          // forced form arrives here, and must not still be flagged afterwards.
+          mustChangePasswordAt: null,
+        },
       });
       await tx.refreshToken.updateMany({
         where: { userId: data.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
       return true;
+    });
+  },
+
+  /**
+   * Replace a password with one the account holder chose, having proved they
+   * know the current one.
+   *
+   * Every other session of theirs ends, exactly as a reset ends them, and for a
+   * sharper reason here: the password being replaced is one somebody else knew.
+   * A session opened with it elsewhere — the administrator's own browser, a
+   * machine the note was typed on — would otherwise keep running for seven days
+   * after the person "changed" it.
+   *
+   * The caller's own session goes too. The controller mints a fresh one from
+   * the same request, so nothing is lost by it, and the alternative is a
+   * revocation sweep with an exception in it.
+   */
+  async replacePassword(userId: number, passwordHash: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash, mustChangePasswordAt: null },
+      });
+      await tx.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
   },
 

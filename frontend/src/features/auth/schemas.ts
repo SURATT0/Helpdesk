@@ -37,6 +37,21 @@ export const authUserSchema = z.object({
    * hides the controls rather than showing ones the server will refuse.
    */
   platformWide: z.boolean().default(false),
+  /**
+   * The password this session was opened with was chosen by an administrator,
+   * and has not been replaced yet.
+   *
+   * The API refuses this session every route but `/auth/me` and
+   * `/auth/change-password`, so this is not a permission the client is being
+   * trusted with — it is what lets the app show the change-password form instead
+   * of a dashboard full of failed requests.
+   *
+   * Defaulted for a session restored from an older payload. False is the safe
+   * direction here in the sense that matters: it shows the app rather than
+   * trapping somebody on a form, and if it were wrong the server would say so on
+   * the first request.
+   */
+  mustChangePassword: z.boolean().default(false),
 });
 
 export const sessionSchema = z.object({

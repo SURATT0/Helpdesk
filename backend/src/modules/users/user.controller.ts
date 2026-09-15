@@ -3,6 +3,7 @@ import { Unauthorized } from "../../shared/errors";
 import { userService } from "./user.service";
 import {
   approveUserBody,
+  createUserBody,
   listUsersQuery,
   rejectUserBody,
   updateProfileBody,
@@ -20,6 +21,14 @@ export const userController = {
   async list(req: Request, res: Response) {
     const filters = listUsersQuery.parse(req.query);
     res.json({ data: await userService.list(currentUser(req), filters) });
+  },
+
+  async create(req: Request, res: Response) {
+    const body = createUserBody.parse(req.body);
+    // 201 with the row, unlike the sign-up form's bare 202: this DID create
+    // something, the caller may see it, and the screen needs the id to show it
+    // in the directory it is about to refresh.
+    res.status(201).json({ data: await userService.create(body, currentUser(req)) });
   },
 
   async approve(req: Request, res: Response) {

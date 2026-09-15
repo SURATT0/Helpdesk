@@ -374,6 +374,68 @@ export const userRepository = {
    * the second one should be told what happened rather than silently overwriting
    * the first one's choice of customer.
    */
+  /**
+   * Create an account outright, with the password an administrator chose for it.
+   *
+   * The counterpart to `createSelfRegistered`, and it differs in every field
+   * that one deliberately leaves open: the customer and the role are decided
+   * here, because a named administrator is deciding them, and the account lands
+   * `active` rather than `pending` — there is nobody left to approve it, the
+   * approver is the person creating it.
+   *
+   * `emailVerifiedAt` is stamped for the same reason approving stamps it (see
+   * `approveRegistration`): an administrator typed this address and vouched for
+   * the person behind it, which is the stronger of the two claims the link and
+   * the approval make. Requiring a confirmation the desk may be unable to
+   * deliver would create accounts that cannot be used.
+   *
+   * `mustChangePasswordAt` is what makes the handed-over password temporary
+   * rather than merely initial. Until it is cleared, `requireAuth` refuses this
+   * account every route but the one that clears it.
+   *
+   * A `P2002` on the unique email is left to the caller: unlike self-sign-up,
+   * "that address already has an account" is exactly what an administrator needs
+   * to be told, and there is no enumeration concern behind a gate only
+   * platform-wide staff can reach.
+   */
+  async createByAdmin(
+    data: {
+      name: string;
+      email: string;
+      passwordHash: string;
+      role: Role;
+      customerId: number;
+    },
+    actor: AuthUser,
+  ): Promise<UserDto> {
+    return prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name: data.name,
+          email: data.email,
+          passwordHash: data.passwordHash,
+          role: data.role,
+          customerId: data.customerId,
+          status: "active",
+          emailVerifiedAt: new Date(),
+          mustChangePasswordAt: new Date(),
+        },
+        include: userInclude,
+      });
+      await auditRepository.record(
+        {
+          userId: actor.id,
+          action: "user.create",
+          entity: "user",
+          entityId: created.id,
+          meta: { customerId: data.customerId, role: data.role },
+        },
+        tx,
+      );
+      return toDto(created);
+    });
+  },
+
   async approveRegistration(
     id: number,
     data: { customerId: number; role: Role },

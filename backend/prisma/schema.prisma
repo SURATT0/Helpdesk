@@ -358,6 +358,19 @@ model User {
   /// person who already knew who they were, so demanding they re-prove it would
   /// lock out the entire existing desk to enforce a rule none of them broke.
   emailVerifiedAt        DateTime?             @map("email_verified_at")
+  /// Set when the password on this account was chosen by somebody ELSE — an
+  /// administrator creating the account hands over a password the person did not
+  /// pick and which was spoken aloud or typed into a chat to reach them. Until
+  /// they replace it, `requireAuth` refuses every route but the one that
+  /// replaces it, so the borrowed password buys nothing beyond its own removal.
+  ///
+  /// A timestamp rather than a flag so the row says WHEN the account was handed
+  /// over, which is the question asked of an account that has been sitting on a
+  /// temporary password for a month. Cleared — back to null — by the change.
+  ///
+  /// Self-registration never sets it: that person chose their own password, and
+  /// nobody else ever knew it.
+  mustChangePasswordAt   DateTime?             @map("must_change_password_at")
   teamId                 Int?                  @map("team_id")
   team                   Team?                 @relation(fields: [teamId], references: [id])
   // The customer this person BELONGS to — their home tenant. Null = platform
