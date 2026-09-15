@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Pencil } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
@@ -10,6 +10,9 @@ import { ApiError } from "@/lib/api-client";
 import { isInternalThread } from "@/lib/domain";
 import { STATUS_TRANSITIONS } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
+import { TOUCH_HEIGHT } from "@/components/ui/touch";
+import { mayEditOwnWording } from "@/lib/ticket-editable";
+import { EditTicketModal } from "./edit-ticket-modal";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { MessageAttachments } from "@/features/attachments/components/message-attachments";
@@ -184,6 +187,7 @@ export function TicketDetailView({ id }: { id: number }) {
   // mid-flight — they move the same ticket in opposite directions.
   const closureBusy = confirmClosure.isPending || rejectClosure.isPending;
   const [rejecting, setRejecting] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
@@ -452,6 +456,28 @@ export function TicketDetailView({ id }: { id: number }) {
           <h1 className="min-w-0 break-words text-subject font-bold tracking-heading text-ink">
             {ticket.subject}
           </h1>
+          {/* Offered only while the edit would actually be accepted — the same
+              two conditions the API applies, mirrored in `mayEditOwnWording`.
+              The API decides again inside the write, so this is an affordance
+              and not the guard; hiding a button has never been enforcement. */}
+          {mayEditOwnWording({
+            status: ticket.status,
+            requesterId: ticket.requesterId,
+            viewerId: user?.id,
+            comments: commentsQuery.data ?? [],
+          }) ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1 text-dense font-medium text-muted hover:bg-app",
+                TOUCH_HEIGHT,
+              )}
+            >
+              <Pencil size={13} strokeWidth={2} />
+              {t("editTicket.action")}
+            </button>
+          ) : null}
           <StatusBadge status={ticket.displayStatus} />
           <span className="inline-flex items-center rounded-full border border-line bg-white px-2.5 py-[3px]">
             <PriorityIndicator priority={ticket.priority} />
@@ -587,6 +613,14 @@ export function TicketDetailView({ id }: { id: number }) {
                 onRejected={() => setRejecting(false)}
               />
             ) : null}
+
+            {/* Mounted rather than conditionally created, so its own close
+                effect can reset the draft from the ticket. */}
+            <EditTicketModal
+              ticket={ticket}
+              open={editing}
+              onClose={() => setEditing(false)}
+            />
 
             <Composer
               ticketId={ticket.id}

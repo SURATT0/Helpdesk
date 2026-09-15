@@ -12,6 +12,7 @@ import { runStream } from "@/lib/sse";
 import type { Comment } from "./schemas";
 import {
   confirmClosure,
+  editOwnTicket,
   createComment,
   createTicket,
   fetchCategories,
@@ -429,5 +430,21 @@ export function useSendReply(ticketId: number) {
     // The reply is recorded as a comment — refresh the thread.
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: commentKeys.list(ticketId) }),
+  });
+}
+
+/**
+ * The requester's own edit.
+ *
+ * Invalidates the ticket queries only — the wording is not part of the thread,
+ * and a correction posts no comment. The server refuses if the desk answered
+ * while the dialog was open, and that refusal is what the dialog renders.
+ */
+export function useEditOwnTicket(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { subject: string; description: string }) =>
+      editOwnTicket(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ticketKeys.all }),
   });
 }

@@ -129,6 +129,24 @@ export async function updateTicketStatus(
  * back. Separate endpoints from the desk's status write, because the right to
  * use them comes from being the person the ticket is about — see the routes.
  */
+/**
+ * The requester correcting their own subject and description.
+ *
+ * Subject and description only. Priority and category feed the SLA deadline at
+ * creation, so moving them is a different decision from fixing a typo and is not
+ * on offer here.
+ */
+export async function editOwnTicket(
+  id: number,
+  input: { subject: string; description: string },
+): Promise<Ticket> {
+  const body = await apiRequest(`/tickets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return ticketEnvelopeSchema.parse(body).data;
+}
+
 export async function confirmClosure(id: number): Promise<Ticket> {
   const body = await apiRequest(`/tickets/${id}/closure/confirm`, {
     method: "POST",
