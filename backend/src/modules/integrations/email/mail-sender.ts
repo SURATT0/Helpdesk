@@ -113,59 +113,148 @@ class SmtpMailSender implements IMailSender {
 }
 
 /**
+ * A Graph `message` resource, shared by both ways of sending it.
+ *
+ * One builder rather than two copies: the draft path and the direct path differ
+ * only in how the message is delivered, and the day somebody adds a field to one
+ * of them is the day the two start producing different mail depending on which
+ * permission the tenant happened to grant.
+ */
+function graphMessage(mail: OutboundMail) {
+  return {
+    subject: mail.subject,
+    // HTML when there is any, because Graph carries one body rather than the
+    // multipart alternative SMTP builds. The plain text is what every client
+    // can already render from HTML; the reverse is not true.
+    body: mail.html
+      ? { contentType: "HTML", content: mail.html }
+      : { contentType: "Text", content: mail.text },
+    toRecipients: [{ emailAddress: { address: mail.to } }],
+    ...(mail.replyTo
+      ? { replyTo: [{ emailAddress: { address: mail.replyTo } }] }
+      : {}),
+    // Only `X-` headers are allowed here by Graph, which is exactly what
+    // `X-Deskly-Ticket-Id` is. `In-Reply-To` and `References` cannot be set this
+    // way — they need extended MAPI properties — so a reply threads on the
+    // subject tag and this header instead, which is the pair inbound already
+    // matches on. See InboundEmail.ticketIdHeader.
+    //
+    // That is also why losing the draft path costs less than it looks: this
+    // header travels either way, so the desk still files a reply on the right
+    // ticket. What is lost is the recipient's own client grouping the thread.
+    ...(mail.headers
+      ? {
+          internetMessageHeaders: Object.entries(mail.headers)
+            .filter(([name]) => name.toLowerCase().startsWith("x-"))
+            .map(([name, value]) => ({ name, value })),
+        }
+      : {}),
+  };
+}
+
+/** Sentinel: the draft call came back 403, so this app holds only `Mail.Send`. */
+const DRAFT_REFUSED = Symbol("draft-refused");
+
+/**
  * Sends as the 365 mailbox, through the Graph API.
  *
- * Two calls, not one. `POST /sendMail` sends in a single request and returns
- * 202 with no body — no Message-ID — and the threading chain here is built from
- * what the PREVIOUS send returned. So this creates a draft, reads the
- * `internetMessageId` Exchange stamped on it, then sends that draft. The extra
- * round trip buys a real id, and without it every mail in a conversation would
- * reference nothing.
+ * Two ways out, and which one is used depends on what the app registration was
+ * actually granted rather than on configuration.
+ *
+ * The preferred way is two calls: create a draft, read the `internetMessageId`
+ * Exchange stamped on it, then send that draft. `POST /sendMail` would do it in
+ * one request but answers 202 with no body and therefore no Message-ID, and the
+ * threading chain here is built from what the PREVIOUS send returned — without
+ * an id every mail in a conversation references nothing. The extra round trip
+ * buys that id.
+ *
+ * But creating a draft writes to the mailbox, so it needs `Mail.ReadWrite` —
+ * the same permission the inbox reader uses, and a SEPARATE one from the
+ * `Mail.Send` that sending itself needs. An app granted only `Mail.Send` can
+ * send perfectly well and cannot draft at all, which is not a hypothetical: it
+ * is the state a tenant is in when somebody has consented to the send
+ * permission and not the other. Refusing to send at all there would be the
+ * wrong answer — the desk would sit silent while holding a working credential.
+ *
+ * So a 403 on the draft is not fatal. It is taken as the answer to "may this
+ * app write to the mailbox", remembered for the life of the process, and every
+ * send from then on goes direct. The cost is the threading id, and the mails
+ * still carry `X-Deskly-Ticket-Id` and the subject tag — the pair inbound
+ * matches on anyway, so a reply still lands on its ticket; it is the recipient's
+ * mail client that stops grouping the conversation.
  *
  * The From is the mailbox in the URL, not `SMTP_FROM`: an app-only token sends
  * as whichever mailbox it names, and Exchange will not let it claim another
  * address. `GRAPH_MAILBOX` is therefore both where mail is read and where it is
  * sent from, which is what a support address usually is.
- *
- * Needs `Mail.Send` on the app registration, which is a SEPARATE permission
- * from the `Mail.ReadWrite` the inbox reader uses. Granting one does not grant
- * the other; a 403 here with `Mail.Send` in the body is what that looks like.
  */
 class GraphMailSender implements IMailSender {
   readonly transport = "graph";
 
+  /**
+   * Whether this app may write drafts, as answered by the mailbox itself.
+   *
+   * Starts optimistic and only ever goes false, on the first 403 from the draft
+   * call. Not read from configuration, because the question is not one an
+   * operator should have to answer — the permission either was consented to or
+   * was not, and the tenant knows. Per process, so a grant added later takes
+   * effect at the next restart rather than never.
+   */
+  private mayDraft = true;
+
   async send(mail: OutboundMail): Promise<SendResult> {
+    if (this.mayDraft) {
+      const drafted = await this.sendAsDraft(mail);
+      if (drafted !== DRAFT_REFUSED) return drafted;
+      this.mayDraft = false;
+      logger.warn(
+        { mailbox: env.integrations.graph.mailbox },
+        "Graph refused to create a draft (needs Mail.ReadWrite) — sending direct from now on, without a Message-ID for threading",
+      );
+    }
+    return this.sendDirect(mail);
+  }
+
+  /**
+   * One call, no id back. Needs only `Mail.Send`.
+   *
+   * `saveToSentItems` is left at its default (true) rather than turned off: a
+   * support mailbox with no record of what it sent is a support mailbox nobody
+   * can audit, and writing to Sent Items is covered by `Mail.Send` itself.
+   */
+  private async sendDirect(mail: OutboundMail): Promise<SendResult> {
+    const box = encodeURIComponent(env.integrations.graph.mailbox!);
+    const res = await graphFetch(`/users/${box}/sendMail`, {
+      method: "POST",
+      body: JSON.stringify({ message: graphMessage(mail) }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Graph sendMail failed (${res.status}): ${await safeText(res)}`,
+      );
+    }
+    // Deliberately no messageId: Graph returns 202 with an empty body, and
+    // inventing one would put a Message-ID in the thread chain that no mail
+    // server ever stamped — a reference to a message that does not exist.
+    return { transport: this.transport };
+  }
+
+  private async sendAsDraft(
+    mail: OutboundMail,
+  ): Promise<SendResult | typeof DRAFT_REFUSED> {
     const { mailbox } = env.integrations.graph;
     const box = encodeURIComponent(mailbox!);
 
     const draft = await graphFetch(`/users/${box}/messages`, {
       method: "POST",
-      body: JSON.stringify({
-        subject: mail.subject,
-        // HTML when there is any, because Graph carries one body rather than
-        // the multipart alternative SMTP builds. The plain text is what every
-        // client can already render from HTML; the reverse is not true.
-        body: mail.html
-          ? { contentType: "HTML", content: mail.html }
-          : { contentType: "Text", content: mail.text },
-        toRecipients: [{ emailAddress: { address: mail.to } }],
-        ...(mail.replyTo
-          ? { replyTo: [{ emailAddress: { address: mail.replyTo } }] }
-          : {}),
-        // Only `X-` headers are allowed here by Graph, which is exactly what
-        // `X-Deskly-Ticket-Id` is. `In-Reply-To` and `References` cannot be set
-        // this way — they need extended MAPI properties — so a reply threads on
-        // the subject tag and this header instead, which is the pair inbound
-        // already matches on. See InboundEmail.ticketIdHeader.
-        ...(mail.headers
-          ? {
-              internetMessageHeaders: Object.entries(mail.headers)
-                .filter(([name]) => name.toLowerCase().startsWith("x-"))
-                .map(([name, value]) => ({ name, value })),
-            }
-          : {}),
-      }),
+      body: JSON.stringify(graphMessage(mail)),
     });
+    // 403 is the mailbox answering "you may not write here" — see `mayDraft`.
+    // Every other failure is a real one and still throws: a 401 is a broken
+    // credential and a 404 a mailbox that does not exist, and silently sending
+    // direct on either would turn a misconfiguration into mail that quietly
+    // loses its threading forever.
+    if (draft.status === 403) return DRAFT_REFUSED;
     if (!draft.ok) {
       throw new Error(
         `Graph draft failed (${draft.status}): ${await safeText(draft)}`,
