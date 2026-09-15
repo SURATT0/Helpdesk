@@ -33,6 +33,34 @@ export async function fetchUsers(filters: UserFilters = {}): Promise<User[]> {
  * in the first place: an applicant belongs to no tenant yet, so the directory's
  * scope filter excludes them.
  */
+export type CreateUserInput = {
+  name: string;
+  email: string;
+  /**
+   * The password the administrator is handing over. Temporary by construction:
+   * the account is created flagged, and the API refuses it every route but the
+   * change-password form until the person replaces this.
+   */
+  password: string;
+  role: UserRole;
+  customerId: number;
+};
+
+/**
+ * Create an account for somebody who has not signed up.
+ *
+ * Nothing is mailed — deliberately, on the server's side: the password IS the
+ * credential and mailing it is how a temporary password becomes a permanent one
+ * sitting in an inbox. Whoever creates the account hands it over themselves.
+ */
+export async function createUser(input: CreateUserInput): Promise<User> {
+  const body = await apiRequest("/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return userEnvelopeSchema.parse(body).data;
+}
+
 export async function approveUser(
   id: number,
   input: { customerId: number; role: UserRole },

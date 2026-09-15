@@ -63,7 +63,13 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   {
     key: "user:write",
     group: "people",
-    description: "Create people, change their role, and deactivate accounts",
+    // Creating one is platform-wide on top of this permission, the same way
+    // approving a registration is: it chooses the person's tenant, and an
+    // account created into a customer its creator cannot reach is a row nobody
+    // can list, open or rename. Said here because a permission cannot express
+    // it — the same reason the two customer entries say it.
+    description:
+      "Change roles and deactivate accounts; creating one is platform staff only",
     lockedForTopRole: true,
   },
 

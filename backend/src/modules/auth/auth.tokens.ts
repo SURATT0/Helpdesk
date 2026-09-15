@@ -22,6 +22,8 @@ type SignableUser = {
   customerId: number | null;
   /** Every customer they may see into, home included. See `customerReach`. */
   customerIds: number[];
+  /** Password was handed over by an administrator and not yet replaced. */
+  mustChangePassword: boolean;
 };
 
 export function signAccessToken(user: SignableUser): string {
@@ -35,6 +37,7 @@ export function signAccessToken(user: SignableUser): string {
       department: user.department,
       customerId: user.customerId,
       customerIds: user.customerIds,
+      mustChangePassword: user.mustChangePassword,
       permissions: permissionsFor(user.role),
     },
     env.jwtAccessSecret,
@@ -64,6 +67,11 @@ export function verifyAccessToken(token: string): AuthUser {
     customerIds: Array.isArray(payload.customerIds)
       ? (payload.customerIds as number[])
       : [],
+    // Absent on a token minted before administrators could create accounts. No
+    // account holding one had been handed a password, so false is what they all
+    // were — and defaulting the other way would lock every live session out of
+    // everything but the change-password form at the moment of the deploy.
+    mustChangePassword: payload.mustChangePassword === true,
     permissions: (payload.permissions as string[]) ?? [],
   };
 }

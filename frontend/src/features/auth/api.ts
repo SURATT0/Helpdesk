@@ -83,6 +83,28 @@ export async function resetPassword(input: {
   );
 }
 
+/**
+ * Replace my own password, having typed the current one.
+ *
+ * Answers with a whole new session, because the change revoked every refresh
+ * token the account had — this browser's included. Stashing the new access
+ * token here is what keeps the person signed in across the change rather than
+ * dropping them at the sign-in form seconds after they chose a password.
+ */
+export async function changePassword(input: {
+  currentPassword: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthUser> {
+  const body = await apiRequest("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  const { user, accessToken } = sessionEnvelope.parse(body).data;
+  tokenStore.set(accessToken);
+  return user;
+}
+
 /** Verify credentials, stash the access token, return the user. */
 export async function login(
   email: string,

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import {
   AccountNotActive,
   MissingPermission,
+  PasswordChangeRequired,
   SessionExpired,
 } from "../shared/errors";
 import { maySignIn } from "../shared/domain";
@@ -38,8 +39,40 @@ import { grantsFor } from "../modules/permissions/permission.repository";
  */
 export async function requireAuth(
   req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  return authenticate(req, res, next, { allowUnchangedPassword: false });
+}
+
+/**
+ * `requireAuth`, minus the handed-over-password gate.
+ *
+ * For the two routes an account holding an administrator's password must still
+ * reach: the form that replaces it, and the `/me` the web app needs in order to
+ * render that form. Every other route goes through `requireAuth` and is refused,
+ * which is the point — see the gate below.
+ *
+ * Deliberately a second exported entry point rather than a path allow-list read
+ * inside the gate. A list would have to be kept in step with the router from a
+ * file that cannot see it, and getting it wrong in the lax direction fails
+ * silently: the route keeps working and the gate quietly stops covering it.
+ * Naming the exemption at the route makes it visible in the one file where
+ * somebody adding a route is already looking.
+ */
+export async function requireAuthDuringPasswordChange(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  return authenticate(req, res, next, { allowUnchangedPassword: true });
+}
+
+async function authenticate(
+  req: Request,
   _res: Response,
   next: NextFunction,
+  opts: { allowUnchangedPassword: boolean },
 ) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {
@@ -56,6 +89,22 @@ export async function requireAuth(
   // refresh-and-retry loop against a door that is not going to open.
   if (!maySignIn(user.status)) {
     return next(AccountNotActive());
+  }
+  /*
+   * An account still carrying the password an administrator chose for it sees
+   * nothing but the way to replace it.
+   *
+   * Here rather than on the routes for the same reason the status gate above is:
+   * the borrowed password has been read aloud, pasted into a chat, or written on
+   * a note, and "everything except the routes somebody remembered to protect" is
+   * not a boundary. One `mustChangePassword` on the token closes the whole API,
+   * and the next route added is behind it without its author doing anything.
+   *
+   * It costs the account nothing it is entitled to: the two exemptions are the
+   * change itself and reading its own identity.
+   */
+  if (user.mustChangePassword && !opts.allowUnchangedPassword) {
+    return next(PasswordChangeRequired());
   }
 
   try {

@@ -26,6 +26,9 @@ const user = (
   department: null,
   customerId,
   customerIds,
+  // Same reasoning as `status` above: an account that has to change its password
+  // is refused by `requireAuth` before any of these predicates is consulted.
+  mustChangePassword: false,
   permissions: permissionsFor(role),
 });
 

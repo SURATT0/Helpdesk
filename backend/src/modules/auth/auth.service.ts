@@ -63,6 +63,14 @@ export type PublicUser = {
    * it drifting from the server's. The server decides; the client is told.
    */
   platformWide: boolean;
+  /**
+   * The password this session was opened with was chosen by an administrator
+   * and has not been replaced. The web app sends this person to the
+   * change-password form and nowhere else; the API refuses everything else
+   * anyway (`requireAuth`), so this only saves them finding that out by being
+   * refused.
+   */
+  mustChangePassword: boolean;
 };
 
 export type Session = {
@@ -84,6 +92,8 @@ type UserRow = {
   teamId: number | null;
   customerId: number | null;
   passwordHash: string | null;
+  /** Non-null = the password was set by an administrator. See User.mustChangePasswordAt. */
+  mustChangePasswordAt: Date | null;
   availableForAssignment: boolean;
   isActive: boolean;
   language: Lang | null;
@@ -147,6 +157,7 @@ function toPublicUser(u: UserRow): PublicUser {
     availableForAssignment: u.availableForAssignment,
     language: u.language,
     platformWide: isPlatformWide(u),
+    mustChangePassword: u.mustChangePasswordAt != null,
   };
 }
 
@@ -174,6 +185,7 @@ async function mintSession(user: UserRow, familyId: string): Promise<Session> {
       // Revoking a grant therefore bites at the next refresh rather than the
       // next request — the same 15-minute lag the role and the tenant have
       // always had, and the reason the access token is short-lived.
+      mustChangePassword: user.mustChangePasswordAt != null,
       customerIds: customerReach({
         customerId: user.customerId,
         customerIds: user.reachGrants.map((g) => g.customerId),
@@ -396,6 +408,47 @@ export const authService = {
     if (!redeemed) {
       throw BadRequest("This reset link is no longer valid — request a new one");
     }
+  },
+
+  /**
+   * Replace your own password, having typed the current one.
+   *
+   * The way out of a handed-over password, and also the ordinary way anybody
+   * changes theirs — the desk had no such route at all before, only the emailed
+   * reset link, which is no use to a person whose mail never arrives and no use
+   * at all on a deployment with no mail transport configured.
+   *
+   * Returns a fresh session because `replacePassword` revokes every refresh
+   * token the account has, this request's included. Handing one straight back
+   * means the person carries on rather than being bounced to the sign-in form to
+   * retype the password they just chose.
+   *
+   * Refusing a new password identical to the current one is not politeness: for
+   * an account being forced off an administrator's password, accepting it would
+   * clear the flag while leaving in place the exact secret the flag exists to
+   * retire.
+   */
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<Session> {
+    const user = await authRepository.findUserById(userId);
+    // The token was valid, so the row is there unless the account was deleted
+    // mid-session. Same uniform refusal either way.
+    if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) {
+      throw InvalidCredentials();
+    }
+    if (currentPassword === newPassword) {
+      throw BadRequest("Choose a password different from your current one");
+    }
+    await authRepository.replacePassword(userId, await hashPassword(newPassword));
+    // Re-read: the row we verified against still says the password was handed
+    // over, and the session minted from it would carry the flag that locks the
+    // API — the change would appear not to have worked.
+    const updated = await authRepository.findUserById(userId);
+    if (!updated) throw InvalidCredentials();
+    return mintSession(updated, randomUUID());
   },
 
   async refresh(rawToken: string): Promise<Session> {

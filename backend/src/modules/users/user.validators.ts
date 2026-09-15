@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { password } from "../auth/auth.validators";
 
 export const userIdParam = z.object({
   id: z.coerce.number().int().positive(),
@@ -29,6 +30,28 @@ export const listUsersQuery = z.object({
 export const approveUserBody = z.object({
   customerId: z.number().int().positive(),
   role,
+});
+
+/**
+ * Creating an account on somebody's behalf.
+ *
+ * `customerId` and `role` are required for the same reason they are on the
+ * approval above — this is the same decision, made up front instead of in
+ * response to an application.
+ *
+ * The password reuses `password` from the auth validators rather than restating
+ * a rule: a second copy would let the two drift, and the direction that drift
+ * goes is an administrator being able to set a password weaker than the one the
+ * person could have chosen for themselves. It arrives in the request body
+ * because a platform-wide administrator typed it, and it is stored hashed by
+ * `hashPassword` — the same function the sign-up form's password goes through.
+ */
+export const createUserBody = z.object({
+  email: z.string().trim().email().max(254),
+  name: z.string().trim().min(1, "Name is required").max(120),
+  password,
+  role,
+  customerId: z.number().int().positive(),
 });
 
 export const rejectUserBody = z.object({

@@ -23,6 +23,23 @@ router.patch(
 );
 
 /**
+ * Create an account for somebody, with a password chosen by the administrator.
+ *
+ * Behind `user:write` like the routes above, but — exactly as with `/approve`
+ * below — the gate that decides is in the SERVICE, because it keys on reach
+ * rather than on a permission string. Creating an account chooses its tenant,
+ * which is the same act approving performs, so the two share `mayApproveRegistration`.
+ *
+ * Its own route rather than a mode of the patch, for the reason stated below:
+ * this writes `customerId`, which `PATCH /:id` must never be able to touch.
+ */
+router.post(
+  "/",
+  requirePermission("user:write"),
+  asyncHandler(userController.create),
+);
+
+/**
  * Deciding a registration. Behind `user:write` like the patch above, but the
  * gate that matters is in the SERVICE (`mayApproveRegistration`), because it
  * keys on reach rather than on a permission string — `super_admin` holds the

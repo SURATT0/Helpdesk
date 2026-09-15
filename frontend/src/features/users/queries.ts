@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   approveUser,
+  createUser,
   fetchUsers,
   rejectUser,
   setUserReach,
   updateMyProfile,
   updateUser,
+  type CreateUserInput,
   type UpdateMyProfileInput,
   type UpdateUserInput,
 } from "./api";
@@ -50,6 +52,14 @@ export function useUsers(
  * moves a row OUT of the pending queue and INTO the customer's directory, so
  * both lists are stale and neither knows about the other.
  */
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateUserInput) => createUser(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  });
+}
+
 export function useApproveUser() {
   const qc = useQueryClient();
   return useMutation({

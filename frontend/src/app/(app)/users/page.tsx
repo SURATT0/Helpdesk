@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Info, Users as UsersIcon } from "lucide-react";
+import { Info, UserPlus, Users as UsersIcon } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { toneForName } from "@/features/tickets/data";
@@ -12,6 +13,7 @@ import { useProjects } from "@/features/projects/queries";
 import { useUpdateUser, useUsers } from "@/features/users/queries";
 import { AccountToggle } from "@/features/users/components/account-toggle";
 import { ApprovalQueue } from "@/features/users/components/approval-queue";
+import { CreateUserModal } from "@/features/users/components/create-user-modal";
 import { CustomerAccess } from "@/features/users/components/customer-access";
 import { UserFiltersBar } from "@/features/users/components/user-filters";
 import { AvailabilityToggle } from "@/features/users/components/availability-toggle";
@@ -120,6 +122,7 @@ export default function UsersPage() {
   // only. The server is the gate; this just avoids offering a refused control.
   const canGrantReach = me?.platformWide === true;
   const [handoverFor, setHandoverFor] = React.useState<User | null>(null);
+  const [creating, setCreating] = React.useState(false);
   // Projects are only needed for the editable picker, and requesters/agents
   // cannot write anyway — so don't fetch them for a read-only view.
   const { data: projectData } = useProjects({ enabled: canEdit });
@@ -130,10 +133,21 @@ export default function UsersPage() {
     <>
       <Topbar titleKey="nav.users" showSearch={false} />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <p className="mb-4 flex max-w-[70ch] items-start gap-2 text-body leading-relaxed text-subtle">
-          <Info size={14} className="mt-[2px] flex-none text-faint" />
-          {t("users.explainer")}
-        </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <p className="flex max-w-[70ch] items-start gap-2 text-body leading-relaxed text-subtle">
+            <Info size={14} className="mt-[2px] flex-none text-faint" />
+            {t("users.explainer")}
+          </p>
+          {/* Same gate as the approval queue below, and for the same reason:
+              creating an account chooses somebody's tenant. The server refuses
+              anyone else; this only avoids offering a button that would 403. */}
+          {canGrantReach ? (
+            <Button onClick={() => setCreating(true)}>
+              <UserPlus size={14} strokeWidth={2} />
+              {t("createUser.open")}
+            </Button>
+          ) : null}
+        </div>
 
         {/* A refused edit has to be readable. Closing an account that still holds
             tickets comes back with the count and "hand the queue over first" —
@@ -319,6 +333,8 @@ export default function UsersPage() {
           </TableScroll>
         </div>
       </main>
+
+      {creating ? <CreateUserModal onClose={() => setCreating(false)} /> : null}
 
       {handoverFor ? (
         <HandoverQueueModal

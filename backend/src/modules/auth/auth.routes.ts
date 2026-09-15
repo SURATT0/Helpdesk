@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../../middlewares";
-import { requireAuth } from "../../middlewares/auth";
+import { requireAuthDuringPasswordChange } from "../../middlewares/auth";
 import { env } from "../../config/env";
 import { authController } from "./auth.controller";
 import {
@@ -26,6 +26,7 @@ const forgotLimiter = createAccountRequestLimiter(env.passwordResetRateLimit);
  * POST /verify-email     — redeem a confirmation link
  * POST /forgot-password  — request a reset link
  * POST /reset-password   — redeem a reset link and set a new password
+ * POST /change-password  — replace your own password, knowing the current one
  *
  * The four below are all UNAUTHENTICATED, which is the point of them, and none
  * carries `requireAuth`. What stands in for it: every one of them answers the
@@ -50,6 +51,31 @@ router.post(
 router.post("/reset-password", asyncHandler(authController.resetPassword));
 router.post("/refresh", asyncHandler(authController.refresh));
 router.post("/logout", asyncHandler(authController.logout));
-router.get("/me", requireAuth, asyncHandler(authController.me));
+
+/*
+ * The two routes an account still carrying an administrator's password may
+ * reach, and the ONLY two — hence `requireAuthDuringPasswordChange` rather than
+ * `requireAuth`, which refuses such an account everywhere.
+ *
+ * `/me` is on the list because the web app cannot render the change-password
+ * form without knowing who is signed in; refusing it would leave the person
+ * looking at a shell with no way forward.
+ *
+ * Rate-limited on the same limiter as sign-in. It takes the current password
+ * and answers differently when that password is wrong, which makes it a
+ * credential endpoint whatever else it is — and one reachable with a token
+ * whose account is otherwise locked out of the API.
+ */
+router.post(
+  "/change-password",
+  loginLimiter,
+  requireAuthDuringPasswordChange,
+  asyncHandler(authController.changePassword),
+);
+router.get(
+  "/me",
+  requireAuthDuringPasswordChange,
+  asyncHandler(authController.me),
+);
 
 export const authRoutes = router;
