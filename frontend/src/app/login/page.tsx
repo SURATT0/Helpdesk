@@ -14,14 +14,29 @@ import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 
 /**
- * The seeded demo account, in one place.
+ * The seeded demo account — configured, or absent.
  *
- * It used to be spelled out four times, and one of those was the email field's
- * initial state — so a real deployment shipped a login screen prefilled with a
- * fixture address. It belongs behind the demo button and in the hint under it,
- * nowhere else.
+ * The password used to be the literal `password123` here, which stopped being
+ * true the day the seed took its password from `SEED_PASSWORD` and generated one
+ * when that is unset. A deployment that set its own got a login screen offering
+ * a one-click sign-in that could not work and a hint naming a password that was
+ * never the password; one that set none got the same, pointing at a password
+ * printed once into a deploy log.
+ *
+ * So it is read from the environment and nothing is assumed. `NEXT_PUBLIC_*` is
+ * inlined at build time, which is the right shape for this — whether a build is
+ * a demo is a property of that build, not a runtime toggle somebody could flip
+ * on a real one.
+ *
+ * Unset — the default, and what any real deployment does — is not a fallback to
+ * the old literal. It removes the button and the hint entirely: an installation
+ * with no demo account should not advertise one.
  */
-const DEMO = { email: "dana.reyes@acme.com", password: "password123" };
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? "";
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "";
+const DEMO = DEMO_EMAIL && DEMO_PASSWORD
+  ? { email: DEMO_EMAIL, password: DEMO_PASSWORD }
+  : null;
 
 export default function LoginPage() {
   const { login, status } = useAuth();
@@ -58,8 +73,10 @@ export default function LoginPage() {
     void signIn(email, password);
   }
 
-  // One-click demo: fill the seeded credentials and sign in immediately.
+  // One-click demo: fill the seeded credentials and sign in immediately. Only
+  // reachable from a button that is not rendered unless DEMO is configured.
   function demoLogin() {
+    if (!DEMO) return;
     setEmail(DEMO.email);
     setPassword(DEMO.password);
     void signIn(DEMO.email, DEMO.password);
@@ -181,14 +198,16 @@ export default function LoginPage() {
               {submitting ? t("login.submitting") : t("login.signIn")}
             </button>
 
-            <button
-              type="button"
-              onClick={demoLogin}
-              disabled={submitting}
-              className="rounded-md border border-line bg-white py-2.5 text-center text-control font-medium text-muted transition-colors hover:border-brand/40 hover:text-ink disabled:opacity-60"
-            >
-              {t("login.demoLogin")}
-            </button>
+            {DEMO ? (
+              <button
+                type="button"
+                onClick={demoLogin}
+                disabled={submitting}
+                className="rounded-md border border-line bg-white py-2.5 text-center text-control font-medium text-muted transition-colors hover:border-brand/40 hover:text-ink disabled:opacity-60"
+              >
+                {t("login.demoLogin")}
+              </button>
+            ) : null}
           </form>
 
           <div className="mt-5 border-t border-line pt-5 text-center text-control text-muted">
@@ -202,9 +221,13 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="mt-5 text-center text-caption leading-relaxed text-faint">
-          {t("login.demo", { pw: DEMO.password })}
-        </div>
+        {/* The hint goes with the button. Printing a password nobody configured
+            is worse than printing nothing. */}
+        {DEMO ? (
+          <div className="mt-5 text-center text-caption leading-relaxed text-faint">
+            {t("login.demo", { pw: DEMO.password })}
+          </div>
+        ) : null}
       </div>
     </div>
   );
