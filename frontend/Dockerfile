@@ -19,6 +19,23 @@ ENV API_PROXY_TARGET=$API_PROXY_TARGET
 # choice is baked and changing it does need `--build`.
 ARG NEXT_PUBLIC_API_URL=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# The demo account the login screen offers one-click sign-in for, if any.
+#
+# Empty by default, and that default is the important half: a build that names
+# no demo account renders no demo button and no "sign in with …" hint. The
+# password used to be a literal in the page, which stopped being true when the
+# seed started taking its own from SEED_PASSWORD — so the screen advertised a
+# password that was not the password.
+#
+# Set BOTH, to the same pair the seed was run with, only for a demo build. Like
+# every NEXT_PUBLIC_*, it is inlined at build time and changing it needs
+# `--build` — which is right: whether an installation is a demo is a property of
+# the image, not a switch on a live one.
+ARG NEXT_PUBLIC_DEMO_EMAIL=
+ENV NEXT_PUBLIC_DEMO_EMAIL=$NEXT_PUBLIC_DEMO_EMAIL
+ARG NEXT_PUBLIC_DEMO_PASSWORD=
+ENV NEXT_PUBLIC_DEMO_PASSWORD=$NEXT_PUBLIC_DEMO_PASSWORD
 RUN npm run build
 
 # --- runtime stage: run the standalone server ---

@@ -229,6 +229,16 @@ services:
         # (`localhost` is the phone itself), and the api's WEB_ORIGIN has to
         # list this app's origin for CORS.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        # The demo account the login screen offers one-click sign-in for.
+        #
+        # This stack IS the demo — it seeds sixteen fixture accounts that all
+        # share SEED_PASSWORD — so it names one here, and the default matches the
+        # api service's SEED_PASSWORD default above. Point either at anything
+        # real and the two must be set together or the button signs in with the
+        # wrong password; leave them BOTH unset and the login screen simply
+        # offers no demo at all, which is what a real deployment wants.
+        NEXT_PUBLIC_DEMO_EMAIL: ${DEMO_EMAIL:-dana.reyes@acme.com}
+        NEXT_PUBLIC_DEMO_PASSWORD: ${SEED_PASSWORD:-password123}
     container_name: deskly-web
     restart: unless-stopped
     depends_on:
