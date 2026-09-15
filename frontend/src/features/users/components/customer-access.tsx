@@ -60,12 +60,20 @@ export function CustomerAccess({
           )}
         >
           <Building2 size={11} className="flex-none" />
-          <span className="truncate">{summary}</span>
+          {/*  beside the truncate: a flex item's automatic minimum is its
+              content, so without it this label sets a floor the table's column
+              ratio has to honour — which is what squeezed the email column to
+              16px. */}
+          <span className="min-w-0 truncate">{summary}</span>
         </button>
       ) : (
         <span className="mt-0.5 inline-flex max-w-full items-center gap-1 text-caption text-subtle">
           <Building2 size={11} className="flex-none" />
-          <span className="truncate">{summary}</span>
+          {/*  beside the truncate: a flex item's automatic minimum is its
+              content, so without it this label sets a floor the table's column
+              ratio has to honour — which is what squeezed the email column to
+              16px. */}
+          <span className="min-w-0 truncate">{summary}</span>
         </span>
       )}
       {open ? (
