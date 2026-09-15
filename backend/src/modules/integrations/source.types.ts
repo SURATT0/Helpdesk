@@ -38,6 +38,46 @@ export interface ITicketSource {
   fetchTickets(): Promise<ExternalTicket[]>;
 }
 
+/**
+ * What one sync of a mail source did.
+ *
+ * Mail is counted by what it BECAME, not by how many rows were created: the
+ * same sweep can open tickets, append replies to threads it recognises, and
+ * discard mail it has already seen. A single "imported" number would hide the
+ * last two, and those are the ones worth watching — a sudden pile of duplicates
+ * says the read-marking is not sticking.
+ */
+export type MailSyncResult = {
+  fetched: number;
+  tickets: number;
+  comments: number;
+  duplicates: number;
+  /** Messages that threw, with the reason. One bad mail must not stop the rest. */
+  failures: { messageId?: string; reason: string }[];
+};
+
+/**
+ * A source that turns MAIL into tickets, and does the turning itself.
+ *
+ * Mail cannot go through `fetchTickets` → `importMany` like a ticket system
+ * does. That path needs a requester who already exists, knows nothing about
+ * threading a reply onto the ticket it answers, and would re-import every
+ * message it has seen before. `emailService.ingest()` handles all three, and is
+ * the same path the inbound webhook uses — so a mail adapter calls it directly
+ * rather than flattening a conversation into rows and losing what makes it one.
+ *
+ * `ingestsOwnMail` is the flag the sync endpoint branches on. It is a property
+ * rather than an `instanceof` so the registry stays a list of interfaces.
+ */
+export interface IMailSource extends ITicketSource {
+  readonly ingestsOwnMail: true;
+  syncMail(): Promise<MailSyncResult>;
+}
+
+export function isMailSource(s: ITicketSource): s is IMailSource {
+  return (s as IMailSource).ingestsOwnMail === true;
+}
+
 /** DTO describing a source's availability, returned by GET /integrations/sources. */
 export type SourceInfo = {
   id: string;

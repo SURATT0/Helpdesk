@@ -1,7 +1,14 @@
 import { z } from "zod";
 
 export const loginBody = z.object({
-  email: z.string().email(),
+  // Trimmed BEFORE the format check, so a pasted address with a space on the end
+  // is a sign-in rather than a 400. Without it the service's own `trim` never
+  // sees the value — validation has already rejected it — and the person is
+  // told their address is invalid when it is the clipboard that is untidy.
+  //
+  // Only whitespace is forgiven here. The case folding that goes with it belongs
+  // in the service, next to the lookup it exists to make match.
+  email: z.string().trim().email(),
   password: z.string().min(1),
 });
 

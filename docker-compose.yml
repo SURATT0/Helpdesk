@@ -102,6 +102,30 @@ services:
       # x-webhook-secret header). Change it for any real deployment.
       EMAIL_WEBHOOK_SECRET: local-compose-email-secret-1f7c9a2b4d6e8035
       EMAIL_DEFAULT_CATEGORY: Email
+      # Email-to-ticket from Microsoft 365, read through the Graph API.
+      #
+      # Passed THROUGH from the environment rather than written here, because
+      # one of them is a client secret and this file is in git. Compose reads
+      # `./.env` (this directory, not backend/) for these substitutions, and
+      # that file is gitignored — so the values live there, or in whatever the
+      # deployment uses for secrets, and never in the repository.
+      #
+      # `backend/.env` is NOT read by this container: it belongs to running the
+      # API directly on the host. Putting the Graph values only there is the one
+      # way to have them look set and still be invisible in here.
+      #
+      # Unset → all four empty → the adapter reports "not configured" and the
+      # sync button refuses before it dials anything.
+      GRAPH_TENANT_ID: ${GRAPH_TENANT_ID:-}
+      GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID:-}
+      GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET:-}
+      GRAPH_MAILBOX: ${GRAPH_MAILBOX:-}
+      GRAPH_PAGE_SIZE: ${GRAPH_PAGE_SIZE:-25}
+      GRAPH_MARK_AS_READ: ${GRAPH_MARK_AS_READ:-true}
+      # Opt-in, and separate from reading: sending needs Mail.Send on the app
+      # registration, and inferring it from a read config sent mail somewhere
+      # nobody asked for.
+      GRAPH_SEND: ${GRAPH_SEND:-false}
       # Outbound ticket mail. UNSET by default, which selects the "log"
       # transport: mail is composed and recorded but never handed to a server.
       #

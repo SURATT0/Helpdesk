@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "../../../config/env";
 import { logger } from "../../../shared/logger";
+import { graphConfigured, graphFetch, safeText } from "./graph-client";
 
 export type OutboundMail = {
   from: string;
@@ -111,6 +112,96 @@ class SmtpMailSender implements IMailSender {
   }
 }
 
+/**
+ * Sends as the 365 mailbox, through the Graph API.
+ *
+ * Two calls, not one. `POST /sendMail` sends in a single request and returns
+ * 202 with no body — no Message-ID — and the threading chain here is built from
+ * what the PREVIOUS send returned. So this creates a draft, reads the
+ * `internetMessageId` Exchange stamped on it, then sends that draft. The extra
+ * round trip buys a real id, and without it every mail in a conversation would
+ * reference nothing.
+ *
+ * The From is the mailbox in the URL, not `SMTP_FROM`: an app-only token sends
+ * as whichever mailbox it names, and Exchange will not let it claim another
+ * address. `GRAPH_MAILBOX` is therefore both where mail is read and where it is
+ * sent from, which is what a support address usually is.
+ *
+ * Needs `Mail.Send` on the app registration, which is a SEPARATE permission
+ * from the `Mail.ReadWrite` the inbox reader uses. Granting one does not grant
+ * the other; a 403 here with `Mail.Send` in the body is what that looks like.
+ */
+class GraphMailSender implements IMailSender {
+  readonly transport = "graph";
+
+  async send(mail: OutboundMail): Promise<SendResult> {
+    const { mailbox } = env.integrations.graph;
+    const box = encodeURIComponent(mailbox!);
+
+    const draft = await graphFetch(`/users/${box}/messages`, {
+      method: "POST",
+      body: JSON.stringify({
+        subject: mail.subject,
+        // HTML when there is any, because Graph carries one body rather than
+        // the multipart alternative SMTP builds. The plain text is what every
+        // client can already render from HTML; the reverse is not true.
+        body: mail.html
+          ? { contentType: "HTML", content: mail.html }
+          : { contentType: "Text", content: mail.text },
+        toRecipients: [{ emailAddress: { address: mail.to } }],
+        ...(mail.replyTo
+          ? { replyTo: [{ emailAddress: { address: mail.replyTo } }] }
+          : {}),
+        // Only `X-` headers are allowed here by Graph, which is exactly what
+        // `X-Deskly-Ticket-Id` is. `In-Reply-To` and `References` cannot be set
+        // this way — they need extended MAPI properties — so a reply threads on
+        // the subject tag and this header instead, which is the pair inbound
+        // already matches on. See InboundEmail.ticketIdHeader.
+        ...(mail.headers
+          ? {
+              internetMessageHeaders: Object.entries(mail.headers)
+                .filter(([name]) => name.toLowerCase().startsWith("x-"))
+                .map(([name, value]) => ({ name, value })),
+            }
+          : {}),
+      }),
+    });
+    if (!draft.ok) {
+      throw new Error(
+        `Graph draft failed (${draft.status}): ${await safeText(draft)}`,
+      );
+    }
+    const created = (await draft.json()) as {
+      id: string;
+      internetMessageId?: string;
+    };
+
+    const sent = await graphFetch(`/users/${box}/messages/${created.id}/send`, {
+      method: "POST",
+    });
+    if (!sent.ok) {
+      throw new Error(
+        `Graph send failed (${sent.status}): ${await safeText(sent)}`,
+      );
+    }
+    return { transport: this.transport, messageId: created.internetMessageId };
+  }
+}
+
+/**
+ * Which way mail goes out, most explicit first.
+ *
+ * SMTP wins when a host is named: someone who set one meant it, and it is the
+ * only option that can send as an address the Graph app does not own. Graph is
+ * next, because a fully configured 365 mailbox is a real mailbox and preferring
+ * the log transport over it would silently throw mail away. The log transport
+ * is last and is a dev fallback, not a choice.
+ *
+ * `GRAPH_SEND=false` opts out — for a deployment that reads 365 mail but sends
+ * through something else, where picking Graph would send from the wrong address.
+ */
 export const mailSender: IMailSender = env.smtp.host
   ? new SmtpMailSender()
-  : new LogMailSender();
+  : graphConfigured() && env.integrations.graph.send
+    ? new GraphMailSender()
+    : new LogMailSender();
