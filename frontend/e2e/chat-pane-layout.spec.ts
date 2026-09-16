@@ -48,17 +48,31 @@ async function ownTicket(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/tickets\/\d+$/, { timeout: 15_000 });
 }
 
-/** Post `n` chat messages through the composer, as a person would. */
+/**
+ * Post `n` chat messages through the composer, as a person would.
+ *
+ * Each send has to SETTLE before the next one starts. The box empties
+ * optimistically, the moment Enter is pressed, but the composer stays `busy`
+ * until the request comes back — and its Enter handler is
+ * `if (canSend && !busy) submit()`, so a second Enter inside that window is
+ * swallowed silently and the draft just sits there. Waiting on the box being
+ * empty is therefore not enough; it is already empty.
+ *
+ * "Sending…" under the optimistic row disappearing is the signal that the write
+ * landed, so that is what this waits for.
+ */
 async function fillThread(page: Page, n: number) {
   const composer = page.getByPlaceholder(CHAT_BOX);
   await expect(composer).toBeVisible();
+  const stamp = Date.now();
   for (let i = 0; i < n; i++) {
-    await composer.fill(`Layout probe ${Date.now()}-${i}`);
+    const text = `Layout probe ${stamp}-${i}`;
+    await composer.fill(text);
     await composer.press("Enter");
-    // Wait for the optimistic row rather than a timeout: the next fill has to
-    // land in a cleared box, and `fill` on a box the send has not emptied yet
-    // silently concatenates.
-    await expect(composer).toHaveValue("", { timeout: 10_000 });
+    await expect(page.getByText(text)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Sending…")).toHaveCount(0, {
+      timeout: 15_000,
+    });
   }
 }
 
