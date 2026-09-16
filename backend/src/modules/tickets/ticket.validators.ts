@@ -136,11 +136,23 @@ export const ticketIdParam = z.object({
 });
 
 /**
- * The desk moving a ticket. `deskSettableStatus`, not `ticketStatus`: this is
- * the endpoint `cancelled` is deliberately kept off — see that constant.
+ * A desk-driven status change.
+ *
+ * `deskSettableStatus`, not `ticketStatus`: this is the endpoint `cancelled` is
+ * deliberately kept off, because withdrawing a request belongs to the person who
+ * made it — see that constant.
+ *
+ * `resolution` is optional HERE and required by the service, which looks
+ * contradictory and is not: whether it is required depends on the move, and the
+ * move depends on the status the ticket is in right now — which this schema
+ * cannot see. Making it required in zod would refuse the requester's reopen and
+ * every other move that legitimately carries none; making it optional and
+ * checking in `changeStatus`, where both ends of the transition are known, is
+ * the only place the real rule can be asked. See `requiresResolution`.
  */
 export const updateStatusBody = z.object({
   status: deskSettableStatus,
+  resolution: freeText({ max: TEXT_MAX.BODY }).optional(),
 });
 
 /**

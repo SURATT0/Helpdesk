@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowDown, Pencil } from "lucide-react";
+import { ArrowDown, ChevronRight, Pencil } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { isInternalThread } from "@/lib/domain";
+import { hasPermission } from "@/lib/permissions";
 import { isConversationClosed, STATUS_TRANSITIONS } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { TOUCH_HEIGHT } from "@/components/ui/touch";
@@ -20,6 +22,7 @@ import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { CancelTicketDialog } from "./cancel-ticket-dialog";
 import { RejectClosureDialog } from "./reject-closure-dialog";
+import { ResolutionDialog } from "./resolution-dialog";
 import { SlaBadge } from "./sla-badge";
 import { useAssessSla } from "../use-sla";
 import { toneForName } from "../data";
@@ -35,8 +38,6 @@ import {
   useRejectClosure,
   useUpdateTicketStatus,
 } from "../queries";
-
-const WRITE_ROLES = ["super_admin", "admin"];
 
 const localeOf = (lang: string) => (lang === "th" ? "th-TH" : "en-US");
 
@@ -190,6 +191,20 @@ export function TicketDetailView({ id }: { id: number }) {
   const [rejecting, setRejecting] = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
+  /**
+   * Whether the properties fold-out is open. Below `lg` only — from `lg` up the
+   * rail is the right-hand column and this state is not consulted.
+   *
+   * Closed to begin with: on a phone the thread now fills the screen, and what
+   * somebody opens a ticket for is the conversation.
+   */
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  // "Done — ask requester" asks what was done before it patches, so the button
+  // opens this rather than firing the mutation. Holds the error too: the dialog
+  // stays open on a failure with the typed text intact, instead of closing and
+  // losing what the agent wrote.
+  const [resolving, setResolving] = React.useState(false);
+  const [resolveError, setResolveError] = React.useState<string | null>(null);
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
@@ -302,7 +317,13 @@ export function TicketDetailView({ id }: { id: number }) {
     );
   }
 
-  const canWrite = user ? WRITE_ROLES.includes(user.role) : false;
+  /**
+   * Working this ticket: the desk's "Done" button, and the internal-note tab on
+   * the composer. Both are `ticket:write` on the API — the status route by
+   * middleware, the note by `commentService.create` — so both are that
+   * permission here, not the role list this used to carry.
+   */
+  const canWrite = hasPermission(user, "ticket:write");
   // "Done, over to the requester" — the move that finishes the desk's part.
   const canResolve =
     canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("pending");
@@ -399,7 +420,14 @@ export function TicketDetailView({ id }: { id: number }) {
     : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
+    /* `overflow-hidden` at every width, not just `lg`.
+
+       Below `lg` this element used to be the page's scroller, so the whole
+       document grew with the conversation: header, thread and composer scrolled
+       together and the composer sat at the bottom of a 50-message page rather
+       than on screen. The thread now owns the only scrollbar at every width — see
+       the chat pane below. */
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* One header across the full width. It used to sit inside the thread
           column, which squeezed the title and the badge row into 1fr while the
           rail stood empty beside them. */}
@@ -435,9 +463,10 @@ export function TicketDetailView({ id }: { id: number }) {
               {canResolve ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    statusMutation.mutate({ id: ticket.id, status: "pending" })
-                  }
+                  onClick={() => {
+                    setResolveError(null);
+                    setResolving(true);
+                  }}
                   disabled={statusMutation.isPending}
                   className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-body font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
                 >
@@ -530,14 +559,38 @@ export function TicketDetailView({ id }: { id: number }) {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_312px] lg:overflow-hidden">
+      {/* A flex COLUMN below `lg`, the two-column grid from `lg` up.
+
+          It was a single-column grid below `lg`, which made the thread and the
+          rail two auto-sized rows: the thread grew with the conversation and the
+          page scrolled to reach either. As a flex column the thread can take
+          `flex-1` of a bounded height and scroll inside itself, which is what
+          lets the composer stay put. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:grid lg:grid-cols-[1fr_312px]">
         {/* thread column */}
-        <div className="flex min-w-0 flex-col border-line lg:overflow-hidden lg:border-r">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line lg:border-r">
+          {/* The conversation, and the only thing on this page that scrolls.
+
+              `overflow-y-auto` is unprefixed now. It used to be `lg:` only, so
+              below `lg` nothing here scrolled at all and the whole document grew
+              with the thread instead.
+
+              `min-h-0` is belt-and-braces rather than the fix: `overflow-y-auto`
+              already zeroes a flex child's automatic minimum (that minimum only
+              applies while overflow is `visible`). It is written out because the
+              day somebody changes this back to `overflow-visible` for a dropdown
+              that is being clipped, the column silently stops being able to
+              shrink and the composer starts collapsing again — and this is the
+              line that says why it must not.
+
+              What the messages themselves must NOT have is a floor: the inner
+              list is content-sized on purpose, so it overflows this box and this
+              box scrolls, rather than the two of them pushing the composer. */}
           <div
             ref={scrollRef}
             onScroll={handleScroll}
             data-testid="chat-scroll"
-            className="relative flex flex-1 flex-col gap-4 p-5 sm:p-7 lg:overflow-y-auto"
+            className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5 sm:p-7"
           >
             <div className="flex flex-col">
               {messages.map((m, i) => {
@@ -573,7 +626,12 @@ export function TicketDetailView({ id }: { id: number }) {
                   >
                     <p
                       className={cn(
-                        "whitespace-pre-wrap text-lead leading-relaxed",
+                        // `break-words` beside `whitespace-pre-wrap`: the latter
+                        // wraps at spaces, and a pasted URL or stack frame has
+                        // none — it ran straight out of the bubble's 82% instead
+                        // of wrapping inside it. The two together keep every line
+                        // in the bubble whatever is in it.
+                        "whitespace-pre-wrap break-words text-lead leading-relaxed",
                         m.internal ? "text-[#57430f]" : "text-strong",
                       )}
                     >
@@ -638,41 +696,40 @@ export function TicketDetailView({ id }: { id: number }) {
               </div>
             ) : null}
 
-            {rejecting ? (
-              <RejectClosureDialog
-                ticketId={ticket.id}
-                onClose={() => setRejecting(false)}
-                onRejected={() => setRejecting(false)}
-              />
-            ) : null}
+            {/* The scroll anchor stays the LAST thing in the scroller, because
+                `scrollToBottom` works by scrolling it into view. */}
+            <div ref={bottomRef} aria-hidden />
+          </div>
 
-            {cancelling ? (
-              <CancelTicketDialog
-                ticketId={ticket.id}
-                onClose={() => setCancelling(false)}
-                onCancelled={() => setCancelling(false)}
-              />
-            ) : null}
+          {/* The composer, a SIBLING of the conversation rather than the last
+              thing inside it.
 
-            {/* Mounted rather than conditionally created, so its own close
-                effect can reset the draft from the ticket. */}
-            <EditTicketModal
-              ticket={ticket}
-              open={editing}
-              onClose={() => setEditing(false)}
-            />
+              It used to sit inside the scroller, which gave it two faults at
+              once: flexbox squeezed it (see `min-h-0` above), and whatever height
+              survived scrolled away with the messages, so on a long thread you
+              had to scroll to the bottom to reach the thing you were trying to
+              type into. `flex-none` is the other half of the rule — it takes the
+              height its own content asks for and neither stretches nor shrinks,
+              whether the conversation has fifty messages or none.
 
+              Deliberately NOT `position: fixed`: this page has a properties rail
+              beside it and a header above it, and a viewport-pinned bar would lie
+              across both. Pinned to the bottom of the thread column is the same
+              effect without the collision. */}
+          <div className="flex-none px-5 pb-5 sm:px-7 sm:pb-7">
             {/* The conversation is over, and there is nothing left this viewer
                 may write. A line saying so, not an empty space: a composer that
                 simply vanishes reads as a page that failed to load, and the
-                sentence is also where the way back is named.
+                sentence is also where the way back is named. `flex-none` above
+                means this shorter box is simply shorter — it does not let the
+                conversation grow into the room it gives up.
 
                 Staff still get the composer here — `internalOnly` collapses it
                 to the note tab — because notes stay open on an ended ticket.
                 What decides between the two is whether the viewer has anything
                 left to say, not the ticket's status alone. */}
             {conversationClosed && !canWrite ? (
-              <div className="mt-auto rounded-lg border border-dashed border-line bg-wash px-4 py-3 text-body text-subtle">
+              <div className="rounded-lg border border-dashed border-line bg-wash px-4 py-3 text-body text-subtle">
                 {t(
                   ticket.status === "cancelled"
                     ? "composer.lockedCancelled"
@@ -693,14 +750,99 @@ export function TicketDetailView({ id }: { id: number }) {
                 }
               />
             )}
-            <div ref={bottomRef} aria-hidden />
           </div>
         </div>
 
-        <div className="border-t border-line lg:overflow-y-auto lg:border-t-0">
-          <PropertiesRail ticket={ticket} />
+        {/* Properties. From `lg` up it is the right-hand column and always open.
+            Below `lg` it moves ABOVE the conversation (`order-first`) and folds
+            away behind its own heading, because the thread now fills the screen
+            and nothing scrolls past it to reach this. Collapsed by default: the
+            reason to open a ticket on a phone is to read and answer it.
+
+            `order` moves it visually only, so the conversation still comes first
+            in the DOM for a screen reader and for tab order. */}
+        <div className="order-first flex-none overflow-hidden border-b border-line lg:order-none lg:overflow-y-auto lg:border-b-0">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((o) => !o)}
+            aria-expanded={detailsOpen}
+            aria-controls="ticket-properties"
+            className={cn(
+              "flex w-full items-center gap-2 px-5 text-left text-dense font-semibold text-muted hover:text-ink sm:px-7 lg:hidden",
+              TOUCH_HEIGHT,
+            )}
+          >
+            <ChevronRight
+              size={14}
+              strokeWidth={2.5}
+              className={cn("transition-transform", detailsOpen && "rotate-90")}
+            />
+            {/* Deliberately NOT "Properties": the rail's own first section is
+                already called that, and a fold-out heading repeating its first
+                child reads as a bug. It also keeps `getByText("Properties")` in
+                the layout spec matching one element rather than two, one of
+                which is hidden at desktop width. */}
+            {t("detail.detailsToggle")}
+          </button>
+          {/* Bounded below `lg` so a long rail cannot take the conversation's
+              room; from `lg` up the column scrolls as it always did. */}
+          <div
+            id="ticket-properties"
+            className={cn(
+              "max-h-[50dvh] overflow-y-auto lg:max-h-none lg:overflow-visible lg:block",
+              detailsOpen ? "block" : "hidden",
+            )}
+          >
+            <PropertiesRail ticket={ticket} />
+          </div>
         </div>
       </div>
+
+      {rejecting ? (
+        <RejectClosureDialog
+          ticketId={ticket.id}
+          onClose={() => setRejecting(false)}
+          onRejected={() => setRejecting(false)}
+        />
+      ) : null}
+
+      {cancelling ? (
+        <CancelTicketDialog
+          ticketId={ticket.id}
+          onClose={() => setCancelling(false)}
+          onCancelled={() => setCancelling(false)}
+        />
+      ) : null}
+
+      {resolving ? (
+        <ResolutionDialog
+          target="pending"
+          busy={statusMutation.isPending}
+          error={resolveError}
+          onCancel={() => setResolving(false)}
+          onSubmit={(resolution) => {
+            setResolveError(null);
+            statusMutation.mutate(
+              { id: ticket.id, status: "pending", resolution },
+              {
+                onSuccess: () => setResolving(false),
+                onError: (err) =>
+                  setResolveError(apiErrorMessage(err, t, "status.updateError")),
+              },
+            );
+          }}
+        />
+      ) : null}
+
+      {/* Mounted rather than conditionally created, so its own close effect can
+          reset the draft from the ticket. All three dialogs portal to <body>, so
+          where they sit in this tree is a readability choice, not a layout one —
+          out of the scroller, where they were only ever confusing. */}
+      <EditTicketModal
+        ticket={ticket}
+        open={editing}
+        onClose={() => setEditing(false)}
+      />
     </div>
   );
 }

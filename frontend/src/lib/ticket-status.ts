@@ -148,6 +148,23 @@ export function isConversationClosed(status: TicketStatusRecord): boolean {
 }
 
 /**
+ * Does this move have to say what was DONE? Mirrors `requiresResolution` in
+ * `backend/src/shared/ticket-status.ts` — see there for why it is keyed on the
+ * pair rather than on the destination.
+ *
+ * Here it decides only whether to ASK: which screens open the resolution dialog
+ * instead of patching straight away. The server checks it again on the write
+ * (twice, in fact), so a screen that forgot to ask gets a 400 rather than a
+ * silently empty column.
+ */
+export function requiresResolution(
+  from: TicketStatus,
+  to: TicketStatus,
+): boolean {
+  return from === "new" && (to === "pending" || to === "closed");
+}
+
+/**
  * Label and colour per status word. Keyed by the union of what is DISPLAYED and
  * what history can hold, because both go through the same badge: a board column
  * says "In Progress" (derived) while a timeline row may still say "Resolved"

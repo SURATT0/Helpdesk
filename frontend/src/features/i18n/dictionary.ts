@@ -354,6 +354,9 @@ const en: Dict = {
   "bulk.result": "{ok} updated · {failed} failed",
 
   "detail.tickets": "Tickets",
+  // The phone-only fold-out that holds the properties rail. Below `lg` the
+  // conversation fills the screen, so the rail moves above it and folds away.
+  "detail.detailsToggle": "Ticket details",
   "detail.markResolved": "Done — ask requester",
   // The requester's half of closing a ticket. Their words, not the desk's:
   // "confirm the fix" rather than "close the ticket", because closing is what
@@ -386,6 +389,22 @@ const en: Dict = {
     "This ticket is closed. Reopen it to carry on the conversation.",
   "composer.lockedCancelled":
     "This request was cancelled. Reopen it to carry on the conversation.",
+  // What the desk did — asked on the move that finishes the work, never on the
+  // requester's answer. "What did you do" rather than "resolution": the agent is
+  // being asked to describe an action they just took, and the noun is what the
+  // rail calls it afterwards.
+  "resolution.title": "What did you do?",
+  "resolution.bodyPending":
+    "This goes to the person who raised the ticket, who will be asked to confirm it is fixed.",
+  "resolution.bodyClosed":
+    "The ticket closes now. This is what anyone reading it later will see.",
+  "resolution.bodyBulk":
+    "Closing {n} tickets. The same note is written on all of them, so describe the fix they share.",
+  "resolution.label": "How it was fixed",
+  "resolution.placeholder": "Restarted the print spooler and cleared the queue…",
+  "resolution.submitPending": "Send to requester",
+  "resolution.submitClosed": "Close ticket",
+  "rail.resolution": "How it was fixed",
   "detail.saving": "Saving…",
   "detail.opened": "opened",
   "detail.by": "by",
@@ -1159,6 +1178,10 @@ const en: Dict = {
     "Only the person who raised a ticket can cancel it.",
   "error.TICKET_ALREADY_STARTED":
     "This ticket is {actual} — the team has already picked it up, so it can no longer be cancelled.",
+  // A backstop, not the normal path: the dialog keeps its button disabled until
+  // something is typed, so this is what a client that skipped the dialog sees.
+  "error.RESOLUTION_REQUIRED":
+    "Say what you did to fix it before finishing this ticket.",
   "error.PROJECT_HAS_OPEN_TICKETS":
     "{count} open ticket(s) are still filed under this project. Finish or re-file them first.",
   "error.PROJECT_NAME_TAKEN":
@@ -1534,6 +1557,7 @@ const th: Dict = {
   "bulk.result": "สำเร็จ {ok} · ล้มเหลว {failed}",
 
   "detail.tickets": "Ticket",
+  "detail.detailsToggle": "รายละเอียดทิกเก็ต",
   "detail.markResolved": "เสร็จแล้ว — ส่งให้ผู้แจ้งยืนยัน",
   // ฝั่งผู้แจ้ง — ใช้คำของผู้แจ้ง ไม่ใช่ของทีมงาน
   "closure.confirm": "ใช่ แก้ได้แล้ว",
@@ -1562,6 +1586,19 @@ const th: Dict = {
     "Ticket นี้ปิดแล้ว ถ้าจะคุยต่อต้องเปิดเรื่องใหม่",
   "composer.lockedCancelled":
     "เรื่องนี้ถูกยกเลิกแล้ว ถ้าจะคุยต่อต้องเปิดเรื่องใหม่",
+  // สิ่งที่ทีมงานทำ — ถามตอนปิดงานเท่านั้น ไม่ถามตอนผู้แจ้งยืนยัน
+  "resolution.title": "แก้ยังไง?",
+  "resolution.bodyPending":
+    "ข้อความนี้จะส่งถึงผู้แจ้ง เพื่อให้เขายืนยันว่าแก้ได้แล้วจริง",
+  "resolution.bodyClosed":
+    "Ticket จะปิดทันที ข้อความนี้คือสิ่งที่คนมาอ่านย้อนหลังจะเห็น",
+  "resolution.bodyBulk":
+    "กำลังปิด {n} ticket ข้อความเดียวกันจะถูกบันทึกลงทุกใบ เขียนวิธีแก้ที่ใช้ร่วมกัน",
+  "resolution.label": "วิธีที่แก้",
+  "resolution.placeholder": "รีสตาร์ท print spooler แล้วเคลียร์คิวงานพิมพ์…",
+  "resolution.submitPending": "ส่งให้ผู้แจ้ง",
+  "resolution.submitClosed": "ปิด Ticket",
+  "rail.resolution": "วิธีที่แก้",
   "detail.saving": "กำลังบันทึก…",
   "detail.opened": "เปิดเมื่อ",
   "detail.by": "โดย",
@@ -2268,6 +2305,7 @@ const th: Dict = {
   "error.NOT_YOUR_TICKET_TO_CANCEL": "เฉพาะผู้ที่แจ้งเรื่องเท่านั้นที่ยกเลิกได้",
   "error.TICKET_ALREADY_STARTED":
     "Ticket นี้อยู่ในสถานะ {actual} — ทีมงานรับเรื่องไปแล้ว จึงยกเลิกไม่ได้",
+  "error.RESOLUTION_REQUIRED": "กรุณาระบุว่าแก้ยังไง ก่อนปิดงาน Ticket นี้",
   "error.PROJECT_HAS_OPEN_TICKETS":
     "ยังมี Ticket ที่เปิดอยู่ {count} รายการในโปรเจกต์นี้ กรุณาปิดหรือย้ายก่อน",
   "error.PROJECT_NAME_TAKEN":

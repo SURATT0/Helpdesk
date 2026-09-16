@@ -4,11 +4,25 @@ import userEvent from "@testing-library/user-event";
 import type { Ticket } from "../schemas";
 
 // Mutable mock state (hoisted so the vi.mock factories can close over it).
-const h = vi.hoisted(() => ({ mutate: vi.fn(), role: "admin" as string }));
+//
+// `permissions`, not `role`, is what the menu now reads — it is the list the
+// server sends on the session, so a test that set a role name would be testing
+// a question nothing asks any more.
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  permissions: ["ticket:read", "ticket:write"] as string[],
+}));
 
 vi.mock("@/features/auth/context", () => ({
   useAuth: () => ({
-    user: { id: 1, name: "Dana", email: "d@acme.com", role: h.role, teamId: 1 },
+    user: {
+      id: 1,
+      name: "Dana",
+      email: "d@acme.com",
+      role: "admin",
+      teamId: 1,
+      permissions: h.permissions,
+    },
   }),
 }));
 vi.mock("../queries", () => ({
@@ -34,11 +48,11 @@ const ticket = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.role = "admin";
+  h.permissions = ["ticket:read", "ticket:write"];
 });
 
 describe("StatusMenu", () => {
-  it("lets a write-capable role pick an allowed transition", async () => {
+  it("lets someone holding ticket:write pick an allowed transition", async () => {
     render(<StatusMenu ticket={ticket} />);
     await userEvent.click(screen.getByRole("button"));
 
@@ -49,17 +63,91 @@ describe("StatusMenu", () => {
     expect(screen.getByText("Closed")).toBeInTheDocument();
     expect(screen.queryByText("In Progress")).not.toBeInTheDocument();
 
+    // Both options out of `new` finish the work, so neither patches straight
+    // away — they ask what was done first. See `requiresResolution`.
     await userEvent.click(screen.getByText("Pending"));
-    expect(h.mutate).toHaveBeenCalledWith({ id: 1042, status: "pending" });
+    expect(h.mutate).not.toHaveBeenCalled();
+    expect(screen.getByText("What did you do?")).toBeInTheDocument();
   });
 
-  it("shows a plain badge (no menu) for a requester", () => {
-    h.role = "user";
+  it("will not submit a finish with nothing written in it", async () => {
+    render(<StatusMenu ticket={ticket} />);
+    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByText("Pending"));
+
+    // The requirement is visible before the click rather than arriving as a
+    // 400 afterwards; the server checks it too, twice, as the backstop.
+    expect(screen.getByRole("button", { name: "Send to requester" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("How it was fixed"), "   ");
+    expect(screen.getByRole("button", { name: "Send to requester" })).toBeDisabled();
+  });
+
+  it("sends what was typed along with the status change", async () => {
+    render(<StatusMenu ticket={ticket} />);
+    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByText("Pending"));
+
+    await userEvent.type(
+      screen.getByLabelText("How it was fixed"),
+      "Replaced the switch on desk 4.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send to requester" }));
+
+    expect(h.mutate).toHaveBeenCalledWith(
+      {
+        id: 1042,
+        status: "pending",
+        resolution: "Replaced the switch on desk 4.",
+      },
+      expect.anything(),
+    );
+  });
+
+  it("reopens without asking — nothing has been finished", async () => {
+    // closed → new is not a finish, so it writes straight through. Keyed on the
+    // PAIR, which is what stops "any move to closed must explain itself" from
+    // catching the requester's confirmation too.
+    const closed = {
+      id: 1042,
+      status: "closed",
+      displayStatus: "closed",
+    } as unknown as Ticket;
+    render(<StatusMenu ticket={closed} />);
+    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByText("New"));
+
+    expect(screen.queryByText("What did you do?")).not.toBeInTheDocument();
+    expect(h.mutate).toHaveBeenCalledWith({ id: 1042, status: "new" });
+  });
+
+  it("shows a plain badge (no menu) without ticket:write", () => {
+    h.permissions = ["ticket:read", "ticket:create"];
     render(<StatusMenu ticket={ticket} />);
     // The DERIVED label, not the column value: this ticket is stored `open` with
     // nobody on it, which is New to a reader.
     expect(screen.getByText("New")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByText("Move to")).not.toBeInTheDocument();
+  });
+
+  it("follows the matrix, not the role name", async () => {
+    // The regression this file is the guard for. The viewer is still an `admin`
+    // — the mock never changes that — but the matrix no longer grants their role
+    // `ticket:write`, and the control has to go. The old check was
+    // `["super_admin", "admin"].includes(user.role)`, which left the dropdown up
+    // and 403'd on every choice in it.
+    h.permissions = ["ticket:read", "ticket:create"];
+    render(<StatusMenu ticket={ticket} />);
+    expect(screen.queryByText("Move to")).not.toBeInTheDocument();
+    expect(h.mutate).not.toHaveBeenCalled();
+  });
+
+  it("offers the control to a role the matrix has just widened", async () => {
+    // And the direction the role list could not express at all: a desk that
+    // decides its requesters may work their own tickets.
+    h.permissions = ["ticket:read", "ticket:create", "ticket:write"];
+    render(<StatusMenu ticket={ticket} />);
+    await userEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("Move to")).toBeInTheDocument();
   });
 });

@@ -221,6 +221,11 @@ test("a stale second screen is refused with the server's reason, not a silent no
     // nobody to confirm and `new → closed` is a legal end.
     await screenA.getByRole("button", { name: unfinished }).first().click();
     await screenA.getByRole("button", { name: /^Closed$/ }).click();
+    // `new → closed` finishes the work, so it asks what was done first.
+    await screenA
+      .getByLabel("How it was fixed")
+      .fill("Raised and handled by the desk in one go.");
+    await screenA.getByRole("button", { name: "Close ticket" }).click();
     await expect(screenA.getByText("Closed").first()).toBeVisible();
 
     // Screen B still believes it is unfinished and offers Pending. The server must
@@ -228,6 +233,13 @@ test("a stale second screen is refused with the server's reason, not a silent no
     // only be reopened — and screen B must SAY so rather than appear to work.
     await screenB.getByRole("button", { name: unfinished }).first().click();
     await screenB.getByRole("button", { name: /^Pending$/ }).click();
+    // The stale screen still believes this is `new`, so it asks for a
+    // resolution exactly as it would for a real finish — the refusal comes from
+    // the server, on the transition, which is the point of the case.
+    await screenB
+      .getByLabel("How it was fixed")
+      .fill("Whatever this screen still thinks it is doing.");
+    await screenB.getByRole("button", { name: "Send to requester" }).click();
     // The exact sentence, so this cannot pass on some other error appearing:
     // the 409 has to name the transition the stale screen actually attempted.
     //

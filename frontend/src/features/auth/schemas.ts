@@ -52,6 +52,23 @@ export const authUserSchema = z.object({
    * the first request.
    */
   mustChangePassword: z.boolean().default(false),
+  /**
+   * What my role may do, as the matrix says right now — the same list the API's
+   * own gates read.
+   *
+   * Sent as the ANSWER for the same reason `platformWide` is: grants are
+   * editable at runtime, so a role name does not determine what somebody may
+   * do, and a client that mapped roles to permissions itself would be a second
+   * copy of a table — one that nobody would notice drifting the moment an
+   * administrator edited the matrix. Read it only through `hasPermission` in
+   * `lib/permissions.ts`, and only to decide what to OFFER; the API is the gate.
+   *
+   * Defaulted to empty so a session restored from an older payload offers
+   * nothing rather than offering everything — the direction that shows too
+   * little and self-corrects on the next `/auth/me`, rather than showing
+   * controls that 403.
+   */
+  permissions: z.array(z.string()).default([]),
 });
 
 export const sessionSchema = z.object({

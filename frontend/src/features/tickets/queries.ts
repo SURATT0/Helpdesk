@@ -183,14 +183,17 @@ export function useRejectClosure() {
 export function useUpdateTicketStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: number; status: TicketStatus }) =>
-      updateTicketStatus(vars.id, vars.status),
+    mutationFn: (vars: {
+      id: number;
+      status: TicketStatus;
+      resolution?: string;
+    }) => updateTicketStatus(vars.id, vars.status, vars.resolution),
     onSuccess: () => qc.invalidateQueries({ queryKey: ticketKeys.all }),
   });
 }
 
 export type BulkAction =
-  | { kind: "status"; status: TicketStatus }
+  | { kind: "status"; status: TicketStatus; resolution?: string }
   | { kind: "assignee"; assigneeId: number | null }
   | { kind: "priority"; priority: Priority };
 
@@ -206,7 +209,11 @@ export function useBulkTicketAction() {
       const run = (id: number) => {
         switch (vars.action.kind) {
           case "status":
-            return updateTicketStatus(id, vars.action.status);
+            return updateTicketStatus(
+              id,
+              vars.action.status,
+              vars.action.resolution,
+            );
           case "assignee":
             return updateTicketAssignee(id, vars.action.assigneeId);
           case "priority":

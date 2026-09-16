@@ -10,6 +10,7 @@ import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { BADGE, type ColourPair } from "@/lib/palette";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuditActions, useAuditLog } from "../queries";
 import type { AuditEntry } from "../schemas";
@@ -142,10 +143,12 @@ export function AuditView() {
   const [action, setAction] = React.useState("");
   const [offset, setOffset] = React.useState(0);
 
-  // Mirrors the server's audit:read grant, which reaches admin: someone working a
-  // case needs to see what happened to a ticket before they picked it up. The API
-  // is the real gate; this only avoids firing a request that would be refused.
-  const canRead = user != null && user.role !== "user";
+  // The server's `audit:read` grant, asked directly rather than guessed from the
+  // role: someone working a case needs to see what happened to a ticket before
+  // they picked it up, and whether they may is the matrix's answer, not a role
+  // list's. The API is the real gate; this only avoids firing a request that
+  // would be refused.
+  const canRead = hasPermission(user, "audit:read");
 
   const filter = React.useMemo(
     () => ({ action: action || undefined, limit: PAGE_SIZE, offset }),

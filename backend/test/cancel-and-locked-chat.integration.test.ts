@@ -104,7 +104,8 @@ describe("the requester withdraws a ticket", () => {
     await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(dana))
-      .send({ status: "pending" })
+      // Both moves out of `new` carry a resolution now — see `requiresResolution`.
+      .send({ status: "pending", resolution: "Swapped the dock." })
       .expect(200);
 
     const res = await request(app)
@@ -203,7 +204,7 @@ describe("a ticket that is over takes no more public messages", () => {
     await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(token))
-      .send({ status: "closed" })
+      .send({ status: "closed", resolution: "Handled and closed." })
       .expect(200);
   }
 
@@ -316,7 +317,8 @@ describe("a ticket that is over takes no more public messages", () => {
     await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(dana))
-      .send({ status: "pending" })
+      // Both moves out of `new` carry a resolution now — see `requiresResolution`.
+      .send({ status: "pending", resolution: "Swapped the dock." })
       .expect(200);
 
     const res = await request(app)

@@ -81,6 +81,17 @@ These are load-bearing invariants — get them right in whatever layer you touch
   `commentRepository`, not the service): refusing there would not stop somebody writing, it would
   throw away a mail already sent. It lands silently, which is a known gap rather than a settled
   answer — see the comment at that call site.
+  **Finishing the work must say what was done.** `tickets.resolution` is required on the two moves
+  out of `new` — `new → pending` and `new → closed` — and on nothing else; the rule is
+  `requiresResolution` in `shared/ticket-status.ts` (mirrored in `lib/ticket-status.ts`), and an
+  empty one returns **400 RESOLUTION_REQUIRED**. It is keyed on the PAIR, never on the destination:
+  `closed` is also reached by the requester confirming and by the 72h sweep, and neither of them did
+  the work or can describe it — a rule written as "every close explains itself" refuses the
+  confirmation and stops the sweep dead. Checked in `changeStatus` AND again inside the repository's
+  status transaction, the same belt-and-braces the transition whitelist has. The column is only ever
+  set, never cleared, so a rejection or a reopen keeps the last account of what was tried until the
+  desk finishes it again. A no-op (re-sending the status a ticket already holds) is not a finish and
+  is not asked for one.
 - **A ticket closes only when both sides have said so.** The desk finishing the work is not the end
   of it: submitting a fix moves the ticket to `pending`, and the person who raised it still has to
   answer. Two endpoints are theirs, and theirs alone:
