@@ -370,6 +370,23 @@ const en: Dict = {
   "closure.rejectConfirm": "Send it back",
   "closure.rejectError": "Couldn’t send it back",
   "closure.cancel": "Cancel",
+
+  // What the desk did — asked on the move that finishes the work, never on the
+  // requester's answer. "What did you do" rather than "resolution": the agent is
+  // being asked to describe an action they just took, and the noun is what the
+  // rail calls it afterwards.
+  "resolution.title": "What did you do?",
+  "resolution.bodyPending":
+    "This goes to the person who raised the ticket, who will be asked to confirm it is fixed.",
+  "resolution.bodyClosed":
+    "The ticket closes now. This is what anyone reading it later will see.",
+  "resolution.bodyBulk":
+    "Closing {n} tickets. The same note is written on all of them, so describe the fix they share.",
+  "resolution.label": "How it was fixed",
+  "resolution.placeholder": "Restarted the print spooler and cleared the queue…",
+  "resolution.submitPending": "Send to requester",
+  "resolution.submitClosed": "Close ticket",
+  "rail.resolution": "How it was fixed",
   "detail.saving": "Saving…",
   "detail.opened": "opened",
   "detail.by": "by",
@@ -1135,6 +1152,10 @@ const en: Dict = {
   // apart in `details`; the field is named so the form can point at it.
   "error.CATEGORY_DETAIL_REQUIRED":
     "Say what the problem is — that is the whole point of choosing Other.",
+  // A backstop, not the normal path: the dialog keeps its button disabled until
+  // something is typed, so this is what a client that skipped the dialog sees.
+  "error.RESOLUTION_REQUIRED":
+    "Say what you did to fix it before finishing this ticket.",
   "error.PROJECT_HAS_OPEN_TICKETS":
     "{count} open ticket(s) are still filed under this project. Finish or re-file them first.",
   "error.PROJECT_NAME_TAKEN":
@@ -1522,6 +1543,20 @@ const th: Dict = {
   "closure.rejectConfirm": "ส่งกลับ",
   "closure.rejectError": "ส่งกลับไม่สำเร็จ",
   "closure.cancel": "ยกเลิก",
+
+  // สิ่งที่ทีมงานทำ — ถามตอนปิดงานเท่านั้น ไม่ถามตอนผู้แจ้งยืนยัน
+  "resolution.title": "แก้ยังไง?",
+  "resolution.bodyPending":
+    "ข้อความนี้จะส่งถึงผู้แจ้ง เพื่อให้เขายืนยันว่าแก้ได้แล้วจริง",
+  "resolution.bodyClosed":
+    "Ticket จะปิดทันที ข้อความนี้คือสิ่งที่คนมาอ่านย้อนหลังจะเห็น",
+  "resolution.bodyBulk":
+    "กำลังปิด {n} ticket ข้อความเดียวกันจะถูกบันทึกลงทุกใบ เขียนวิธีแก้ที่ใช้ร่วมกัน",
+  "resolution.label": "วิธีที่แก้",
+  "resolution.placeholder": "รีสตาร์ท print spooler แล้วเคลียร์คิวงานพิมพ์…",
+  "resolution.submitPending": "ส่งให้ผู้แจ้ง",
+  "resolution.submitClosed": "ปิด Ticket",
+  "rail.resolution": "วิธีที่แก้",
   "detail.saving": "กำลังบันทึก…",
   "detail.opened": "เปิดเมื่อ",
   "detail.by": "โดย",
@@ -2223,6 +2258,7 @@ const th: Dict = {
   "error.SAME_ASSIGNEE": "เป็นคนเดิมที่ถือคิวนี้อยู่แล้ว",
   "error.CATEGORY_DETAIL_REQUIRED":
     "กรุณาระบุว่าปัญหาคืออะไร — นี่คือเหตุผลทั้งหมดของการเลือก “อื่นๆ”",
+  "error.RESOLUTION_REQUIRED": "กรุณาระบุว่าแก้ยังไง ก่อนปิดงาน Ticket นี้",
   "error.PROJECT_HAS_OPEN_TICKETS":
     "ยังมี Ticket ที่เปิดอยู่ {count} รายการในโปรเจกต์นี้ กรุณาปิดหรือย้ายก่อน",
   "error.PROJECT_NAME_TAKEN":

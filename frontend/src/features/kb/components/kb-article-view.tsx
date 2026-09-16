@@ -7,6 +7,7 @@ import { ArrowLeft, Clock, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
+import { hasPermission } from "@/lib/permissions";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useKbArticle } from "../queries";
@@ -25,7 +26,7 @@ export function KbArticleView({ id }: { id: string }) {
   const { data: a, isLoading, isError, error, refetch } = useKbArticle(id);
 
   // Mirrors the server’s kb:write grant (admin and up), same as the browser.
-  const canWrite = user != null && user.role !== "user";
+  const canWrite = hasPermission(user, "kb:write");
 
   if (isLoading) return <LoadingRow label={`Loading ${id}…`} />;
   if (isError || !a) {

@@ -407,7 +407,7 @@ describe("concurrent edits to one ticket", () => {
     const first = await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(dana))
-      .send({ status: "closed" });
+      .send({ status: "closed", resolution: "Handled on the phone." });
     expect(first.status).toBe(200);
 
     // closed → pending is not in the whitelist: a closed ticket may only be
@@ -428,7 +428,7 @@ describe("concurrent edits to one ticket", () => {
       request(app)
         .patch(`${API}/tickets/${id}/status`)
         .set(bearer(dana))
-        .send({ status: "pending" }),
+        .send({ status: "pending", resolution: "Swapped the monitor cable." }),
       request(app)
         .patch(`${API}/tickets/${id}/priority`)
         .set(bearer(dana))

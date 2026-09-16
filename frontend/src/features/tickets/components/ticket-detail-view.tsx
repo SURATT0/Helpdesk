@@ -7,7 +7,9 @@ import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
+import { apiErrorMessage } from "@/lib/api-error";
 import { isInternalThread } from "@/lib/domain";
+import { hasPermission } from "@/lib/permissions";
 import { STATUS_TRANSITIONS } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { TOUCH_HEIGHT } from "@/components/ui/touch";
@@ -19,6 +21,7 @@ import { MessageAttachments } from "@/features/attachments/components/message-at
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { RejectClosureDialog } from "./reject-closure-dialog";
+import { ResolutionDialog } from "./resolution-dialog";
 import { SlaBadge } from "./sla-badge";
 import { useAssessSla } from "../use-sla";
 import { toneForName } from "../data";
@@ -34,8 +37,6 @@ import {
   useRejectClosure,
   useUpdateTicketStatus,
 } from "../queries";
-
-const WRITE_ROLES = ["super_admin", "admin"];
 
 const localeOf = (lang: string) => (lang === "th" ? "th-TH" : "en-US");
 
@@ -196,6 +197,12 @@ export function TicketDetailView({ id }: { id: number }) {
    * somebody opens a ticket for is the conversation.
    */
   const [detailsOpen, setDetailsOpen] = React.useState(false);
+  // "Done — ask requester" asks what was done before it patches, so the button
+  // opens this rather than firing the mutation. Holds the error too: the dialog
+  // stays open on a failure with the typed text intact, instead of closing and
+  // losing what the agent wrote.
+  const [resolving, setResolving] = React.useState(false);
+  const [resolveError, setResolveError] = React.useState<string | null>(null);
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
   const removeFailed = useRemoveFailedComment(id);
@@ -308,7 +315,13 @@ export function TicketDetailView({ id }: { id: number }) {
     );
   }
 
-  const canWrite = user ? WRITE_ROLES.includes(user.role) : false;
+  /**
+   * Working this ticket: the desk's "Done" button, and the internal-note tab on
+   * the composer. Both are `ticket:write` on the API — the status route by
+   * middleware, the note by `commentService.create` — so both are that
+   * permission here, not the role list this used to carry.
+   */
+  const canWrite = hasPermission(user, "ticket:write");
   // "Done, over to the requester" — the move that finishes the desk's part.
   const canResolve =
     canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("pending");
@@ -429,9 +442,10 @@ export function TicketDetailView({ id }: { id: number }) {
               {canResolve ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    statusMutation.mutate({ id: ticket.id, status: "pending" })
-                  }
+                  onClick={() => {
+                    setResolveError(null);
+                    setResolving(true);
+                  }}
                   disabled={statusMutation.isPending}
                   className="rounded-md border border-[#e2caa5] bg-[#efe0cd] px-3 py-1.5 text-body font-semibold text-brand-hover hover:bg-[#e7d3b8] disabled:opacity-50"
                 >
@@ -734,8 +748,28 @@ export function TicketDetailView({ id }: { id: number }) {
         />
       ) : null}
 
+      {resolving ? (
+        <ResolutionDialog
+          target="pending"
+          busy={statusMutation.isPending}
+          error={resolveError}
+          onCancel={() => setResolving(false)}
+          onSubmit={(resolution) => {
+            setResolveError(null);
+            statusMutation.mutate(
+              { id: ticket.id, status: "pending", resolution },
+              {
+                onSuccess: () => setResolving(false),
+                onError: (err) =>
+                  setResolveError(apiErrorMessage(err, t, "status.updateError")),
+              },
+            );
+          }}
+        />
+      ) : null}
+
       {/* Mounted rather than conditionally created, so its own close effect can
-          reset the draft from the ticket. Both dialogs portal to <body>, so
+          reset the draft from the ticket. All three dialogs portal to <body>, so
           where they sit in this tree is a readability choice, not a layout one —
           out of the scroller, where they were only ever confusing. */}
       <EditTicketModal

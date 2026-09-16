@@ -10,6 +10,7 @@ import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { LoadingRow, EmptyState, ErrorState } from "@/components/ui/states";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { ApiError } from "@/lib/api-client";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -38,7 +39,7 @@ export function OtherDescriptionsView() {
   // Mirrors the server's `category:write`, held by no role explicitly so only a
   // super admin's wildcard satisfies it. The API is the gate; this only decides
   // whether to ask for data that would come back 403.
-  const canManage = user?.role === "super_admin";
+  const canManage = hasPermission(user, "category:write");
   const { data, isLoading, isError, refetch } = useOtherDescriptions({
     enabled: canManage,
   });

@@ -89,6 +89,19 @@ export function PropertiesRail({ ticket }: { ticket: Ticket }) {
         </div>
       </Section>
 
+      {/* What was done, directly under the properties: on a closed ticket it is
+          the thing the reader came for, and making them scroll the whole thread
+          to find it is what the column exists to stop. Absent rather than empty
+          when there is none — every ticket closed before this was asked for has
+          none, and an empty box on all of them reads as a broken panel. */}
+      {ticket.resolution ? (
+        <Section title={t("rail.resolution")}>
+          <p className="whitespace-pre-wrap rounded-tile border border-line bg-wash px-3.5 py-3 text-body text-ink">
+            {ticket.resolution}
+          </p>
+        </Section>
+      ) : null}
+
       <Section title="SLA">
         <div className="flex items-center justify-between rounded-tile border border-line bg-wash px-3.5 py-3">
           <span className="text-dense font-semibold text-muted">

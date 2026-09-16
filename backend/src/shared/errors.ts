@@ -373,6 +373,22 @@ export const DeskAlreadyStarted = () =>
 export const TicketClosedForEditing = () =>
   new AppError(409, "TICKET_CLOSED_FOR_EDITING", "This ticket is closed and cannot be edited");
 
+/**
+ * The desk finished a ticket without saying what it did.
+ *
+ * 400 rather than 409: nothing about the ticket's state is wrong, the request
+ * is simply incomplete — the same answer a missing `subject` gets. `fields`
+ * names the input so the form can mark it, which is why this is not a bare
+ * BadRequest with a sentence.
+ */
+export const ResolutionRequired = () =>
+  new AppError(
+    400,
+    "RESOLUTION_REQUIRED",
+    "Say what was done to fix this before finishing it",
+    { fields: ["resolution"] },
+  );
+
 /** A handover whose source and target are the same person. */
 export const SameAssignee = () =>
   new AppError(400, "SAME_ASSIGNEE", "Source and target assignee are the same");
@@ -584,6 +600,7 @@ export const ERROR_CODES = [
   "TICKET_NOT_AWAITING_ANSWER",
   "SAME_ASSIGNEE",
   "CATEGORY_DETAIL_REQUIRED",
+  "RESOLUTION_REQUIRED",
   "NOT_ASSIGNABLE",
   // People, projects, customers.
   "LAST_ADMIN",
