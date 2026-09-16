@@ -2,12 +2,53 @@ import { describe, expect, it } from "vitest";
 import {
   ROLES,
   ROLE_PERMISSIONS,
+  hasPermission,
   holds,
   maySeeTeamWorkload,
   maySeeWorkloadOf,
   rolesHolding,
 } from "./permissions";
 import { CAPABILITIES } from "@/features/permissions/components/permissions-view";
+
+describe("hasPermission", () => {
+  const withGrants = (permissions: string[]) => ({ permissions });
+
+  it("answers from the session's list, not from a role", () => {
+    expect(hasPermission(withGrants(["ticket:write"]), "ticket:write")).toBe(true);
+    expect(hasPermission(withGrants(["ticket:read"]), "ticket:write")).toBe(false);
+  });
+
+  it("follows the matrix when a grant is revoked from a role that used to hold it", () => {
+    // The bug this function exists for: an admin whose `ticket:write` was taken
+    // away in the matrix. The hard-coded `["super_admin", "admin"]` list this
+    // replaced said yes here, and every control it gated then 403'd.
+    const strippedAdmin = withGrants(["ticket:read", "ticket:create"]);
+    expect(hasPermission(strippedAdmin, "ticket:write")).toBe(false);
+  });
+
+  it("follows the matrix when a grant is given to a role that never held it", () => {
+    // And the other direction, which the role list could not express at all: a
+    // desk that decides its requesters may close their own tickets.
+    const empoweredUser = withGrants(["ticket:read", "ticket:create", "ticket:write"]);
+    expect(hasPermission(empoweredUser, "ticket:write")).toBe(true);
+  });
+
+  it("honours the server's `*` wildcard", () => {
+    expect(hasPermission(withGrants(["*"]), "anything:at:all")).toBe(true);
+  });
+
+  it("offers nothing when there is no session", () => {
+    expect(hasPermission(null, "ticket:write")).toBe(false);
+    expect(hasPermission(undefined, "ticket:write")).toBe(false);
+  });
+
+  it("offers nothing when the payload carried no list", () => {
+    // What `authUserSchema`'s `.default([])` produces for a session restored
+    // from a payload minted before the server sent grants. Hiding a control is
+    // the recoverable direction; showing one that 403s is not.
+    expect(hasPermission(withGrants([]), "ticket:write")).toBe(false);
+  });
+});
 
 describe("holds", () => {
   it("gives super_admin everything through the wildcard", () => {

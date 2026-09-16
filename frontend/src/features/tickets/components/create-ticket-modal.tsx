@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { randomId } from "@/lib/random-id";
 import { apiErrorMessage } from "@/lib/api-error";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { uploadAttachment } from "@/features/attachments/api";
 import { FileInput } from "@/features/attachments/components/file-input";
@@ -102,7 +103,7 @@ export function CreateTicketModal({
   // Projects need `project:read`, which a requester does not hold — asking for
   // them would be a guaranteed 403. Their ticket still routes through their own
   // project automatically, exactly as it did before this field existed.
-  const canPickProject = user != null && user.role !== "user";
+  const canPickProject = hasPermission(user, "project:read");
   const { data: projectData } = useProjects({ enabled: canPickProject });
   const createTicket = useCreateTicket();
 

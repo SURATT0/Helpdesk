@@ -18,6 +18,7 @@ import {
 import { maySignIn, type Role, type UserStatus } from "../../shared/domain";
 import { DEFAULT_LANG, type Lang } from "../../shared/i18n";
 import { customerReach, isPlatformWide } from "../../shared/auth";
+import { grantsFor } from "../permissions/permission.repository";
 import { authMail } from "./auth.mail";
 import { hashPassword, verifyPassword } from "./auth.password";
 import { authRepository } from "./auth.repository";
@@ -71,6 +72,29 @@ export type PublicUser = {
    * refused.
    */
   mustChangePassword: boolean;
+  /**
+   * What this principal's role may do right now — the same list every gate on
+   * the API asks, read from `role_permissions` rather than inferred from the
+   * role name.
+   *
+   * Sent for the same reason `platformWide` is, and to fix the same class of
+   * bug. The matrix screen makes grants editable at runtime, but the web app
+   * had no way to hear about it: it decided what to render from hard-coded role
+   * lists (`WRITE_ROLES = ["super_admin", "admin"]` and five others like it), so
+   * revoking `ticket:write` from admin left the status dropdown on screen and
+   * 403ing, and granting it to `user` left it hidden from someone the API would
+   * now allow. The role is not the answer to "may I", and the client cannot
+   * compute the answer — so it is told.
+   *
+   * **This is not the gate**, exactly as `platformWide` is not. Every endpoint
+   * checks for itself against `grantsFor` at request time, which is the live
+   * answer; this list is a snapshot from when the session payload was built and
+   * goes stale the moment an administrator edits the matrix. Use it only to
+   * decide what to OFFER. The staleness closes at the next `/auth/me`, refresh
+   * or sign-in, and erring in either direction is safe: a control offered in
+   * error is refused by the API, and one hidden in error reappears on reload.
+   */
+  permissions: string[];
 };
 
 export type Session = {
@@ -147,7 +171,14 @@ function signInRefusal(user: {
   return null;
 }
 
-function toPublicUser(u: UserRow): PublicUser {
+/**
+ * Async only because of `permissions`, which comes from `grantsFor` — the same
+ * per-process cache the request gate reads, so this costs a map lookup rather
+ * than a query in the ordinary case. Deliberately that source and not
+ * `INITIAL_ROLE_PERMISSIONS`: the seeded grants are history, and the client must
+ * be told what the matrix says today.
+ */
+async function toPublicUser(u: UserRow): Promise<PublicUser> {
   return {
     id: u.id,
     name: u.name,
@@ -158,6 +189,7 @@ function toPublicUser(u: UserRow): PublicUser {
     language: u.language,
     platformWide: isPlatformWide(u),
     mustChangePassword: u.mustChangePasswordAt != null,
+    permissions: await grantsFor(u.role),
   };
 }
 
@@ -171,7 +203,7 @@ async function mintSession(user: UserRow, familyId: string): Promise<Session> {
     expiresAt: new Date(Date.now() + env.refreshTtlSec * 1000),
   });
   return {
-    user: toPublicUser(user),
+    user: await toPublicUser(user),
     accessToken: signAccessToken({
       id: user.id,
       name: user.name,

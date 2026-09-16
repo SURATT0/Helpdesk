@@ -15,6 +15,7 @@ import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { useI18n } from "@/features/i18n/context";
 import { needsOwnDescription } from "@/lib/category-other";
+import { hasPermission } from "@/lib/permissions";
 import { useAuth } from "@/features/auth/context";
 import { useCustomers } from "@/features/customers/queries";
 import { matchesFilters, useSearch } from "../search-context";
@@ -36,12 +37,22 @@ import { cn } from "@/lib/utils";
 // ("missed by 9d 20h"); anything narrower and it runs under Priority.
 const COLS = "grid-cols-[40px_82px_1fr_128px_152px_100px_140px_130px]";
 /**
+ * The same table without its 40px select column, for a viewer who cannot work
+ * tickets — see `canSelect` below. The four variants are spelled out rather than
+ * assembled, because Tailwind only emits an arbitrary value it can SEE in the
+ * source: a template string built at runtime produces a class name that exists
+ * in the DOM and in no stylesheet, and the table silently loses its grid.
+ */
+const COLS_NO_SELECT = "grid-cols-[82px_1fr_128px_152px_100px_140px_130px]";
+/**
  * With the tenant column. Only ever used by a viewer who reaches more than one
  * customer — for anyone else it would hold the same name on every row, and a
  * constant column costs 130px on a table that already scrolls sideways.
  */
 const COLS_WITH_CUSTOMER =
   "grid-cols-[40px_82px_1fr_128px_152px_100px_140px_130px_130px]";
+const COLS_NO_SELECT_WITH_CUSTOMER =
+  "grid-cols-[82px_1fr_128px_152px_100px_140px_130px_130px]";
 
 /** The row's left edge, coloured only when the row needs someone to act. */
 const STRIPE: Partial<Record<SlaState, string>> = {
@@ -179,7 +190,28 @@ export function TicketTable() {
   const staff = user != null && user.role !== "user";
   const { data: customers = [] } = useCustomers({ enabled: staff });
   const showCustomer = staff && customers.length > 1;
-  const cols = showCustomer ? COLS_WITH_CUSTOMER : COLS;
+  /**
+   * Selecting rows is only worth offering to somebody who can act on them.
+   *
+   * Everything the bulk bar does — assign, change status, change priority — is
+   * `ticket:write`, so a requester was being shown checkboxes, a select-all,
+   * and a toolbar whose every button 403s on every selected row. The column and
+   * the bar are both gone for them now.
+   *
+   * Note this is NOT the `staff` check above it: that one guards the tenant
+   * column and is a question about role and reach, not about a permission. The
+   * two happen to answer the same for the seeded grants and stop doing so the
+   * moment somebody edits the matrix, which is the whole reason they are asked
+   * separately.
+   */
+  const canSelect = hasPermission(user, "ticket:write");
+  const cols = showCustomer
+    ? canSelect
+      ? COLS_WITH_CUSTOMER
+      : COLS_NO_SELECT_WITH_CUSTOMER
+    : canSelect
+      ? COLS
+      : COLS_NO_SELECT;
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
   const [sort, setSort] = React.useState<SortState | null>(null);
   const assess = useAssessSla();
@@ -256,7 +288,10 @@ export function TicketTable() {
     <div className="mx-4 mb-2 overflow-hidden rounded-lg border border-line bg-panel sm:mx-6">
       {/* Columns use fixed widths, so let them scroll horizontally on narrow
           screens instead of squishing. */}
-      <TableScroll minWidth={showCustomer ? 1090 : 960}>
+      {/* Narrower by the 40px the select column is not taking. */}
+      <TableScroll
+        minWidth={(showCustomer ? 1090 : 960) - (canSelect ? 0 : 40)}
+      >
       {/* header */}
       <div
         className={cn(
@@ -264,19 +299,21 @@ export function TicketTable() {
           cols,
         )}
       >
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={allSelected}
-          aria-label={t("tickets.selectAll")}
-          onClick={toggleAll}
-          // 40px wide, not the usual 44: the checkbox column is 40px, and a
-          // wider box spilled 4px onto the ID sort button beside it, so the far
-          // left of that header toggled select-all instead of sorting.
-          className="grid w-fit place-items-center rounded [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
-        >
-          <Checkbox checked={allSelected} />
-        </button>
+        {canSelect ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={allSelected}
+            aria-label={t("tickets.selectAll")}
+            onClick={toggleAll}
+            // 40px wide, not the usual 44: the checkbox column is 40px, and a
+            // wider box spilled 4px onto the ID sort button beside it, so the far
+            // left of that header toggled select-all instead of sorting.
+            className="grid w-fit place-items-center rounded [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
+          >
+            <Checkbox checked={allSelected} />
+          </button>
+        ) : null}
         <SortHeader label={t("col.id")} col="id" sort={sort} onSort={onSort} />
         <SortHeader
           label={t("col.subject")}
@@ -370,20 +407,22 @@ export function TicketTable() {
               isSel ? "bg-accent-tint" : "hover:bg-wash",
             )}
           >
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={isSel}
-              aria-label={selectRowLabel(t.id)}
-              onClick={(e) => toggle(t.id, e)}
-              // The visual box stays 14px; only the tappable area grows. A 14px
-              // checkbox is not reachable with a finger, which made bulk selection
-              // a desktop-only feature by accident. 40px wide to stay inside the
-              // column — see the select-all above.
-              className="grid w-fit place-items-center rounded [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
-            >
-              <Checkbox checked={isSel} />
-            </button>
+            {canSelect ? (
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={isSel}
+                aria-label={selectRowLabel(t.id)}
+                onClick={(e) => toggle(t.id, e)}
+                // The visual box stays 14px; only the tappable area grows. A 14px
+                // checkbox is not reachable with a finger, which made bulk selection
+                // a desktop-only feature by accident. 40px wide to stay inside the
+                // column — see the select-all above.
+                className="grid w-fit place-items-center rounded [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10"
+              >
+                <Checkbox checked={isSel} />
+              </button>
+            ) : null}
             <span className="font-mono text-dense font-medium text-muted">
               #{t.id}
             </span>
@@ -443,8 +482,10 @@ export function TicketTable() {
       })}
       </TableScroll>
 
-      {/* bulk bar */}
-      {selected.size > 0 && rows.length > 0 ? (
+      {/* bulk bar — `canSelect` as well as a selection, so a permission
+          revoked while rows were already ticked takes the toolbar away too
+          rather than leaving it over a selection nothing can be done with. */}
+      {canSelect && selected.size > 0 && rows.length > 0 ? (
         <BulkActionBar
           selectedIds={[...selected]}
           onClear={() => setSelected(new Set())}
