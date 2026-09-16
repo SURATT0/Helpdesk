@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { apiErrorMessage } from "@/lib/api-error";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -18,9 +19,6 @@ import { IntegrationsPanel } from "@/features/integrations/components/integratio
 import { NotificationsPanel } from "./notifications-panel";
 import type { Lang } from "@/features/i18n/dictionary";
 
-// Roles that may connect/sync external sources (mirrors backend `ticket:import`).
-const CAN_INTEGRATE = new Set(["super_admin", "admin"]);
-
 /**
  * Roles that can be handed a ticket, and therefore the only ones for whom an
  * availability switch means anything.
@@ -28,6 +26,12 @@ const CAN_INTEGRATE = new Set(["super_admin", "admin"]);
  * Mirrors `mayReceiveAssignment` in the API's `ticket.scope.ts`, which refuses a
  * candidate whose role is `user` before it looks at anything else — so a
  * requester's flag is never read by routing at all.
+ *
+ * Still a ROLE list, deliberately, while the panels below moved to permissions:
+ * this is not asking what the viewer may do, it is asking what a person IS. The
+ * server's answer is keyed on the role too, and there is no grant to consult —
+ * "may be assigned work" is not in the permission catalogue and should not be
+ * turned into one just to make the two checks look alike.
  */
 const CAN_BE_ASSIGNED = new Set(["super_admin", "admin"]);
 
@@ -234,12 +238,12 @@ export function SettingsView() {
           which case it asks. Every super admin belongs to none now, so this is
           how the panel learns whose settings it is editing. */}
       <NotificationsPanel
-        canManage={user.role === "super_admin"}
+        canManage={hasPermission(user, "settings:write")}
         needsCustomer={user.platformWide === true}
       />
 
       {/* Integrations — external ticket sources (import-capable roles only) */}
-      {CAN_INTEGRATE.has(user.role) ? <IntegrationsPanel /> : null}
+      {hasPermission(user, "ticket:import") ? <IntegrationsPanel /> : null}
 
       {/* Password — the ordinary way to change it, which the desk had no route
           for at all before administrators could hand one over. The emailed reset

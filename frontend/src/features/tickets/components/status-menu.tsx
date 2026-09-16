@@ -4,22 +4,27 @@ import * as React from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { STATUS_TRANSITIONS, type TicketStatus } from "@/lib/ticket-status";
 import { apiErrorMessage } from "@/lib/api-error";
+import { hasPermission } from "@/lib/permissions";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUpdateTicketStatus } from "../queries";
 import type { Ticket } from "../schemas";
 
-const WRITE_ROLES = ["super_admin", "admin"];
-
 /**
- * Status control for the properties rail. Requesters (no write permission) see
- * a plain badge; write-capable roles get a dropdown of the transitions the
- * domain whitelist allows, which drive the live PATCH mutation.
+ * Status control for the properties rail. Whoever cannot work tickets sees a
+ * plain badge; whoever can gets a dropdown of the transitions the domain
+ * whitelist allows, which drive the live PATCH mutation.
+ *
+ * Keyed on `ticket:write` — the permission `PATCH /tickets/:id/status` is gated
+ * on — rather than on a role list. It used to read
+ * `["super_admin", "admin"].includes(user.role)`, which stopped being the same
+ * question when the grants became editable: revoking `ticket:write` from admin
+ * left this dropdown on screen, and every choice in it 403ing.
  */
 export function StatusMenu({ ticket }: { ticket: Ticket }) {
   const { user } = useAuth();
   const { t } = useI18n();
-  const canWrite = user ? WRITE_ROLES.includes(user.role) : false;
+  const canWrite = hasPermission(user, "ticket:write");
   const mutation = useUpdateTicketStatus();
   const [open, setOpen] = React.useState(false);
 

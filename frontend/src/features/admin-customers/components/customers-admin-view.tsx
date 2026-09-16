@@ -23,7 +23,7 @@ import { TOUCH_HEIGHT, TOUCH_TARGET } from "@/components/ui/touch";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
-import { holds } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 import { useCustomers } from "@/features/customers/queries";
 import { ArchiveCustomerDialog } from "@/features/customers/components/archive-customer-dialog";
 import { useProjects } from "@/features/projects/queries";
@@ -106,15 +106,17 @@ export function CustomersAdminView({
   );
 
   /**
-   * Archiving is its own grant, read through the shared permission table rather
-   * than compared against a role name here — the same arrangement
-   * `project:delete` uses, and deliberately stricter than creating. Both are
-   * enforced by the API; these only decide whether a button is in the document.
+   * Archiving is its own grant, asked of the session rather than looked up in
+   * the client's static copy of the starter grants — which is what this used to
+   * do, and which stopped being true the moment anybody edited the matrix. The
+   * same arrangement `project:delete` uses, and deliberately stricter than
+   * creating. Both are enforced by the API; these only decide whether a button
+   * is in the document.
    *
    * The API asks for platform reach here too, which this does not repeat: every
    * use of it is below the `canRead` guard, and that is where reach is settled.
    */
-  const canArchive = user != null && holds(user.role, "customer:archive");
+  const canArchive = hasPermission(user, "customer:archive");
 
   if (!canRead) {
     return (

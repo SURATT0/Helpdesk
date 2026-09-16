@@ -29,6 +29,7 @@ import type {
   UserStatus,
 } from "@/features/users/schemas";
 import { BADGE, type ColourPair } from "@/lib/palette";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 // Descending privilege, so the badge colours read as a ladder at a glance.
@@ -113,10 +114,13 @@ export default function UsersPage() {
 
   // Mirrors the server's user:write grant. The API is the real gate; this only
   // avoids rendering controls that would be refused.
-  const canEdit = me?.role === "super_admin";
+  const canEdit = hasPermission(me, "user:write");
   // Handing over a whole queue needs ticket:assign — managers and admins only,
   // unlike single-ticket assignment which any agent may do.
-  const canHandover = canEdit;
+  // Its own grant, not `canEdit` reused — the comment above already said the two
+  // are different questions and the code answered them the same way. Handing a
+  // whole queue over is `ticket:assign`; changing a role is `user:write`.
+  const canHandover = hasPermission(me, "ticket:assign");
   // Reach is the one thing on this page a customer's own super admin may NOT
   // change: granting it crosses the tenant boundary, so it is platform-wide
   // only. The server is the gate; this just avoids offering a refused control.

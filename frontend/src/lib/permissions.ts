@@ -1,27 +1,90 @@
 /**
- * The permission grants per role, mirroring `ROLE_PERMISSIONS` in the API's
- * `shared/auth.ts` — the same mirroring arrangement as `lib/ticket-status.ts`
- * and `lib/domain.ts`.
+ * Two different questions live in this file, and they have different answers.
  *
- * The server is the authority: every grant here is enforced by
- * `requirePermission` on a route, and nothing the client believes changes what
- * the API allows. This copy exists for exactly one screen — the Permissions
- * page, which sets out what each role may do — so that page can DERIVE its
- * table from the grants instead of restating the answer role by role. Hand-
- * written role lists were how it came to claim that only a super_admin may
- * assign a ticket, when `PATCH /tickets/:id/assignee` asks for `ticket:write`
- * and every admin holds it.
+ * **"May I?" → `hasPermission`,** which reads the list the server put on the
+ * session. That is the live matrix, and it is the only thing a screen may use
+ * to decide what to offer.
  *
- * Keep it in step with the API. `auth.test.ts` on the server pins the admin
- * grant list for that reason: changing it there fails a test that names this
- * file.
+ * **"What does each role hold?" → `ROLE_PERMISSIONS` below,** a static copy of
+ * the grants a fresh install starts with. It is documentation, not an answer
+ * about any actual person, and it is KNOWN to be stale — see its own note.
+ *
+ * They used to be one thing, and that was the bug: screens asked
+ * `holds(user.role, "customer:archive")` to decide whether to show a control,
+ * which is the static table pretending to be the live one.
  */
 
 import type { Role } from "./domain";
+import type { AuthUser } from "@/features/auth/schemas";
+
+/**
+ * May this person do `permission`?
+ *
+ * The client's half of the permission matrix, and the ONLY way a screen may ask
+ * what the viewer is allowed to do. `user.permissions` is sent by the server on
+ * the session payload, read from `role_permissions` — the same table every gate
+ * on the API consults — so an edit in the matrix screen reaches the UI instead
+ * of stopping at it.
+ *
+ * This replaced six hard-coded role lists, of which
+ * `WRITE_ROLES = ["super_admin", "admin"]` was copied into two files. Every one
+ * of them named the grant it was mirroring in a comment directly above itself,
+ * which is how the drift stayed invisible: the code said "admin", the comment
+ * said `ticket:write`, and only one of them changed when somebody edited the
+ * matrix.
+ *
+ * **Not a gate.** Every endpoint checks for itself against the live grants at
+ * request time; this list is a snapshot from when the session payload was built
+ * and goes stale the moment the matrix is edited. Use it to decide what to
+ * OFFER and let the API answer the request. Both error directions are safe and
+ * self-correcting: a control offered in error is refused with a 403 the screen
+ * already handles, and one hidden in error comes back at the next `/auth/me`,
+ * token refresh or reload.
+ *
+ * Signed out (`null`) is false, which offers nothing rather than offering
+ * everything to somebody with no session at all.
+ */
+export function hasPermission(
+  user: Pick<AuthUser, "permissions"> | null | undefined,
+  permission: string,
+): boolean {
+  // The list is absent rather than empty for a session object that never went
+  // through `authUserSchema` — a payload cached by an older build, say. Treated
+  // as "nothing granted" rather than dereferenced, because the alternative is a
+  // TypeError inside a render, and a blank screen is a worse way to find out
+  // than a missing button.
+  const granted = user?.permissions;
+  if (!granted) return false;
+  // `*` mirrors the server's own `hasPermission`. Nothing writes it into
+  // `role_permissions` today — the top role holds an expanded list of every key
+  // instead — but the server still honours it, and a client that did not would
+  // hide the whole app from whoever the two disagreed about.
+  return granted.includes("*") || granted.includes(permission);
+}
 
 /** Roles in ascending privilege — the column order of the matrix. */
 export const ROLES = ["user", "admin", "super_admin"] as const satisfies readonly Role[];
 
+/**
+ * The grants each role STARTS with, mirroring `INITIAL_ROLE_PERMISSIONS` in the
+ * API's `shared/permissions.ts`.
+ *
+ * **This is not what any role currently holds, and it cannot be.** Grants moved
+ * into `role_permissions` and became editable from the Permissions screen; this
+ * constant is the state of a fresh install and nothing keeps it in step with a
+ * desk that has edited its matrix. It is already visibly behind — `admin` holds
+ * `customer:write` on the server and not here.
+ *
+ * Used by exactly one screen: the all-roles table on the Permissions page,
+ * which sets out what each role may do. That page needs every role's grants,
+ * not the viewer's, and the API's `GET /permissions/matrix` is deliberately
+ * gated on `permission:write` — "the people who may look at it are the people
+ * who may change it" — so there is nothing live for it to read. Fixing that
+ * needs a product decision about who may see the matrix, not another mirror.
+ *
+ * **Never use this to decide what to offer somebody.** That is `hasPermission`
+ * above, which asks about the actual person in front of you.
+ */
 export const ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
   /**
    * `*` — everything an admin can do, plus managing the admins themselves. The

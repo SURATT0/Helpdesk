@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
 import { isInternalThread } from "@/lib/domain";
+import { hasPermission } from "@/lib/permissions";
 import { STATUS_TRANSITIONS } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { TOUCH_HEIGHT } from "@/components/ui/touch";
@@ -34,8 +35,6 @@ import {
   useRejectClosure,
   useUpdateTicketStatus,
 } from "../queries";
-
-const WRITE_ROLES = ["super_admin", "admin"];
 
 const localeOf = (lang: string) => (lang === "th" ? "th-TH" : "en-US");
 
@@ -300,7 +299,13 @@ export function TicketDetailView({ id }: { id: number }) {
     );
   }
 
-  const canWrite = user ? WRITE_ROLES.includes(user.role) : false;
+  /**
+   * Working this ticket: the desk's "Done" button, and the internal-note tab on
+   * the composer. Both are `ticket:write` on the API — the status route by
+   * middleware, the note by `commentService.create` — so both are that
+   * permission here, not the role list this used to carry.
+   */
+  const canWrite = hasPermission(user, "ticket:write");
   // "Done, over to the requester" — the move that finishes the desk's part.
   const canResolve =
     canWrite && (STATUS_TRANSITIONS[ticket.status] ?? []).includes("pending");
