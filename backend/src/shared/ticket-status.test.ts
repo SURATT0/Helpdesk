@@ -4,6 +4,7 @@ import {
   DB_STATUSES,
   DISPLAY_STATUSES,
   getDisplayStatus,
+  isConversationClosed,
   requiresResolution,
   toQueryFilter,
   type TicketStatusRecord,
@@ -88,6 +89,44 @@ describe("toQueryFilter", () => {
         getDisplayStatus(ticket as Parameters<typeof getDisplayStatus>[0]),
       );
     }
+  });
+});
+
+describe("isConversationClosed", () => {
+  it("is true for both endings", () => {
+    expect(isConversationClosed("closed")).toBe(true);
+    expect(isConversationClosed("cancelled")).toBe(true);
+  });
+
+  it("is false while the ticket is still live", () => {
+    // `pending` included: the desk says the work is done, but the requester has
+    // to answer — and answering IS a public message, so the thread must stay open.
+    expect(isConversationClosed("new")).toBe(false);
+    expect(isConversationClosed("pending")).toBe(false);
+  });
+
+  it("answers for the historical words a timeline row can still hold", () => {
+    expect(isConversationClosed("open")).toBe(false);
+    expect(isConversationClosed("in_progress")).toBe(false);
+    expect(isConversationClosed("resolved")).toBe(false);
+  });
+});
+
+describe("cancelled is a status of its own, not a flavour of closed", () => {
+  it("shows as itself rather than folding into Closed", () => {
+    expect(getDisplayStatus({ status: "cancelled", assigneeId: null })).toBe(
+      "cancelled",
+    );
+    // And an assignee does not turn it into In Progress — that derivation is for
+    // unfinished tickets, and this one is over.
+    expect(getDisplayStatus({ status: "cancelled", assigneeId: 7 })).toBe(
+      "cancelled",
+    );
+  });
+
+  it("filters to its own rows, so a Closed filter never counts a withdrawal", () => {
+    expect(toQueryFilter("cancelled")).toEqual({ status: "cancelled" });
+    expect(toQueryFilter("closed")).toEqual({ status: "closed" });
   });
 });
 

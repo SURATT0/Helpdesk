@@ -2,8 +2,29 @@ import { z } from "zod";
 import { DB_STATUSES } from "../../shared/ticket-status";
 import { freeText, TEXT_MAX } from "../../shared/text";
 
-/** What a ticket may be SET to — the three stored values. */
-export const ticketStatus = z.enum(["new", "pending", "closed"]);
+/** Any value a ticket may be STORED as. Mirrors `DB_STATUSES`. */
+export const ticketStatus = z.enum(DB_STATUSES);
+
+/**
+ * What the DESK may set through `PATCH /:id/status` — every stored value except
+ * `cancelled`.
+ *
+ * The one place the two lists differ, and the difference is the rule: cancelling
+ * is the requester withdrawing their own request, and it has an endpoint of its
+ * own (`POST /:id/cancel`) that checks who is asking. The transition whitelist
+ * says `new → cancelled` is a legal MOVE but cannot say who may make it, so this
+ * is where "not the desk" is actually enforced — an agent who wants a ticket
+ * gone has `closed`, which says the true thing about what happened.
+ *
+ * `new` is NOT excluded, so the desk can still take a cancelled ticket back
+ * (`cancelled → new`) when somebody withdraws the wrong one.
+ *
+ * Written out rather than derived from `DB_STATUSES` by subtraction — a literal
+ * list is what a reader can check against the sentence above it. A test pins it
+ * as exactly the stored values minus `cancelled`, so a status added later cannot
+ * go silently missing from here.
+ */
+export const deskSettableStatus = z.enum(["new", "pending", "closed"]);
 
 export const priority = z.enum(["low", "medium", "high", "critical"]);
 
@@ -31,6 +52,7 @@ export const displayStatus = z.enum([
   "in_progress",
   "pending",
   "closed",
+  "cancelled",
 ]);
 
 export const listTicketsQuery = z.object({
@@ -116,6 +138,10 @@ export const ticketIdParam = z.object({
 /**
  * A desk-driven status change.
  *
+ * `deskSettableStatus`, not `ticketStatus`: this is the endpoint `cancelled` is
+ * deliberately kept off, because withdrawing a request belongs to the person who
+ * made it — see that constant.
+ *
  * `resolution` is optional HERE and required by the service, which looks
  * contradictory and is not: whether it is required depends on the move, and the
  * move depends on the status the ticket is in right now — which this schema
@@ -125,7 +151,7 @@ export const ticketIdParam = z.object({
  * the only place the real rule can be asked. See `requiresResolution`.
  */
 export const updateStatusBody = z.object({
-  status: ticketStatus,
+  status: deskSettableStatus,
   resolution: freeText({ max: TEXT_MAX.BODY }).optional(),
 });
 
@@ -137,6 +163,17 @@ export const updateStatusBody = z.object({
  * rather than a column; see ticketService.rejectClosure.
  */
 export const rejectClosureBody = z.object({
+  reason: freeText({ max: TEXT_MAX.BODY }).optional(),
+});
+
+/**
+ * The requester withdrawing their own ticket.
+ *
+ * Same shape as the rejection above, and optional for the same reason: "I do not
+ * need this any more" is a complete answer, and a required box is how people are
+ * taught to type "n/a" to get past one. What is typed becomes a public comment.
+ */
+export const cancelTicketBody = z.object({
   reason: freeText({ max: TEXT_MAX.BODY }).optional(),
 });
 

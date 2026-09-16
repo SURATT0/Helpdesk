@@ -23,6 +23,7 @@ import {
   fetchTicketHistory,
   fetchTickets,
   importTickets,
+  cancelTicket,
   rejectClosure,
   reassignTickets,
   sendReply,
@@ -147,6 +148,20 @@ export function useConfirmClosure() {
   return useMutation({
     mutationFn: (id: number) => confirmClosure(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ticketKeys.all }),
+  });
+}
+
+export function useCancelTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; reason?: string }) =>
+      cancelTicket(vars.id, vars.reason),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ticketKeys.all });
+      // Same reason as the rejection below: a cancellation with a reason posts a
+      // comment, and the thread is a different query.
+      qc.invalidateQueries({ queryKey: commentKeys.list(vars.id) });
+    },
   });
 }
 

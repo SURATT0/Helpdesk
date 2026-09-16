@@ -172,6 +172,24 @@ export async function rejectClosure(
   return ticketEnvelopeSchema.parse(body).data;
 }
 
+/**
+ * The requester withdrawing a ticket the desk has not moved yet.
+ *
+ * Its own endpoint, not `PATCH /:id/status` with `cancelled` — the API refuses
+ * that value there on purpose, because the transition whitelist can say the move
+ * is legal but not who may make it.
+ */
+export async function cancelTicket(
+  id: number,
+  reason?: string,
+): Promise<Ticket> {
+  const body = await apiRequest(`/tickets/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+  return ticketEnvelopeSchema.parse(body).data;
+}
+
 export async function updateTicketAssignee(
   id: number,
   assigneeId: number | null,

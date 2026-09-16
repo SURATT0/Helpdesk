@@ -79,6 +79,7 @@ const en: Dict = {
   "status.in_progress": "In Progress",
   "status.pending": "Pending",
   "status.closed": "Closed",
+  "status.cancelled": "Cancelled",
   // History only: no ticket is stored this way any more, but ticket_status_history
   // is append-only and its older rows still say these words.
   "status.open": "Open",
@@ -371,6 +372,23 @@ const en: Dict = {
   "closure.rejectError": "Couldn’t send it back",
   "closure.cancel": "Cancel",
 
+  // The requester withdrawing a ticket the desk has not moved yet. Their words,
+  // not the desk's: "cancel this request", never "set status to cancelled".
+  "cancelTicket.action": "Cancel request",
+  "cancelTicket.title": "Cancel this request?",
+  "cancelTicket.body":
+    "The team will stop working on it. Anything you write here is posted on the ticket, so whoever had it can see why. To pick it up again you will have to ask them to reopen it.",
+  "cancelTicket.reason": "Why are you cancelling? (optional)",
+  "cancelTicket.placeholder": "Sorted it myself…",
+  "cancelTicket.keep": "Keep it open",
+  "cancelTicket.confirm": "Cancel request",
+  "cancelTicket.error": "Couldn’t cancel this request",
+
+  // What stands where the composer was, once nobody can write publicly.
+  "composer.lockedClosed":
+    "This ticket is closed. Reopen it to carry on the conversation.",
+  "composer.lockedCancelled":
+    "This request was cancelled. Reopen it to carry on the conversation.",
   // What the desk did — asked on the move that finishes the work, never on the
   // requester's answer. "What did you do" rather than "resolution": the agent is
   // being asked to describe an action they just took, and the noun is what the
@@ -1152,6 +1170,14 @@ const en: Dict = {
   // apart in `details`; the field is named so the form can point at it.
   "error.CATEGORY_DETAIL_REQUIRED":
     "Say what the problem is — that is the whole point of choosing Other.",
+  // The composer is already hidden on an ended ticket, so this is what a client
+  // that got there anyway sees — a stale tab, mostly.
+  "error.CONVERSATION_CLOSED":
+    "This ticket is {actual}, so the conversation is closed. Reopen it to carry on.",
+  "error.NOT_YOUR_TICKET_TO_CANCEL":
+    "Only the person who raised a ticket can cancel it.",
+  "error.TICKET_ALREADY_STARTED":
+    "This ticket is {actual} — the team has already picked it up, so it can no longer be cancelled.",
   // A backstop, not the normal path: the dialog keeps its button disabled until
   // something is typed, so this is what a client that skipped the dialog sees.
   "error.RESOLUTION_REQUIRED":
@@ -1273,6 +1299,7 @@ const th: Dict = {
   "status.in_progress": "กำลังดำเนินการ",
   "status.pending": "รอข้อมูลเพิ่มเติม",
   "status.closed": "ปิดแล้ว",
+  "status.cancelled": "ยกเลิกแล้ว",
   // History only — see the English block.
   "status.open": "เปิด",
   "status.resolved": "แก้ไขแล้ว",
@@ -1544,6 +1571,21 @@ const th: Dict = {
   "closure.rejectError": "ส่งกลับไม่สำเร็จ",
   "closure.cancel": "ยกเลิก",
 
+  // ผู้แจ้งถอนเรื่องที่เดสก์ยังไม่ได้ขยับ — ใช้คำของผู้แจ้ง ไม่ใช่ศัพท์สถานะ
+  "cancelTicket.action": "ยกเลิกเรื่อง",
+  "cancelTicket.title": "ยกเลิกเรื่องนี้ไหม?",
+  "cancelTicket.body":
+    "ทีมงานจะหยุดทำเรื่องนี้ ข้อความที่พิมพ์ตรงนี้จะขึ้นในเธรดให้คนที่ดูแลอยู่เห็นว่าทำไม ถ้าจะเอากลับมาต้องขอให้ทีมงานเปิดเรื่องใหม่",
+  "cancelTicket.reason": "ยกเลิกเพราะอะไร? (ไม่บังคับ)",
+  "cancelTicket.placeholder": "แก้เองได้แล้ว…",
+  "cancelTicket.keep": "เก็บไว้ก่อน",
+  "cancelTicket.confirm": "ยกเลิกเรื่อง",
+  "cancelTicket.error": "ยกเลิกไม่สำเร็จ",
+
+  "composer.lockedClosed":
+    "Ticket นี้ปิดแล้ว ถ้าจะคุยต่อต้องเปิดเรื่องใหม่",
+  "composer.lockedCancelled":
+    "เรื่องนี้ถูกยกเลิกแล้ว ถ้าจะคุยต่อต้องเปิดเรื่องใหม่",
   // สิ่งที่ทีมงานทำ — ถามตอนปิดงานเท่านั้น ไม่ถามตอนผู้แจ้งยืนยัน
   "resolution.title": "แก้ยังไง?",
   "resolution.bodyPending":
@@ -2258,6 +2300,11 @@ const th: Dict = {
   "error.SAME_ASSIGNEE": "เป็นคนเดิมที่ถือคิวนี้อยู่แล้ว",
   "error.CATEGORY_DETAIL_REQUIRED":
     "กรุณาระบุว่าปัญหาคืออะไร — นี่คือเหตุผลทั้งหมดของการเลือก “อื่นๆ”",
+  "error.CONVERSATION_CLOSED":
+    "Ticket นี้อยู่ในสถานะ {actual} เธรดจึงปิดแล้ว ถ้าจะคุยต่อต้องเปิดเรื่องใหม่",
+  "error.NOT_YOUR_TICKET_TO_CANCEL": "เฉพาะผู้ที่แจ้งเรื่องเท่านั้นที่ยกเลิกได้",
+  "error.TICKET_ALREADY_STARTED":
+    "Ticket นี้อยู่ในสถานะ {actual} — ทีมงานรับเรื่องไปแล้ว จึงยกเลิกไม่ได้",
   "error.RESOLUTION_REQUIRED": "กรุณาระบุว่าแก้ยังไง ก่อนปิดงาน Ticket นี้",
   "error.PROJECT_HAS_OPEN_TICKETS":
     "ยังมี Ticket ที่เปิดอยู่ {count} รายการในโปรเจกต์นี้ กรุณาปิดหรือย้ายก่อน",

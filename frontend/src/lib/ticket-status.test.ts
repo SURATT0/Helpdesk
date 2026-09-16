@@ -11,9 +11,27 @@ import {
 } from "./ticket-status";
 
 describe("the three vocabularies", () => {
-  it("stores three values and shows four", () => {
-    expect(DB_STATUSES).toEqual(["new", "pending", "closed"]);
-    expect(DISPLAY_STATUSES).toEqual(["new", "in_progress", "pending", "closed"]);
+  it("stores four values and shows five", () => {
+    expect(DB_STATUSES).toEqual(["new", "pending", "closed", "cancelled"]);
+    expect(DISPLAY_STATUSES).toEqual([
+      "new",
+      "in_progress",
+      "pending",
+      "closed",
+      "cancelled",
+    ]);
+  });
+
+  it("keeps cancelled apart from closed, which is the point of having it", () => {
+    // Two endings, and a reader has to be able to tell them apart: closed is
+    // work the desk finished, cancelled is work that never happened.
+    expect(getDisplayStatus({ status: "cancelled", assigneeId: null })).toBe(
+      "cancelled",
+    );
+    expect(getDisplayStatus({ status: "cancelled", assigneeId: 7 })).toBe(
+      "cancelled",
+    );
+    expect(STATUS_META.cancelled.bg).not.toBe(STATUS_META.closed.bg);
   });
 
   it("keeps every stored value showable", () => {

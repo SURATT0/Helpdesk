@@ -13,11 +13,13 @@ import {
   NotAssignable,
   NotFound,
   NotYourTicketToAnswer,
+  NotYourTicketToCancel,
   NotYourTicketToEdit,
   NotYoursToRead,
   ReopenWindowExpired,
   ResolutionRequired,
   SameAssignee,
+  TicketAlreadyStarted,
   TicketClosedForEditing,
   TicketNotAwaitingAnswer,
 } from "../../shared/errors";
@@ -535,6 +537,79 @@ export const ticketService = {
       case "started":
         throw DeskAlreadyStarted();
     }
+  },
+
+  /**
+   * The requester withdrawing a ticket the desk has not moved yet.
+   *
+   * `new → cancelled`, and only from the person who raised it. A third ending
+   * beside `closed` and the 72h sweep, and the only one that is not the desk's:
+   * the other two say the work finished, this one says it was never needed.
+   *
+   * The window is "while the status is still `new`", which is what the desk not
+   * having moved it MEANS. Assignment is not a move — a ticket can sit with
+   * somebody's name on it and be cancellable, exactly as it can be edited then
+   * (see `editOwnWording`) — so an agent may lose a little reading time to this.
+   * That is the right way round: the alternative is a person who no longer wants
+   * a thing being unable to say so.
+   *
+   * The reason is optional and goes in as a public comment rather than a column,
+   * for the same reason `rejectClosure`'s does — it is a message to whoever
+   * picks the ticket up, and it belongs in the thread they will read.
+   *
+   * Order matters and is not incidental: the comment is posted BEFORE the status
+   * moves. A cancelled ticket's public conversation is closed
+   * (`isConversationClosed`), so a reason written afterwards would be refused by
+   * the very rule this move turns on.
+   */
+  async cancelOwn(
+    id: number,
+    reason: string | undefined,
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const ticket = await this.requireOwnUntouchedTicket(id, user);
+    if (reason) {
+      await commentService.create(ticket.id, { body: reason, internal: false }, user);
+    }
+    // `changeStatus` compare-and-swaps on the status it read, so a desk that
+    // moves this ticket in the same moment wins and the cancellation is refused
+    // with a 409 naming where it actually went — rather than both applying and
+    // the last writer deciding.
+    const cancelled = await this.changeStatus(ticket.id, "cancelled", user);
+    await auditRepository.record({
+      userId: user.id,
+      action: "ticket.cancelled",
+      entity: "ticket",
+      entityId: ticket.id,
+      meta: { via: "in_app", withReason: Boolean(reason) },
+    });
+    return cancelled;
+  },
+
+  /**
+   * The gate for cancelling: this ticket is yours, and nobody has moved it.
+   *
+   * Keyed on being the REQUESTER of this row, never on a role — the same shape
+   * as `requireOwnPendingTicket`, and for the same reason. An admin who raised
+   * their own ticket withdraws it like anyone else; an admin who did not has
+   * `closed` on the desk's endpoint and no business withdrawing somebody's
+   * request on their behalf.
+   *
+   * 404 → 403 → 409, in that order, so each answer means one thing: you cannot
+   * see it, it is not yours, it is too late.
+   */
+  async requireOwnUntouchedTicket(
+    id: number,
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const ticket = await this.get(id, user); // row scope → 404 if out of reach
+    if (ticket.requesterId !== user.id) {
+      throw NotYourTicketToCancel();
+    }
+    if (ticket.status !== "new") {
+      throw TicketAlreadyStarted(ticket.displayStatus);
+    }
+    return ticket;
   },
 
   async requireOwnPendingTicket(id: number, user: AuthUser): Promise<Ticket> {
