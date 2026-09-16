@@ -49,8 +49,61 @@ describe("StatusMenu", () => {
     expect(screen.getByText("Closed")).toBeInTheDocument();
     expect(screen.queryByText("In Progress")).not.toBeInTheDocument();
 
+    // Both options out of `new` finish the work, so neither patches straight
+    // away — they ask what was done first. See `requiresResolution`.
     await userEvent.click(screen.getByText("Pending"));
-    expect(h.mutate).toHaveBeenCalledWith({ id: 1042, status: "pending" });
+    expect(h.mutate).not.toHaveBeenCalled();
+    expect(screen.getByText("What did you do?")).toBeInTheDocument();
+  });
+
+  it("will not submit a finish with nothing written in it", async () => {
+    render(<StatusMenu ticket={ticket} />);
+    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByText("Pending"));
+
+    // The requirement is visible before the click rather than arriving as a
+    // 400 afterwards; the server checks it too, twice, as the backstop.
+    expect(screen.getByRole("button", { name: "Send to requester" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("How it was fixed"), "   ");
+    expect(screen.getByRole("button", { name: "Send to requester" })).toBeDisabled();
+  });
+
+  it("sends what was typed along with the status change", async () => {
+    render(<StatusMenu ticket={ticket} />);
+    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByText("Pending"));
+
+    await userEvent.type(
+      screen.getByLabelText("How it was fixed"),
+      "Replaced the switch on desk 4.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send to requester" }));
+
+    expect(h.mutate).toHaveBeenCalledWith(
+      {
+        id: 1042,
+        status: "pending",
+        resolution: "Replaced the switch on desk 4.",
+      },
+      expect.anything(),
+    );
+  });
+
+  it("reopens without asking — nothing has been finished", async () => {
+    // closed → new is not a finish, so it writes straight through. Keyed on the
+    // PAIR, which is what stops "any move to closed must explain itself" from
+    // catching the requester's confirmation too.
+    const closed = {
+      id: 1042,
+      status: "closed",
+      displayStatus: "closed",
+    } as unknown as Ticket;
+    render(<StatusMenu ticket={closed} />);
+    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByText("New"));
+
+    expect(screen.queryByText("What did you do?")).not.toBeInTheDocument();
+    expect(h.mutate).toHaveBeenCalledWith({ id: 1042, status: "new" });
   });
 
   it("shows a plain badge (no menu) for a requester", () => {

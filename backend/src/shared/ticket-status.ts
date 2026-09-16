@@ -124,3 +124,34 @@ export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
 export function canTransition(from: TicketStatus, to: TicketStatus): boolean {
   return STATUS_TRANSITIONS[from]?.includes(to) ?? false;
 }
+
+/**
+ * Does this move have to say what was DONE?
+ *
+ * Both moves out of `new` are the desk declaring the work finished, and those
+ * are the two that must carry a resolution: `new → pending` hands it to the
+ * requester to check, `new → closed` is the desk having raised and finished it
+ * with nobody to ask. Finishing a ticket without a sentence saying how leaves
+ * the next person reading a closed row with the problem and no answer.
+ *
+ * The other three moves deliberately do NOT require one, each for its own
+ * reason, and they are not oversights:
+ *
+ *   pending → closed  the requester agreeing, or the 72h sweep giving up.
+ *                     Neither of them did the work, so neither can describe it
+ *                     — and the resolution the desk wrote on the way INTO
+ *                     `pending` is already on the row.
+ *   pending → new     a rejection, which carries its own reason as a public
+ *                     comment (see `rejectClosure`).
+ *   closed  → new     a reopen. The old resolution stays; what replaces it is
+ *                     whatever the desk writes when it finishes again.
+ *
+ * Keyed on the PAIR rather than on the destination, because `closed` is reached
+ * from two directions and only one of them is somebody finishing work.
+ */
+export function requiresResolution(
+  from: TicketStatus,
+  to: TicketStatus,
+): boolean {
+  return from === "new" && (to === "pending" || to === "closed");
+}

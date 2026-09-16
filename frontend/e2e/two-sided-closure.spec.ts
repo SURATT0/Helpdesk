@@ -36,11 +36,19 @@ async function requesterRaises(page: Page): Promise<string> {
   return page.url();
 }
 
-/** The desk finishes the work, which is what puts the ball in the requester's court. */
+/**
+ * The desk finishes the work, which is what puts the ball in the requester's
+ * court — and finishing now has to say what was done, so the button opens the
+ * resolution dialog rather than patching straight away.
+ */
 async function deskFinishes(page: Page, url: string) {
   await loginAs(page, DEMO.email); // Dana Reyes, admin
   await page.goto(url);
   await page.getByRole("button", { name: "Done — ask requester" }).click();
+  await page
+    .getByLabel("How it was fixed")
+    .fill("Replaced the access point on the second floor.");
+  await page.getByRole("button", { name: "Send to requester" }).click();
   await expect(page.getByText("Pending").first()).toBeVisible();
 }
 

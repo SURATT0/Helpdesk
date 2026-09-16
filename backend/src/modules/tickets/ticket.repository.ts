@@ -3,6 +3,7 @@ import type { Priority, Role } from "../../shared/domain";
 import {
   canTransition,
   getDisplayStatus,
+  requiresResolution,
   toQueryFilter,
   type DisplayStatus,
   type TicketStatus,
@@ -19,6 +20,7 @@ import {
   CategoryDetailRequired,
   ConcurrentStatusChange,
   IllegalTransition,
+  ResolutionRequired,
 } from "../../shared/errors";
 import { prisma } from "../../shared/db";
 import { auditRepository } from "../audit/audit.repository";
@@ -147,6 +149,17 @@ export type Ticket = {
    */
   dueAt: string | null;
   resolvedAt: string | null;
+  /**
+   * What the desk did about it, or null for a ticket nobody has finished yet —
+   * and for every ticket closed before this was asked for.
+   *
+   * Read-only as far as the client is concerned: it arrives here, but it is
+   * SENT back on the status change that sets it (`PATCH /:id/status`), never as
+   * a field of its own. There is no endpoint that edits it after the fact,
+   * deliberately — it is the account of a move that already happened, and the
+   * place to correct the record is the thread.
+   */
+  resolution: string | null;
   /**
    * This ticket's customer's SLA warning window, in milliseconds.
    *
@@ -340,6 +353,7 @@ function toTicketDto(
     slaState,
     dueAt: row.dueAt?.toISOString() ?? null,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
+    resolution: row.resolution,
     slaWarnMs,
     attachments: row._count.attachments,
     affectedUsers: row.affectedUsers.map((a) => a.user),
@@ -1202,6 +1216,7 @@ export const ticketRepository = {
     id: number,
     status: TicketStatus,
     changedById?: number,
+    resolution?: string,
   ): Promise<Ticket | null> {
     // Bells ring after the commit, never inside it — see `notifyBell`.
     const { dto, notified } = await prisma.$transaction(async (tx) => {
@@ -1224,6 +1239,15 @@ export const ticketRepository = {
         throw IllegalTransition(current.status, status);
       }
 
+      // And so is the resolution, for the same reason and against the same row.
+      // The service checks it too, so an ordinary caller gets the error before
+      // a transaction opens; this is the copy that cannot be gone around. The
+      // auto-close sweep reaches this line with no resolution and is unaffected
+      // — it closes from `pending`, which requires none.
+      if (requiresResolution(current.status, status) && !resolution) {
+        throw ResolutionRequired();
+      }
+
       const swap = await tx.ticket.updateMany({
         where: { id, status: current.status },
         data: {
@@ -1235,6 +1259,11 @@ export const ticketRepository = {
           ...(status === "pending" && current.resolvedAt == null
             ? { resolvedAt: new Date() }
             : {}),
+          // Only ever set, never cleared. A move that carries no resolution
+          // leaves the column alone rather than writing null over it, which is
+          // what keeps a reopened ticket's previous account readable until the
+          // desk finishes it again and overwrites it with the new one.
+          ...(resolution ? { resolution } : {}),
           ...(status === "closed" ? { closedAt: new Date() } : {}),
         },
       });
