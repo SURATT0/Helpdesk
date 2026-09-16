@@ -26,6 +26,12 @@ enum TicketStatus {
   new
   pending
   closed
+  /// Withdrawn by the person who raised it, before the desk moved it. Its own
+  /// value rather than a flavour of `closed`: closed is work that was done,
+  /// cancelled is work that never happened, and merging them would inflate the
+  /// closed archive and every desk figure with tickets nobody worked. See
+  /// shared/ticket-status.ts.
+  cancelled
 }
 
 /// The vocabulary `ticket_status_history` was written with, which is wider than
@@ -41,6 +47,7 @@ enum TicketStatusRecord {
   pending
   resolved
   closed
+  cancelled
 }
 
 enum Priority {

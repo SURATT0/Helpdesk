@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { STATUS_TRANSITIONS, type TicketStatus } from "@/lib/ticket-status";
+import { deskTransitionsFrom, type TicketStatus } from "@/lib/ticket-status";
 import { apiErrorMessage } from "@/lib/api-error";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
@@ -23,7 +23,9 @@ export function StatusMenu({ ticket }: { ticket: Ticket }) {
   const mutation = useUpdateTicketStatus();
   const [open, setOpen] = React.useState(false);
 
-  const nextStatuses = STATUS_TRANSITIONS[ticket.status] ?? [];
+  // `deskTransitionsFrom`, not the raw whitelist: `new → cancelled` is a legal
+  // move but not the desk's to make, and the API refuses it on this endpoint.
+  const nextStatuses = deskTransitionsFrom(ticket.status);
 
   if (!canWrite || nextStatuses.length === 0) {
     return <StatusBadge status={ticket.displayStatus} />;

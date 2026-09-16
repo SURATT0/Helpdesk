@@ -1,10 +1,12 @@
 import {
   CannotDeleteComment,
+  ConversationClosed,
   InternalNotesAreForAgents,
   NotFound,
 } from "../../shared/errors";
 import { hasPermission, type AuthUser } from "../../shared/auth";
 import { isInternalThread } from "../../shared/domain";
+import { isConversationClosed } from "../../shared/ticket-status";
 import { bus } from "../../shared/events";
 import { ticketService } from "../tickets/ticket.service";
 import {
@@ -44,6 +46,21 @@ export const commentService = {
     const ticket = await ticketService.get(ticketId, user); // must see the ticket
     if (input.internal && !hasPermission(user, "ticket:write")) {
       throw InternalNotesAreForAgents();
+    }
+    /**
+     * A ticket that is over takes no more PUBLIC messages.
+     *
+     * Asked before the internal-thread coercion below, and of what the CALLER
+     * asked for, for the same reason the permission check above is: a requester
+     * writing on a closed ticket has to be told the conversation is over, not
+     * have their message quietly filed as a note they cannot see. The two
+     * questions are different — "may you write a note" and "is anyone still
+     * listening" — and collapsing them is how one of them stops being asked.
+     *
+     * Notes are deliberately still allowed. See `isConversationClosed`.
+     */
+    if (!input.internal && isConversationClosed(ticket.status)) {
+      throw ConversationClosed(ticket.displayStatus);
     }
     // A ticket raised by staff has no external side (see isInternalThread), so a
     // public comment on one has no audience a note doesn't already reach: the row

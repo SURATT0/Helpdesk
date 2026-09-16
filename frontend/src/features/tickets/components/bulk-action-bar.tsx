@@ -13,7 +13,10 @@ import { useBulkTicketAction, type BulkAction } from "../queries";
 // The three STORED values — a bulk write sends `status`, so this menu offers
 // what a write may carry. "In Progress" is absent because it is derived: it is
 // `new` with an assignee, which the Assign menu beside this one is for.
-const STATUSES = DB_STATUSES;
+// Every stored value the DESK may set. `cancelled` is absent because it is not
+// the desk's move — withdrawing a request belongs to the person who made it, and
+// the API refuses the value on the route this bar fans out to.
+const STATUSES = DB_STATUSES.filter((s) => s !== "cancelled");
 const ASSIGNABLE_ROLES = ["super_admin", "admin"];
 
 function Menu({

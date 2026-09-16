@@ -5,15 +5,27 @@ import {
   type TicketStatus,
 } from "./ticket-status";
 
-const ALL: TicketStatus[] = ["new", "pending", "closed"];
+const ALL: TicketStatus[] = ["new", "pending", "closed", "cancelled"];
 
 describe("STATUS_TRANSITIONS whitelist", () => {
   it("matches the documented flow", () => {
     // New → In Progress is missing on purpose: taking a ticket is an assignment,
     // not a status change, and both read from the same stored `new`.
-    expect(STATUS_TRANSITIONS.new).toEqual(["pending", "closed"]);
+    expect(STATUS_TRANSITIONS.new).toEqual(["pending", "closed", "cancelled"]);
     expect(STATUS_TRANSITIONS.pending).toEqual(["new", "closed"]);
     expect(STATUS_TRANSITIONS.closed).toEqual(["new"]);
+    // Not a trapdoor: the desk can put a withdrawal back when somebody cancels
+    // the wrong ticket. And nothing else — a cancelled ticket does not go
+    // straight to `pending` or `closed`, because there is no work to finish.
+    expect(STATUS_TRANSITIONS.cancelled).toEqual(["new"]);
+  });
+
+  it("lets a ticket be withdrawn only before the desk has moved it", () => {
+    // The window, as a property of the whitelist rather than of the endpoint:
+    // `new` is the one state a cancellation can leave from.
+    for (const from of ALL) {
+      expect(canTransition(from, "cancelled")).toBe(from === "new");
+    }
   });
 });
 

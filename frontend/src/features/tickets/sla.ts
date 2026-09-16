@@ -142,6 +142,12 @@ export function judgeSla(
   { dueAt, status, resolvedAt, slaWarnMs }: SlaInput,
   now: number = Date.now(),
 ): Omit<SlaAssessment, "label"> {
+  // Withdrawn before the desk moved it, so there is no promise to judge. Ahead
+  // of the target check on purpose: a cancelled ticket DOES carry a `dueAt` —
+  // it was set when the ticket was raised — and without this it would either
+  // count down as if somebody were still working it or be scored "met" for a
+  // target nobody was asked to hit. Same answer the API's `deriveSla` gives.
+  if (status === "cancelled") return { state: "no_sla", minutesDelta: null };
   const due = dueAt ? Date.parse(dueAt) : NaN;
   if (Number.isNaN(due)) return { state: "no_sla", minutesDelta: null };
 

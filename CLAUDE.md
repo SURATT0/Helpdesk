@@ -34,9 +34,10 @@ Per-directory conventions live in `frontend/CLAUDE.md` and `backend/CLAUDE.md`.
 
 These are load-bearing invariants — get them right in whatever layer you touch.
 
-- **Ticket status: three stored values, four shown.** `tickets.status` holds **`new | pending |
-  closed`** only. **"In Progress" is a derived state, never a column value** — it is `new` with an
-  assignee, so the flow a person sees is `New → In Progress → Pending → Closed`. The derivation lives
+- **Ticket status: four stored values, five shown.** `tickets.status` holds **`new | pending |
+  closed | cancelled`** only. **"In Progress" is a derived state, never a column value** — it is `new` with an
+  assignee, so the flow a person sees is `New → In Progress → Pending → Closed`, with `Cancelled` as
+  the other ending. The derivation lives
   in exactly one function per side, `displayStatus` in `shared/domain.ts` and `lib/domain.ts`; every
   badge, board column, chart and filter goes through it, and its reverse (`displayStatusWhere` in
   `ticket.scope.ts`) is how a filter for a shown value becomes a WHERE clause. Never re-derive it
@@ -46,12 +47,40 @@ These are load-bearing invariants — get them right in whatever layer you touch
   ILLEGAL_TRANSITION**. `new → pending` (work done, requester asked to confirm), `new → closed` (the
   desk raised it and finished it), `pending → new` (requester rejects, or more work turns up),
   `pending → closed` (confirmed, or the 72h auto-close), `closed → new` (reopen ≤ 30 days — the
-  assignee is KEPT, so it returns as In Progress; beyond 30 days, a new ticket). Taking a ticket is
-  not a transition: assignment is what makes it In Progress. Every transition appends a
-  `ticket_status_history` row and fires a notification.
+  assignee is KEPT, so it returns as In Progress; beyond 30 days, a new ticket),
+  `new → cancelled` (the requester withdrew it) and `cancelled → new` (the desk putting a
+  withdrawal back — no window, since `closed_at` is what dates a reopen and a cancellation does not
+  set it). Taking a ticket is not a transition: assignment is what makes it In Progress. Every
+  transition appends a `ticket_status_history` row and fires a notification.
   **`pending` means finished work awaiting confirmation** (what `resolved` used to mean), so
   `resolved_at` is stamped on the first arrival there and the SLA resolution clock stops —
   `SLA_ACTIVE_STATUSES` is `["new"]` alone.
+  **`cancelled` is not a flavour of `closed`, and that distinction is the whole reason it exists.**
+  Closed is work the desk finished; cancelled is work that never happened. It therefore stays out of
+  the closed archive (`closed_at` is left NULL), out of `ACTIVE_STATUSES`, and out of any SLA
+  verdict — `deriveSla` and the client's `assess` both short-circuit it to neutral rather than
+  scoring "met", because a target nobody was asked to hit was neither met nor missed.
+- **Only the requester cancels, and only before the desk has moved it.** `POST /tickets/:id/cancel`
+  is theirs — no `requirePermission`, gated by `requireOwnUntouchedTicket` in the ticket service:
+  row scope (404), then ownership (403), then that the status is still `new` (409
+  TICKET_ALREADY_STARTED, naming where it went). Assignment is not a move, so a ticket carrying
+  somebody's name is still cancellable — the same window `editOwnWording` uses, and for the same
+  reason. An optional `{ reason }` is posted as a public comment BEFORE the status changes, because
+  afterwards the thread is shut (below). **The whitelist cannot express "who", so the enforcement is
+  that `cancelled` is absent from `deskSettableStatus`** — the enum behind `PATCH /:id/status`. Do
+  not add it there: an agent who wants a ticket gone has `closed`, which says the true thing.
+- **A ticket that is over takes no more PUBLIC messages.** `isConversationClosed` in
+  `shared/ticket-status.ts` (mirrored in `lib/ticket-status.ts`) is true for `closed` and
+  `cancelled`, and `commentService.create` refuses a non-internal comment on one with **409
+  CONVERSATION_CLOSED**. That covers the agent's email reply too, which posts through the same
+  service. **Internal notes stay open** — the lock is on the conversation, not the ticket, so the
+  desk can still record what it learns afterwards without reopening a ticket just to file a note,
+  and a staff-raised ticket (notes only, see `isInternalThread`) stays writable once it is done.
+  Reopening lifts the lock, because it is a fact about the state rather than a one-way door.
+  **Inbound email deliberately bypasses this** (`emailService.ingest` writes through
+  `commentRepository`, not the service): refusing there would not stop somebody writing, it would
+  throw away a mail already sent. It lands silently, which is a known gap rather than a settled
+  answer — see the comment at that call site.
 - **A ticket closes only when both sides have said so.** The desk finishing the work is not the end
   of it: submitting a fix moves the ticket to `pending`, and the person who raised it still has to
   answer. Two endpoints are theirs, and theirs alone:

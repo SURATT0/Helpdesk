@@ -82,6 +82,20 @@ router.post("/:id/closure/confirm", asyncHandler(ticketController.confirmClosure
 router.post("/:id/closure/reject", asyncHandler(ticketController.rejectClosure));
 
 /**
+ * The requester withdrawing a ticket the desk has not moved yet.
+ *
+ * No `requirePermission`, for the same reason as the two above: the right comes
+ * from being the person who raised the row. `ticketService.cancelOwn` checks it.
+ *
+ * Its own endpoint rather than a value the desk's `PATCH /:id/status` accepts,
+ * and that is what makes "only the requester cancels" enforceable at all: the
+ * transition whitelist can say `new → cancelled` is a legal MOVE, but it cannot
+ * say who may make it. Keeping the move off the desk's endpoint is the answer —
+ * an agent who wants a ticket gone has `closed`, which says the true thing.
+ */
+router.post("/:id/cancel", asyncHandler(ticketController.cancel));
+
+/**
  * The requester correcting their own subject and description.
  *
  * No `requirePermission`, for the same reason as the two above: the right comes

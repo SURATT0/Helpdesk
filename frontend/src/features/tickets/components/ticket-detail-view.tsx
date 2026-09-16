@@ -8,7 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { LoadingRow, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
 import { isInternalThread } from "@/lib/domain";
-import { STATUS_TRANSITIONS } from "@/lib/ticket-status";
+import { isConversationClosed, STATUS_TRANSITIONS } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { TOUCH_HEIGHT } from "@/components/ui/touch";
 import { mayEditOwnWording } from "@/lib/ticket-editable";
@@ -18,6 +18,7 @@ import { useI18n } from "@/features/i18n/context";
 import { MessageAttachments } from "@/features/attachments/components/message-attachments";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
+import { CancelTicketDialog } from "./cancel-ticket-dialog";
 import { RejectClosureDialog } from "./reject-closure-dialog";
 import { SlaBadge } from "./sla-badge";
 import { useAssessSla } from "../use-sla";
@@ -187,6 +188,7 @@ export function TicketDetailView({ id }: { id: number }) {
   // mid-flight — they move the same ticket in opposite directions.
   const closureBusy = confirmClosure.isPending || rejectClosure.isPending;
   const [rejecting, setRejecting] = React.useState(false);
+  const [cancelling, setCancelling] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const commentsQuery = useComments(id);
   const createComment = useCreateComment(id);
@@ -315,6 +317,25 @@ export function TicketDetailView({ id }: { id: number }) {
     user != null &&
     ticket.requesterId === user.id &&
     ticket.status === "pending";
+  /**
+   * The requester withdrawing a ticket the desk has not moved yet.
+   *
+   * Same two facts the API checks (`requireOwnUntouchedTicket`): this row is
+   * mine, and its status is still `new`. Assignment is not a move, so a ticket
+   * with somebody's name on it is still cancellable — exactly as it is still
+   * editable, and for the same reason.
+   */
+  const canCancel =
+    user != null && ticket.requesterId === user.id && ticket.status === "new";
+  /**
+   * The public thread is over, so the composer is not offered. Mirrors
+   * `isConversationClosed` on the API, which refuses the post regardless — this
+   * is so nobody types a paragraph into a thread nobody is reading.
+   *
+   * Notes are a separate question: staff keep theirs on an ended ticket, which
+   * is why this gates the composer's PUBLIC half rather than the whole box.
+   */
+  const conversationClosed = isConversationClosed(ticket.status);
   const comments = commentsQuery.data ?? [];
   commentsRef.current = comments; // latest snapshot for the scroll/jump handlers
 
@@ -406,7 +427,7 @@ export function TicketDetailView({ id }: { id: number }) {
             <span className="text-caption font-semibold text-muted">SLA</span>
             <SlaBadge sla={assess(ticket)} />
           </span>
-          {canResolve || awaitingMyConfirmation ? (
+          {canResolve || awaitingMyConfirmation || canCancel ? (
             // flex-wrap: a requester answering their own pending ticket gets two
             // buttons here on top of whatever the desk is offered, and the strip
             // must wrap rather than widen the header past the viewport.
@@ -444,6 +465,17 @@ export function TicketDetailView({ id }: { id: number }) {
                     {t("closure.reject")}
                   </button>
                 </>
+              ) : null}
+              {/* Withdrawing it. Quiet styling on purpose: this is the way out,
+                  not something to nudge anybody towards, and it sits last. */}
+              {canCancel ? (
+                <button
+                  type="button"
+                  onClick={() => setCancelling(true)}
+                  className="rounded-md border border-line bg-white px-3 py-1.5 text-body font-semibold text-muted hover:text-danger"
+                >
+                  {t("cancelTicket.action")}
+                </button>
               ) : null}
             </span>
           ) : null}
@@ -614,6 +646,14 @@ export function TicketDetailView({ id }: { id: number }) {
               />
             ) : null}
 
+            {cancelling ? (
+              <CancelTicketDialog
+                ticketId={ticket.id}
+                onClose={() => setCancelling(false)}
+                onCancelled={() => setCancelling(false)}
+              />
+            ) : null}
+
             {/* Mounted rather than conditionally created, so its own close
                 effect can reset the draft from the ticket. */}
             <EditTicketModal
@@ -622,13 +662,37 @@ export function TicketDetailView({ id }: { id: number }) {
               onClose={() => setEditing(false)}
             />
 
-            <Composer
-              ticketId={ticket.id}
-              requester={ticket.requester}
-              requesterEmail={ticket.requesterEmail}
-              canAddNote={canWrite}
-              internalOnly={isInternalThread(ticket.requesterRole)}
-            />
+            {/* The conversation is over, and there is nothing left this viewer
+                may write. A line saying so, not an empty space: a composer that
+                simply vanishes reads as a page that failed to load, and the
+                sentence is also where the way back is named.
+
+                Staff still get the composer here — `internalOnly` collapses it
+                to the note tab — because notes stay open on an ended ticket.
+                What decides between the two is whether the viewer has anything
+                left to say, not the ticket's status alone. */}
+            {conversationClosed && !canWrite ? (
+              <div className="mt-auto rounded-lg border border-dashed border-line bg-wash px-4 py-3 text-body text-subtle">
+                {t(
+                  ticket.status === "cancelled"
+                    ? "composer.lockedCancelled"
+                    : "composer.lockedClosed",
+                )}
+              </div>
+            ) : (
+              <Composer
+                ticketId={ticket.id}
+                requester={ticket.requester}
+                requesterEmail={ticket.requesterEmail}
+                canAddNote={canWrite}
+                // Once the public thread is shut, a note is the only thing left
+                // to write — the same shape a staff-raised ticket has from the
+                // start, and the composer already knows how to be that.
+                internalOnly={
+                  conversationClosed || isInternalThread(ticket.requesterRole)
+                }
+              />
+            )}
             <div ref={bottomRef} aria-hidden />
           </div>
         </div>
