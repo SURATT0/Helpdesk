@@ -37,13 +37,15 @@ test("the requester can withdraw a ticket the desk has not moved", async ({
 }) => {
   await requesterRaises(page);
 
-  await page.getByRole("button", { name: "Cancel request" }).click();
+  await page.getByRole("button", { name: "Cancel request" }).first().click();
   const reason = `Sorted it myself ${Date.now()}`;
   await page.getByLabel("Why are you cancelling? (optional)").fill(reason);
-  // The confirm, not the "Keep it open" beside it.
+  // Scoped to the dialog: the header button that opened it carries the same
+  // label, and choosing between the two by DOM position is exactly the kind of
+  // thing that breaks when the dialog moves in the tree.
   await page
+    .getByRole("dialog")
     .getByRole("button", { name: "Cancel request", exact: true })
-    .last()
     .click();
 
   // Its own badge, not Closed — the two endings have to be told apart.
@@ -55,10 +57,10 @@ test("a cancelled ticket takes no more messages, and says so", async ({
   page,
 }) => {
   await requesterRaises(page);
-  await page.getByRole("button", { name: "Cancel request" }).click();
+  await page.getByRole("button", { name: "Cancel request" }).first().click();
   await page
+    .getByRole("dialog")
     .getByRole("button", { name: "Cancel request", exact: true })
-    .last()
     .click();
   await expect(page.getByText("Cancelled").first()).toBeVisible();
 
@@ -96,6 +98,9 @@ test("a closed ticket keeps the note tab for staff but loses the public thread",
   await page.goto(url);
   await page.getByRole("button", { name: /New|In Progress/ }).first().click();
   await page.getByRole("button", { name: /^Closed$/ }).click();
+  // `new → closed` finishes the work, so it asks what was done before it moves.
+  await page.getByLabel("How it was fixed").fill("Handled and closed.");
+  await page.getByRole("button", { name: "Close ticket" }).click();
   await expect(page.getByText("Closed").first()).toBeVisible();
 
   // No chat box: an agent's public message would email somebody about a ticket
@@ -114,6 +119,8 @@ test("the requester loses the way out once the desk has moved it", async ({
   await loginAs(page, DEMO.email);
   await page.goto(url);
   await page.getByRole("button", { name: "Done — ask requester" }).click();
+  await page.getByLabel("How it was fixed").fill("Replaced the dock.");
+  await page.getByRole("button", { name: "Send to requester" }).click();
   await expect(page.getByText("Pending").first()).toBeVisible();
 
   await loginAs(page, REQUESTER);
