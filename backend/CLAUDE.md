@@ -14,6 +14,19 @@ Project-wide rules (domain invariants, RBAC scoping, design source of truth) liv
 
 ## Database objects Prisma does not know about
 
+**Column collation is one of them.** `categories.name`, `customers.name`,
+`projects.name` and `users.name` carry `COLLATE "th-TH-x-icu"`, set in migration
+SQL, because Prisma models no collation at all — not in the schema, and not in
+`orderBy`. This is what makes every `ORDER BY name` Prisma emits sort Thai the
+way a Thai reader reads it; without it the default (`en_US.utf8`, which on this
+Alpine/musl image is byte order) strands every word beginning with a leading
+vowel — เ แ โ ใ ไ — at the end of the list. See `docs/thai-collation.md`.
+
+Because Prisma cannot see it, **a `migrate dev` that alters one of those columns
+will silently drop the COLLATE**. `collation.integration.test.ts` sorts a Thai
+fixture through Prisma's own `orderBy` and fails if it comes back in byte order,
+so losing it turns a test red rather than quietly un-sorting the product.
+
 One **partial unique index** exists only in migration SQL, because Prisma has no
 syntax for it:
 
