@@ -635,6 +635,23 @@ model Ticket {
   customer       Customer              @relation(fields: [customerId], references: [id])
   dueAt          DateTime?             @map("due_at") // computed from SLA policy at creation
   resolvedAt     DateTime?             @map("resolved_at") // set when it first reaches resolved; drives SLA met/breached
+  /// What the desk did about it, written when the work is declared finished.
+  ///
+  /// Nullable in the database and required in the domain, the same split
+  /// `categoryOther` makes and for the same first reason: every ticket closed
+  /// before this column existed has none and must still open. The second reason
+  /// differs — the rule is about the MOVE, not the row. `new → pending` and
+  /// `new → closed` must carry one; `pending → closed` must not, because the
+  /// requester confirming and the 72h sweep are not the ones who did the work.
+  /// A CHECK constraint here can only see the row it is written on, never which
+  /// transition put it there, so the rule lives in `requiresResolution` in
+  /// shared/ticket-status.ts and is enforced at the one place status is written.
+  ///
+  /// A reopen keeps whatever is here rather than clearing it: the ticket that
+  /// comes back is the same ticket, and the account of what was tried last time
+  /// is the most useful thing the person picking it up can read. Finishing it
+  /// again overwrites this with the new answer.
+  resolution     String?               @map("resolution")
   closedAt       DateTime?             @map("closed_at")
   // Soft delete, super-admin only. The normal end of a ticket's life is `closed`,
   // which keeps it in the history log; this is the escape hatch for a row that
