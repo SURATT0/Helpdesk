@@ -1,5 +1,5 @@
 import { env } from "../../config/env";
-import { canTransition } from "../../shared/ticket-status";
+import { canTransition, requiresResolution } from "../../shared/ticket-status";
 import {
   type Priority,
   type TicketStatus,
@@ -16,6 +16,7 @@ import {
   NotYourTicketToEdit,
   NotYoursToRead,
   ReopenWindowExpired,
+  ResolutionRequired,
   SameAssignee,
   TicketClosedForEditing,
   TicketNotAwaitingAnswer,
@@ -551,12 +552,31 @@ export const ticketService = {
     id: number,
     next: TicketStatus,
     user: AuthUser,
+    resolution?: string,
   ): Promise<Ticket> {
     // get() applies row scope, so an out-of-scope ticket 404s before any write.
     const ticket = await this.get(id, user);
     if (ticket.status !== next && !canTransition(ticket.status, next)) {
       throw IllegalTransition(ticket.status, next);
     }
+    /**
+     * What was done — asked of the MOVE, not the destination, and only when the
+     * move is a real one.
+     *
+     * Re-sending the status a ticket is already in is a no-op further down
+     * (`updateStatus` returns the row untouched), so it must not be treated as
+     * a second finish and asked for a fresh account of work nobody redid.
+     *
+     * The text is carried into the write ONLY for the moves that require it.
+     * A `resolution` arriving on any other move is dropped rather than stored:
+     * this column is the desk's account of finishing the work, and the two
+     * other ways a ticket reaches `closed` are the requester confirming and the
+     * sweep timing out. Writing whatever they sent would let a confirmation
+     * overwrite the sentence the person who actually did the work left behind.
+     */
+    const finishing =
+      ticket.status !== next && requiresResolution(ticket.status, next);
+    if (finishing && !resolution) throw ResolutionRequired();
     // Reopen is only allowed within 30 days of closing; beyond that, a new ticket.
     // Reopening comes back as `new`, and the assignee is left alone: the person
     // who closed it is the one who knows it, so it returns as their In Progress
@@ -566,7 +586,12 @@ export const ticketService = {
         throw ReopenWindowExpired();
       }
     }
-    const updated = await ticketRepository.updateStatus(id, next, user.id);
+    const updated = await ticketRepository.updateStatus(
+      id,
+      next,
+      user.id,
+      finishing ? resolution : undefined,
+    );
     if (!updated) throw NotFound(`Ticket #${id} not found`);
     return updated;
   },

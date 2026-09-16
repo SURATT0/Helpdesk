@@ -69,6 +69,7 @@ export const API_ERROR_CODES = [
   "TICKET_NOT_AWAITING_ANSWER",
   "SAME_ASSIGNEE",
   "CATEGORY_DETAIL_REQUIRED",
+  "RESOLUTION_REQUIRED",
   "NOT_ASSIGNABLE",
   // People, projects, customers.
   "LAST_ADMIN",

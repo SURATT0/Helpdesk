@@ -1287,7 +1287,7 @@ describe("tickets — status transitions", () => {
     const res = await request(app)
       .patch(`${API}/tickets/1035/status`) // new → pending (the work is done)
       .set(bearer(dana))
-      .send({ status: "pending" });
+      .send({ status: "pending", resolution: "Cleared the stuck print job." });
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe("pending");
     // 1035 has an assignee, so before the move it READ as In Progress; now the
@@ -1306,7 +1306,7 @@ describe("tickets — status transitions", () => {
     await request(app)
       .patch(`${API}/tickets/1042/status`)
       .set(bearer(dana))
-      .send({ status: "closed" })
+      .send({ status: "closed", resolution: "Raised and handled by the desk." })
       .expect(200);
     const res = await request(app)
       .patch(`${API}/tickets/1042/status`)
@@ -1327,11 +1327,11 @@ describe("tickets — status transitions", () => {
       request(app)
         .patch(`${API}/tickets/1035/status`)
         .set(bearer(dana))
-        .send({ status: "closed" }),
+        .send({ status: "closed", resolution: "Closed it outright." }),
       request(app)
         .patch(`${API}/tickets/1035/status`)
         .set(bearer(dana))
-        .send({ status: "pending" }),
+        .send({ status: "pending", resolution: "Handed back to be checked." }),
     ]);
 
     // Both moves are legal from `new`, so one wins outright. The loser is
@@ -1369,7 +1369,10 @@ describe("tickets — status transitions", () => {
       request(app)
         .patch(`${API}/tickets/1035/status`) // new → pending
         .set(bearer(dana))
-        .send({ status: "pending" });
+        // Sent on both calls. The second is a no-op (`pending → pending`), and
+        // a no-op is deliberately not treated as a second finish — nobody redid
+        // the work, so nothing is asked for and nothing is rewritten.
+        .send({ status: "pending", resolution: "Reseated the network cable." });
 
     expect((await send()).status).toBe(200);
     expect((await send()).status).toBe(200); // double submit
@@ -2756,7 +2759,7 @@ describe("notifications", () => {
     await request(app)
       .patch(`${API}/tickets/1042/status`)
       .set(bearer(dana))
-      .send({ status: "pending" })
+      .send({ status: "pending", resolution: "Rebuilt the user profile." })
       .expect(200);
 
     const marcusN = await request(app)
@@ -2833,7 +2836,7 @@ describe("tickets — status history", () => {
     await request(app)
       .patch(`${API}/tickets/1042/status`)
       .set(bearer(dana))
-      .send({ status: "pending" })
+      .send({ status: "pending", resolution: "Rebuilt the user profile." })
       .expect(200);
 
     const after = await request(app)

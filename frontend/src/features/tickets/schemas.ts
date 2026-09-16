@@ -95,6 +95,12 @@ export const ticketSchema = z.object({
   dueAt: z.string().nullable(),
   resolvedAt: z.string().nullable(),
   /**
+   * What the desk did about it — null until somebody finishes it, and null
+   * forever on tickets closed before it was asked for. `.default(null)` so a
+   * cached response from an older server still parses.
+   */
+  resolution: z.string().nullable().default(null),
+  /**
    * This ticket's customer's "due soon" window, in milliseconds.
    *
    * Per ticket rather than per response: a list can span tenants, and each row
