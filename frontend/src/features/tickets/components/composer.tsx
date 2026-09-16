@@ -55,7 +55,41 @@ export function Composer({
   const sendReply = useSendReply(ticketId);
   const upload = useUploadAttachment(ticketId);
   const lastTypingRef = React.useRef(0);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const firstName = requester.split(" ")[0];
+
+  /**
+   * Grow the box to fit what has been typed, between the `rows` floor and the
+   * `max-h` ceiling.
+   *
+   * The reset is `height = ""`, NOT `height = "auto"`. Both drop the height this
+   * effect set last time — which has to happen, or the element can only ever
+   * grow and refuses to shrink back when you delete a line — but only the empty
+   * string hands the sizing back to the `rows` attribute. With `auto` the
+   * element sizes to its CONTENT, so an empty chat box measured one line and
+   * collapsed from the two `rows` asks for, and the Reply tab lost all three.
+   *
+   * Then: only override when the content genuinely needs more than `rows` gives,
+   * capped at the `max-h` on the element — read back off the computed style
+   * rather than repeated here, so the two cannot drift. Past the cap the element
+   * stops growing and its own `overflow-y-auto` takes the rest, which is what
+   * keeps a pasted essay from pushing the conversation off screen.
+   *
+   * No dependency array on purpose: this has to re-run for anything that changes
+   * the content or the floor — the draft, the tab (`rows` differs), a resize
+   * that rewraps the text — and it is three reads and at most one write.
+   */
+  React.useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "";
+    if (el.scrollHeight <= el.clientHeight) return; // `rows` is enough
+    const cap = Number.parseFloat(getComputedStyle(el).maxHeight);
+    const next = Number.isFinite(cap)
+      ? Math.min(el.scrollHeight, cap)
+      : el.scrollHeight;
+    el.style.height = `${next}px`;
+  });
 
   // Emit a throttled "typing" ping while the user writes a chat message, so the
   // other participant sees a live indicator. Chat tab only; at most every 2.5s.
@@ -193,7 +227,17 @@ export function Composer({
         : t("composer.send");
 
   return (
-    <div className="mt-auto overflow-hidden rounded-lg border border-line bg-white">
+    /* `mt-auto` is gone with the reason for it. This used to be the last child
+       of the scrolling conversation, where `mt-auto` was what pushed it to the
+       bottom of whatever space was left over. It is now a `flex-none` sibling of
+       that scroller, so the bottom is simply where it is.
+
+       `flex-none` is not decoration: as a flex child with no floor of its own
+       this box is the one thing in the column that WILL shrink. A <textarea> has
+       a tiny min-content height — it can always scroll its own text — so when
+       the conversation refused to give up any height, flexbox took it from here
+       and the text box collapsed. That was the bug. */
+    <div className="overflow-hidden rounded-lg border border-line bg-white">
       <div className="flex border-b border-hairline text-body font-semibold">
         {noteOnly ? null : (
           <button
@@ -279,6 +323,7 @@ export function Composer({
       ) : null}
 
       <textarea
+        ref={textareaRef}
         rows={isReply ? 3 : 2}
         value={body}
         onChange={(e) => onBodyChange(e.target.value)}
@@ -291,7 +336,12 @@ export function Composer({
         }}
         placeholder={placeholder}
         className={cn(
-          "w-full resize-none px-4 py-3 text-ink placeholder:text-faint focus:outline-none",
+          // `max-h-[9.5rem]` ≈ five lines. Past that the box stops growing and
+          // scrolls its own content, which is what keeps a pasted essay from
+          // eating the conversation above it. `overflow-y-auto` rather than
+          // `scroll` so no track shows for the ordinary one-liner.
+          "w-full resize-none overflow-y-auto px-4 py-3 text-ink placeholder:text-faint focus:outline-none",
+          "max-h-[9.5rem]",
           FIELD_TEXT,
           isNote && "bg-warn-tint",
         )}

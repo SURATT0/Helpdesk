@@ -353,6 +353,9 @@ const en: Dict = {
   "bulk.result": "{ok} updated · {failed} failed",
 
   "detail.tickets": "Tickets",
+  // The phone-only fold-out that holds the properties rail. Below `lg` the
+  // conversation fills the screen, so the rail moves above it and folds away.
+  "detail.detailsToggle": "Ticket details",
   "detail.markResolved": "Done — ask requester",
   // The requester's half of closing a ticket. Their words, not the desk's:
   // "confirm the fix" rather than "close the ticket", because closing is what
@@ -1506,6 +1509,7 @@ const th: Dict = {
   "bulk.result": "สำเร็จ {ok} · ล้มเหลว {failed}",
 
   "detail.tickets": "Ticket",
+  "detail.detailsToggle": "รายละเอียดทิกเก็ต",
   "detail.markResolved": "เสร็จแล้ว — ส่งให้ผู้แจ้งยืนยัน",
   // ฝั่งผู้แจ้ง — ใช้คำของผู้แจ้ง ไม่ใช่ของทีมงาน
   "closure.confirm": "ใช่ แก้ได้แล้ว",
