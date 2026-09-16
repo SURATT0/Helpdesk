@@ -237,7 +237,10 @@ export function Composer({
        a tiny min-content height — it can always scroll its own text — so when
        the conversation refused to give up any height, flexbox took it from here
        and the text box collapsed. That was the bug. */
-    <div className="overflow-hidden rounded-lg border border-line bg-white">
+    <div
+      data-testid="composer"
+      className="overflow-hidden rounded-lg border border-line bg-white"
+    >
       <div className="flex border-b border-hairline text-body font-semibold">
         {noteOnly ? null : (
           <button

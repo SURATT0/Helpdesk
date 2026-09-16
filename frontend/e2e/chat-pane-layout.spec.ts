@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { login } from "./helpers";
+import { login, loginAs } from "./helpers";
 
 /**
  * The chat pane's geometry: the conversation scrolls, the composer does not move.
@@ -21,14 +21,23 @@ const PHONE = { width: 375, height: 800 };
 const CHAT_BOX = /Enter to send/;
 
 /**
- * A ticket of this spec's own, for the cases that POST into the thread.
+ * A ticket of this spec's own, raised BY A REQUESTER, for the cases that post
+ * into the thread.
  *
  * Not seeded 1042: the suite is `fullyParallel`, several specs read that ticket,
  * and dropping a dozen probe messages into it from here is how a shared fixture
  * turns into cross-spec flake. The read-only measurements below still use 1042,
  * which they cannot disturb.
+ *
+ * And not raised as the demo AGENT, which is what this did first: a ticket
+ * raised by staff has no external side (`isInternalThread`), so its composer is
+ * note-only and there is no "Enter to send" box on it at all. The chat pane is
+ * what this spec measures, so the ticket has to be one that HAS a chat.
  */
+const REQUESTER = "r.danforth@acme.com";
+
 async function ownTicket(page: Page): Promise<void> {
+  await loginAs(page, REQUESTER);
   await page.goto("/tickets");
   await page.getByRole("button", { name: "New ticket" }).click();
   await page.getByLabel("Subject").fill(`Chat layout probe ${Date.now()}`);
@@ -65,7 +74,6 @@ test("a long thread scrolls inside the pane and leaves the composer alone", asyn
   page,
 }) => {
   await page.setViewportSize(DESKTOP);
-  await login(page);
   await ownTicket(page);
 
   const chat = page.getByTestId("chat-scroll");
@@ -76,7 +84,8 @@ test("a long thread scrolls inside the pane and leaves the composer alone", asyn
   const before = await composer.boundingBox();
   expect(before).toBeTruthy();
 
-  // Enough to overflow the pane at 900px tall whatever the seed left on 1042.
+  // Enough to overflow the pane at 900px tall. The ticket is newly raised, so
+  // the only thing above these is its opening description.
   await fillThread(page, 12);
 
   // 1. The conversation overflows and owns a scrollbar of its own.
@@ -130,7 +139,6 @@ test("an unbroken 400-character word wraps instead of widening the page", async 
   page,
 }) => {
   await page.setViewportSize(DESKTOP);
-  await login(page);
   await ownTicket(page);
 
   const composer = page.getByPlaceholder(CHAT_BOX);
@@ -189,7 +197,6 @@ test("on a phone the composer is reachable and the thread still has room", async
   page,
 }) => {
   await page.setViewportSize(PHONE);
-  await login(page);
   await ownTicket(page);
 
   const chat = page.getByTestId("chat-scroll");

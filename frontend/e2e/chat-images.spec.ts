@@ -22,10 +22,16 @@ const TICKET = 1042;
 /**
  * Put files on the COMPOSER's hidden input.
  *
- * Scoped to the chat pane: the sidebar has a file input of its own, and an
+ * Scoped to the COMPOSER: the sidebar has a file input of its own, and an
  * unscoped selector matches both. They are also not interchangeable — the
  * sidebar's upload is ticket-level, so a file added there is deliberately
  * attached to no message and would never appear in a bubble.
+ *
+ * It used to scope to `chat-scroll`, which worked only because the composer was
+ * then the last child of the scrolling conversation. It is a `flex-none` sibling
+ * of that scroller now — so that it stops being squeezed by a long thread — and
+ * scoping to the thing this helper is actually named after is what it should
+ * have been doing regardless.
  *
  * And scoped again WITHIN the composer, which now carries two inputs: the
  * picker, and a `capture` one that opens the camera on a touch device. The
@@ -39,7 +45,7 @@ async function attach(
   files: { name: string; mimeType: string; buffer: Buffer }[],
 ) {
   await page
-    .getByTestId("chat-scroll")
+    .getByTestId("composer")
     .locator('input[type="file"]:not([capture])')
     .setInputFiles(files);
 }
