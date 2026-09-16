@@ -37,7 +37,10 @@ async function pendingTicketOfMarcus(): Promise<number> {
   await request(app)
     .patch(`${API}/tickets/${ticket.id}/status`)
     .set(bearer(dana))
-    .send({ status: "pending" })
+    // The desk's half of the close now has to say what it did — see
+    // `requiresResolution`. Every test below starts from a ticket that was
+    // finished properly, because that is the only way one reaches `pending`.
+    .send({ status: "pending", resolution: "Swapped the faulty dock." })
     .expect(200);
   return ticket.id;
 }
@@ -212,7 +215,7 @@ describe("who may answer a closure", () => {
     await request(app)
       .patch(`${API}/tickets/${id}/status`)
       .set(bearer(kai))
-      .send({ status: "pending" })
+      .send({ status: "pending", resolution: "Reindexed and verified." })
       .expect(200);
 
     const res = await request(app)

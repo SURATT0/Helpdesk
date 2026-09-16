@@ -9,6 +9,7 @@ import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { FIELD_TEXT_13 } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useKbArticles } from "../queries";
 import { KbEditorModal } from "./kb-editor-modal";
@@ -50,7 +51,7 @@ export function KbBrowser() {
 
   // Mirrors the server’s kb:write grant (admin and up). A requester sees the
   // library read-only, which is the whole point of having one.
-  const canWrite = user != null && user.role !== "user";
+  const canWrite = hasPermission(user, "kb:write");
 
   const categories = data?.categories ?? [];
   const articles = data?.articles ?? [];

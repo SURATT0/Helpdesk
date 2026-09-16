@@ -373,6 +373,61 @@ export const DeskAlreadyStarted = () =>
 export const TicketClosedForEditing = () =>
   new AppError(409, "TICKET_CLOSED_FOR_EDITING", "This ticket is closed and cannot be edited");
 
+/**
+ * A public message aimed at a ticket that is over.
+ *
+ * 409 rather than 403: nothing is wrong with who is asking — the same person
+ * could post this a moment earlier, and can again if the ticket is reopened.
+ * What is wrong is the state, which is exactly what a conflict says. Carries the
+ * state so the page can word itself ("this ticket was cancelled") rather than
+ * guessing from a status it may have re-fetched since.
+ */
+export const ConversationClosed = (actual: string) =>
+  new AppError(
+    409,
+    "CONVERSATION_CLOSED",
+    `This ticket is "${actual}" — reopen it to carry on the conversation`,
+    { actual },
+  );
+
+/** Somebody other than the requester tried to withdraw a ticket. */
+export const NotYourTicketToCancel = () =>
+  new AppError(
+    403,
+    "NOT_YOUR_TICKET_TO_CANCEL",
+    "Only the person who raised a ticket can cancel it",
+  );
+
+/**
+ * A cancellation that arrived after the desk had already moved the ticket.
+ *
+ * Carries the state it is in, because the page's next move is to re-render at
+ * that state and the sentence should name it.
+ */
+export const TicketAlreadyStarted = (actual: string) =>
+  new AppError(
+    409,
+    "TICKET_ALREADY_STARTED",
+    `This ticket is "${actual}" — the desk has already moved it, so it can no longer be cancelled`,
+    { actual },
+  );
+
+/**
+ * The desk finished a ticket without saying what it did.
+ *
+ * 400 rather than 409: nothing about the ticket's state is wrong, the request
+ * is simply incomplete — the same answer a missing `subject` gets. `fields`
+ * names the input so the form can mark it, which is why this is not a bare
+ * BadRequest with a sentence.
+ */
+export const ResolutionRequired = () =>
+  new AppError(
+    400,
+    "RESOLUTION_REQUIRED",
+    "Say what was done to fix this before finishing it",
+    { fields: ["resolution"] },
+  );
+
 /** A handover whose source and target are the same person. */
 export const SameAssignee = () =>
   new AppError(400, "SAME_ASSIGNEE", "Source and target assignee are the same");
@@ -584,6 +639,10 @@ export const ERROR_CODES = [
   "TICKET_NOT_AWAITING_ANSWER",
   "SAME_ASSIGNEE",
   "CATEGORY_DETAIL_REQUIRED",
+  "CONVERSATION_CLOSED",
+  "NOT_YOUR_TICKET_TO_CANCEL",
+  "TICKET_ALREADY_STARTED",
+  "RESOLUTION_REQUIRED",
   "NOT_ASSIGNABLE",
   // People, projects, customers.
   "LAST_ADMIN",

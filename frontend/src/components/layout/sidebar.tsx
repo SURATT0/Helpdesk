@@ -17,7 +17,7 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
-import type { Role } from "@/features/auth/schemas";
+import { hasPermission } from "@/lib/permissions";
 import { Logo } from "./logo";
 import { Avatar } from "@/components/ui/avatar";
 import { TOUCH_TARGET } from "@/components/ui/touch";
@@ -27,21 +27,29 @@ import { useI18n } from "@/features/i18n/context";
 import { cn } from "@/lib/utils";
 
 /**
- * `roles` restricts who sees the entry. Omitted = everyone. This only hides
+ * `permission` restricts who sees the entry. Omitted = everyone. This only hides
  * links that would be refused anyway — the API permission check is the real
  * gate, and the page itself also handles the forbidden case for a direct visit.
  *
+ * It used to be a `roles` list, and every entry carrying one had a comment above
+ * it naming the grant it was "mirroring". That mirror was the bug: grants are
+ * editable from the matrix screen, so the comment stayed true and the code
+ * stopped being — take `audit:read` away from admin and the entry remained,
+ * leading to a forbidden panel. Naming the permission means there is nothing
+ * left to mirror.
+ *
  * `platformWide` narrows it further, to staff who belong to no customer of their
- * own. Role and reach are separate axes, so a role list alone cannot express
- * "tenant management": a super admin who belongs to a customer holds the top
- * role and has no business creating or ending tenants — the API refuses them
- * now, and an entry that led straight to that refusal was worse than no entry.
+ * own. Role and reach are separate axes, so a permission alone cannot express
+ * "tenant management": a super admin who belongs to a customer may hold
+ * `customer:write` and still has no business creating or ending tenants — the
+ * API refuses them, and an entry that led straight to that refusal was worse
+ * than no entry.
  */
 const NAV: Array<{
   href: string;
   key: string;
   icon: typeof LayoutDashboard;
-  roles?: readonly Role[];
+  permission?: string;
   platformWide?: true;
 }> = [
   { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
@@ -49,10 +57,15 @@ const NAV: Array<{
   // No `roles`: the closed-ticket log is a ticket read, so repository row
   // scoping already narrows it — a requester sees their own closed tickets.
   { href: "/history", key: "nav.history", icon: Archive },
-  // Mirrors the server's user:read grant. A requester was shown this and got a
-  // forbidden panel — the directory is the desk's list of who it serves, and the
-  // one account they can act on (their own away state) lives in Settings.
-  { href: "/users", key: "nav.users", icon: Users, roles: ["admin", "super_admin"] },
+  // The server's user:read grant, asked directly. A requester was shown this and
+  // got a forbidden panel — the directory is the desk's list of who it serves,
+  // and the one account they can act on (their own away state) lives in Settings.
+  {
+    href: "/users",
+    key: "nav.users",
+    icon: Users,
+    permission: "user:read",
+  },
   // Mirrors the server's project:read grant, like the audit entry below. Reading
   // the routing table is desk work — it says where a queue's work comes from —
   // while changing who owns a project stays with project:write, above admin.
@@ -68,7 +81,11 @@ const NAV: Array<{
     href: "/admin/customers",
     key: "nav.customers",
     icon: Building2,
-    roles: ["super_admin"],
+    // Both halves of what the API asks: `customer:write` AND platform reach.
+    // The role list this replaced was redundant with the reach flag — only the
+    // top role can be platform-wide — but it could not express a super admin
+    // whose `customer:write` had been taken away, which this does.
+    permission: "customer:write",
     platformWide: true,
   },
   // The routing table, kept for everyone `project:read` reaches. Folding it into
@@ -86,7 +103,7 @@ const NAV: Array<{
     href: "/projects",
     key: "nav.projects",
     icon: FolderKanban,
-    roles: ["admin", "super_admin"],
+    permission: "project:read",
   },
   // Reviewing what people typed under "Other". Top tier only, mirroring the
   // server's `category:write` — and unlike the entries above it, the READ is
@@ -97,17 +114,17 @@ const NAV: Array<{
     href: "/categories",
     key: "nav.categories",
     icon: Tag,
-    roles: ["super_admin"],
+    permission: "category:write",
   },
   { href: "/reports", key: "nav.reports", icon: BarChart3 },
   { href: "/kb", key: "nav.kb", icon: BookOpen },
-  // Mirrors the server's audit:read grant. An admin working a case needs to see
-  // what happened to a ticket before they picked it up; nobody writes it.
+  // The server's audit:read grant, asked directly. An admin working a case needs
+  // to see what happened to a ticket before they picked it up; nobody writes it.
   {
     href: "/audit",
     key: "nav.audit",
     icon: ScrollText,
-    roles: ["admin", "super_admin"],
+    permission: "audit:read",
   },
   { href: "/permissions", key: "nav.permissions", icon: ShieldCheck },
   { href: "/settings", key: "nav.settings", icon: Settings },
@@ -143,8 +160,8 @@ export function Sidebar() {
 
       <nav className="flex flex-col gap-0.5">
         {NAV.filter(
-          ({ roles, platformWide }) =>
-            (!roles || (user != null && roles.includes(user.role))) &&
+          ({ permission, platformWide }) =>
+            (!permission || hasPermission(user, permission)) &&
             (!platformWide || user?.platformWide === true),
         ).map(({ href, key, icon: Icon }) => {
           const active =

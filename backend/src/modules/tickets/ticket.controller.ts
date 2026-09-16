@@ -5,6 +5,7 @@ import {
   closedHistoryQuery,
   closedPeriodsQuery,
   createTicketBody,
+  cancelTicketBody,
   idempotencyKeyHeader,
   importTicketsBody,
   listTicketsQuery,
@@ -136,8 +137,13 @@ export const ticketController = {
 
   async updateStatus(req: Request, res: Response) {
     const { id } = ticketIdParam.parse(req.params);
-    const { status } = updateStatusBody.parse(req.body);
-    const ticket = await ticketService.changeStatus(id, status, currentUser(req));
+    const { status, resolution } = updateStatusBody.parse(req.body);
+    const ticket = await ticketService.changeStatus(
+      id,
+      status,
+      currentUser(req),
+      resolution,
+    );
     res.json({ data: ticket });
   },
 
@@ -169,6 +175,14 @@ export const ticketController = {
       reason,
       currentUser(req),
     );
+    res.json({ data: ticket });
+  },
+
+  /** The requester withdrawing a ticket the desk has not moved yet. */
+  async cancel(req: Request, res: Response) {
+    const { id } = ticketIdParam.parse(req.params);
+    const { reason } = cancelTicketBody.parse(req.body ?? {});
+    const ticket = await ticketService.cancelOwn(id, reason, currentUser(req));
     res.json({ data: ticket });
   },
 

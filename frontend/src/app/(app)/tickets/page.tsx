@@ -11,19 +11,19 @@ import { TicketBoard } from "@/features/tickets/components/ticket-board";
 import { ImportTicketsModal } from "@/features/tickets/components/import-tickets-modal";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type View = "list" | "board";
 
 // Roles that may bulk-import tickets (mirrors the backend `ticket:import` grant).
-const CAN_IMPORT = new Set(["super_admin", "admin"]);
 
 export default function TicketsPage() {
   const { t } = useI18n();
   const { user } = useAuth();
   const [view, setView] = React.useState<View>("list");
   const [importOpen, setImportOpen] = React.useState(false);
-  const canImport = user ? CAN_IMPORT.has(user.role) : false;
+  const canImport = hasPermission(user, "ticket:import");
 
   return (
     <>

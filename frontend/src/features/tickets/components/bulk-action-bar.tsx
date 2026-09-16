@@ -6,14 +6,18 @@ import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
 import { PRIORITIES } from "@/lib/domain";
-import { DB_STATUSES } from "@/lib/ticket-status";
+import { DB_STATUSES, type TicketStatus } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { useBulkTicketAction, type BulkAction } from "../queries";
+import { ResolutionDialog } from "./resolution-dialog";
 
 // The three STORED values — a bulk write sends `status`, so this menu offers
 // what a write may carry. "In Progress" is absent because it is derived: it is
 // `new` with an assignee, which the Assign menu beside this one is for.
-const STATUSES = DB_STATUSES;
+// Every stored value the DESK may set. `cancelled` is absent because it is not
+// the desk's move — withdrawing a request belongs to the person who made it, and
+// the API refuses the value on the route this bar fans out to.
+const STATUSES = DB_STATUSES.filter((s) => s !== "cancelled");
 const ASSIGNABLE_ROLES = ["super_admin", "admin"];
 
 function Menu({
@@ -78,6 +82,8 @@ export function BulkActionBar({
   const bulk = useBulkTicketAction();
   const { data: users = [] } = useUsers();
   const [note, setNote] = React.useState<string | null>(null);
+  // Which destination the resolution dialog is collecting for, or null when shut.
+  const [resolving, setResolving] = React.useState<TicketStatus | null>(null);
 
   const staff = users.filter((u) => ASSIGNABLE_ROLES.includes(u.role));
 
@@ -87,6 +93,7 @@ export function BulkActionBar({
       { ids: selectedIds, action },
       {
         onSuccess: (res) => {
+          setResolving(null);
           if (res.failed === 0) {
             onClear();
           } else {
@@ -100,6 +107,31 @@ export function BulkActionBar({
         },
       },
     );
+  }
+
+  /**
+   * A bulk status change asks for a resolution whenever the destination is one
+   * a finish can land on — `pending` or `closed`.
+   *
+   * It cannot do better than "whenever", because the selection is a set of ids
+   * and this bar never loaded their rows: whether any given ticket is making a
+   * move that requires text is a question about its CURRENT status, which only
+   * the server knows. So the text is collected for the whole batch and sent
+   * with every patch; the server writes it on the tickets that were finished by
+   * this move and drops it on the rest (a `pending` ticket in the selection
+   * being confirmed closed keeps the resolution whoever did the work wrote).
+   *
+   * Asking once for the batch is also the right shape for the case that
+   * produces a bulk close — one incident, many tickets, one account of the fix.
+   * `new` is not asked: reopening and sending back finish nothing.
+   */
+  function chooseStatus(status: TicketStatus) {
+    if (status === "new") {
+      apply({ kind: "status", status });
+      return;
+    }
+    setNote(null);
+    setResolving(status);
   }
 
   return (
@@ -142,7 +174,7 @@ export function BulkActionBar({
                 key={s}
                 onClick={() => {
                   close();
-                  apply({ kind: "status", status: s });
+                  chooseStatus(s);
                 }}
               >
                 <StatusBadge status={s} />
@@ -183,6 +215,19 @@ export function BulkActionBar({
       >
         {t("bulk.clear")}
       </button>
+
+      {resolving ? (
+        <ResolutionDialog
+          target={resolving}
+          count={selectedIds.length}
+          busy={bulk.isPending}
+          error={null}
+          onCancel={() => setResolving(null)}
+          onSubmit={(resolution) =>
+            apply({ kind: "status", status: resolving, resolution })
+          }
+        />
+      ) : null}
     </div>
   );
 }

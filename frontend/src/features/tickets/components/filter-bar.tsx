@@ -11,7 +11,7 @@ import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
 import { useCustomers } from "@/features/customers/queries";
 import { PRIORITIES } from "@/lib/domain";
-import { maySeeTeamWorkload } from "@/lib/permissions";
+import { hasPermission, maySeeTeamWorkload } from "@/lib/permissions";
 import { DISPLAY_STATUSES } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
 import { toneForName } from "../data";
@@ -201,12 +201,14 @@ export function FilterBar() {
     activeCount,
   } = useSearch();
 
-  // Only staff can read the user directory (user:read), and a requester only
-  // ever sees their own tickets — an assignee facet would be meaningless there.
-  const isStaff =
-    user != null &&
-    user.role !== "user";
-  const { data: users = [] } = useUsers({ enabled: isStaff });
+  // The assignee facet needs the user directory, which is `user:read` — asked of
+  // the session rather than inferred from the role. Somebody who only ever sees
+  // their own tickets has no use for the facet anyway.
+  const canReadDirectory = hasPermission(user, "user:read");
+  // The tenant facet is a question about reach, not about a grant — the same one
+  // the ticket table's customer column asks, and deliberately still a role test.
+  const isStaff = user != null && user.role !== "user";
+  const { data: users = [] } = useUsers({ enabled: canReadDirectory });
   /**
    * The tenant facet exists only for a viewer who reaches more than one.
    * With a single customer every ticket carries the same one, so the filter
@@ -304,7 +306,7 @@ export function FilterBar() {
         />
       ) : null}
 
-      {isStaff ? (
+      {canReadDirectory ? (
         <FacetDropdown
           label={t("filter.assignee")}
           options={assigneeOptions}

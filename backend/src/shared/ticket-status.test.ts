@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  canTransition,
+  DB_STATUSES,
   DISPLAY_STATUSES,
   getDisplayStatus,
+  isConversationClosed,
+  requiresResolution,
   toQueryFilter,
   type TicketStatusRecord,
 } from "./ticket-status";
@@ -84,6 +88,84 @@ describe("toQueryFilter", () => {
       expect(hits[0]).toBe(
         getDisplayStatus(ticket as Parameters<typeof getDisplayStatus>[0]),
       );
+    }
+  });
+});
+
+describe("isConversationClosed", () => {
+  it("is true for both endings", () => {
+    expect(isConversationClosed("closed")).toBe(true);
+    expect(isConversationClosed("cancelled")).toBe(true);
+  });
+
+  it("is false while the ticket is still live", () => {
+    // `pending` included: the desk says the work is done, but the requester has
+    // to answer — and answering IS a public message, so the thread must stay open.
+    expect(isConversationClosed("new")).toBe(false);
+    expect(isConversationClosed("pending")).toBe(false);
+  });
+
+  it("answers for the historical words a timeline row can still hold", () => {
+    expect(isConversationClosed("open")).toBe(false);
+    expect(isConversationClosed("in_progress")).toBe(false);
+    expect(isConversationClosed("resolved")).toBe(false);
+  });
+});
+
+describe("cancelled is a status of its own, not a flavour of closed", () => {
+  it("shows as itself rather than folding into Closed", () => {
+    expect(getDisplayStatus({ status: "cancelled", assigneeId: null })).toBe(
+      "cancelled",
+    );
+    // And an assignee does not turn it into In Progress — that derivation is for
+    // unfinished tickets, and this one is over.
+    expect(getDisplayStatus({ status: "cancelled", assigneeId: 7 })).toBe(
+      "cancelled",
+    );
+  });
+
+  it("filters to its own rows, so a Closed filter never counts a withdrawal", () => {
+    expect(toQueryFilter("cancelled")).toEqual({ status: "cancelled" });
+    expect(toQueryFilter("closed")).toEqual({ status: "closed" });
+  });
+});
+
+describe("requiresResolution", () => {
+  it("asks on both moves out of new — the two ways the desk finishes work", () => {
+    expect(requiresResolution("new", "pending")).toBe(true);
+    expect(requiresResolution("new", "closed")).toBe(true);
+  });
+
+  it("does not ask the requester confirming, or the sweep timing out", () => {
+    // Both arrive as pending → closed, and neither did the work. The desk's
+    // account is already on the row from the move into `pending`.
+    expect(requiresResolution("pending", "closed")).toBe(false);
+  });
+
+  it("does not ask on a rejection — it carries its own reason", () => {
+    expect(requiresResolution("pending", "new")).toBe(false);
+  });
+
+  it("does not ask on a reopen — nothing has been finished yet", () => {
+    expect(requiresResolution("closed", "new")).toBe(false);
+  });
+
+  it("is keyed on the pair, not the destination", () => {
+    // `closed` is reached from two directions and only one of them is somebody
+    // finishing work. A rule written as `to === "closed"` would fail this.
+    expect(requiresResolution("new", "closed")).toBe(true);
+    expect(requiresResolution("pending", "closed")).toBe(false);
+  });
+
+  it("only ever asks on moves the whitelist actually allows", () => {
+    // Guards against the two lists drifting: a transition that requires an
+    // account of the work but can never be taken is a rule nobody can satisfy.
+    for (const from of DB_STATUSES) {
+      for (const to of DB_STATUSES) {
+        if (requiresResolution(from, to)) {
+          expect(canTransition(from, to)).toBe(true);
+        }
+      }
     }
   });
 });

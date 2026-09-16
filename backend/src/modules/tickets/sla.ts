@@ -95,6 +95,11 @@ export function deriveSla(
    */
   warnMs: number = SLA_WARN_MS,
 ): { slaDue: string; slaState: SlaState } {
+  // Withdrawn before the desk moved it, so there is no promise to judge. Not
+  // "met" — the desk did not meet anything — and not "breached" either, which
+  // would blame it for work it was told to stop. The same neutral answer a
+  // ticket with no target gets.
+  if (status === "cancelled") return { slaDue: "—", slaState: "ok" };
   // Finished: the work is done (pending, waiting on the requester) or the ticket
   // is over (closed). `resolved_at` is stamped on the move into pending, so both
   // have a resolution time to judge the target against.

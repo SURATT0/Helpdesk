@@ -103,6 +103,18 @@ export const emailService = {
       );
       // An unknown or unauthorized reference is NOT an error: fall through and
       // open a new ticket so the mail is never dropped on the floor.
+      //
+      // Deliberately NOT subject to the closed-conversation lock that
+      // `commentService.create` applies to the in-app composer and the agent's
+      // email reply. That lock exists to stop somebody writing into a thread
+      // nobody is watching; refusing HERE would not stop them writing, it would
+      // throw away a mail already sent, which is worse. So a reply to a ticket
+      // that has since closed still lands on the thread.
+      //
+      // It lands silently, though, and that is a real gap rather than a settled
+      // answer: nothing reopens the ticket and nothing tells the desk. Making it
+      // reopen, or filing it as a new ticket that cites the old one, is a
+      // product decision and is not taken here.
       if (target?.senderMayReply) {
         const comment = await commentRepository.create({
           ticketId: target.id,

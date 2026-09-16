@@ -110,6 +110,10 @@ describe("values are interpolated, shapes are not", () => {
       ILLEGAL_TRANSITION: { from: "closed", to: "pending" },
       CONCURRENT_STATUS_CHANGE: { attemptedFrom: "new", to: "closed", actual: "pending" },
       TICKET_NOT_AWAITING_ANSWER: { actual: "closed" },
+      // Both name the state the ticket is actually in, so the page can say
+      // "cancelled" rather than the generic "over".
+      CONVERSATION_CLOSED: { actual: "closed" },
+      TICKET_ALREADY_STARTED: { actual: "pending" },
       USER_HAS_OPEN_QUEUE: { count: 4 },
       PROJECT_HAS_MEMBERS: { count: 3 },
       CUSTOMER_NOT_EMPTY: { projects: 1, tickets: 2, users: 3 },

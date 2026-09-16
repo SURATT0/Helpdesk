@@ -1,5 +1,5 @@
 import { env } from "../../config/env";
-import { canTransition } from "../../shared/ticket-status";
+import { canTransition, requiresResolution } from "../../shared/ticket-status";
 import {
   type Priority,
   type TicketStatus,
@@ -13,10 +13,13 @@ import {
   NotAssignable,
   NotFound,
   NotYourTicketToAnswer,
+  NotYourTicketToCancel,
   NotYourTicketToEdit,
   NotYoursToRead,
   ReopenWindowExpired,
+  ResolutionRequired,
   SameAssignee,
+  TicketAlreadyStarted,
   TicketClosedForEditing,
   TicketNotAwaitingAnswer,
 } from "../../shared/errors";
@@ -536,6 +539,79 @@ export const ticketService = {
     }
   },
 
+  /**
+   * The requester withdrawing a ticket the desk has not moved yet.
+   *
+   * `new → cancelled`, and only from the person who raised it. A third ending
+   * beside `closed` and the 72h sweep, and the only one that is not the desk's:
+   * the other two say the work finished, this one says it was never needed.
+   *
+   * The window is "while the status is still `new`", which is what the desk not
+   * having moved it MEANS. Assignment is not a move — a ticket can sit with
+   * somebody's name on it and be cancellable, exactly as it can be edited then
+   * (see `editOwnWording`) — so an agent may lose a little reading time to this.
+   * That is the right way round: the alternative is a person who no longer wants
+   * a thing being unable to say so.
+   *
+   * The reason is optional and goes in as a public comment rather than a column,
+   * for the same reason `rejectClosure`'s does — it is a message to whoever
+   * picks the ticket up, and it belongs in the thread they will read.
+   *
+   * Order matters and is not incidental: the comment is posted BEFORE the status
+   * moves. A cancelled ticket's public conversation is closed
+   * (`isConversationClosed`), so a reason written afterwards would be refused by
+   * the very rule this move turns on.
+   */
+  async cancelOwn(
+    id: number,
+    reason: string | undefined,
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const ticket = await this.requireOwnUntouchedTicket(id, user);
+    if (reason) {
+      await commentService.create(ticket.id, { body: reason, internal: false }, user);
+    }
+    // `changeStatus` compare-and-swaps on the status it read, so a desk that
+    // moves this ticket in the same moment wins and the cancellation is refused
+    // with a 409 naming where it actually went — rather than both applying and
+    // the last writer deciding.
+    const cancelled = await this.changeStatus(ticket.id, "cancelled", user);
+    await auditRepository.record({
+      userId: user.id,
+      action: "ticket.cancelled",
+      entity: "ticket",
+      entityId: ticket.id,
+      meta: { via: "in_app", withReason: Boolean(reason) },
+    });
+    return cancelled;
+  },
+
+  /**
+   * The gate for cancelling: this ticket is yours, and nobody has moved it.
+   *
+   * Keyed on being the REQUESTER of this row, never on a role — the same shape
+   * as `requireOwnPendingTicket`, and for the same reason. An admin who raised
+   * their own ticket withdraws it like anyone else; an admin who did not has
+   * `closed` on the desk's endpoint and no business withdrawing somebody's
+   * request on their behalf.
+   *
+   * 404 → 403 → 409, in that order, so each answer means one thing: you cannot
+   * see it, it is not yours, it is too late.
+   */
+  async requireOwnUntouchedTicket(
+    id: number,
+    user: AuthUser,
+  ): Promise<Ticket> {
+    const ticket = await this.get(id, user); // row scope → 404 if out of reach
+    if (ticket.requesterId !== user.id) {
+      throw NotYourTicketToCancel();
+    }
+    if (ticket.status !== "new") {
+      throw TicketAlreadyStarted(ticket.displayStatus);
+    }
+    return ticket;
+  },
+
   async requireOwnPendingTicket(id: number, user: AuthUser): Promise<Ticket> {
     const ticket = await this.get(id, user); // row scope → 404 if out of reach
     if (ticket.requesterId !== user.id) {
@@ -551,12 +627,31 @@ export const ticketService = {
     id: number,
     next: TicketStatus,
     user: AuthUser,
+    resolution?: string,
   ): Promise<Ticket> {
     // get() applies row scope, so an out-of-scope ticket 404s before any write.
     const ticket = await this.get(id, user);
     if (ticket.status !== next && !canTransition(ticket.status, next)) {
       throw IllegalTransition(ticket.status, next);
     }
+    /**
+     * What was done — asked of the MOVE, not the destination, and only when the
+     * move is a real one.
+     *
+     * Re-sending the status a ticket is already in is a no-op further down
+     * (`updateStatus` returns the row untouched), so it must not be treated as
+     * a second finish and asked for a fresh account of work nobody redid.
+     *
+     * The text is carried into the write ONLY for the moves that require it.
+     * A `resolution` arriving on any other move is dropped rather than stored:
+     * this column is the desk's account of finishing the work, and the two
+     * other ways a ticket reaches `closed` are the requester confirming and the
+     * sweep timing out. Writing whatever they sent would let a confirmation
+     * overwrite the sentence the person who actually did the work left behind.
+     */
+    const finishing =
+      ticket.status !== next && requiresResolution(ticket.status, next);
+    if (finishing && !resolution) throw ResolutionRequired();
     // Reopen is only allowed within 30 days of closing; beyond that, a new ticket.
     // Reopening comes back as `new`, and the assignee is left alone: the person
     // who closed it is the one who knows it, so it returns as their In Progress
@@ -566,7 +661,12 @@ export const ticketService = {
         throw ReopenWindowExpired();
       }
     }
-    const updated = await ticketRepository.updateStatus(id, next, user.id);
+    const updated = await ticketRepository.updateStatus(
+      id,
+      next,
+      user.id,
+      finishing ? resolution : undefined,
+    );
     if (!updated) throw NotFound(`Ticket #${id} not found`);
     return updated;
   },

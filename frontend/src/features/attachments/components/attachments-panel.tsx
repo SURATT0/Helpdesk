@@ -28,8 +28,7 @@ import {
   useUploadAttachment,
 } from "../queries";
 import type { Attachment } from "../schemas";
-
-const MANAGE_ROLES = new Set(["super_admin", "admin"]);
+import { hasPermission } from "@/lib/permissions";
 
 /** Trash button with a two-step inline confirm (no blocking dialog). */
 function DeleteButton({
@@ -337,7 +336,9 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
   const [opened, setOpened] = React.useState<Opened | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<number | null>(null);
-  const canManage = user ? MANAGE_ROLES.has(user.role) : false;
+  // Uploading and deleting an attachment are both `ticket:write` on the API
+  // (attachment.routes.ts), so that is the question here rather than a role list.
+  const canManage = hasPermission(user, "ticket:write");
 
   function remove(file: Attachment) {
     setActionError(null);

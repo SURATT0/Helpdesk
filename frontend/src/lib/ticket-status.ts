@@ -16,11 +16,12 @@ import { BADGE, type ColourPair } from "./palette";
 /**
  * What `tickets.status` can hold, mirroring the API's enum.
  *
- *   new      nobody has finished it — the queue, taken or not
- *   pending  the work is done and it is waiting on the requester
- *   closed   over
+ *   new        nobody has finished it — the queue, taken or not
+ *   pending    the work is done and it is waiting on the requester
+ *   closed     over, because the work was done
+ *   cancelled  over, because the person who raised it withdrew it
  */
-export const DB_STATUSES = ["new", "pending", "closed"] as const;
+export const DB_STATUSES = ["new", "pending", "closed", "cancelled"] as const;
 export type TicketStatus = (typeof DB_STATUSES)[number];
 
 /**
@@ -33,6 +34,7 @@ export const DISPLAY_STATUSES = [
   "in_progress",
   "pending",
   "closed",
+  "cancelled",
 ] as const;
 export type DisplayStatus = (typeof DISPLAY_STATUSES)[number];
 
@@ -48,6 +50,7 @@ export const HISTORY_STATUSES = [
   "pending",
   "resolved",
   "closed",
+  "cancelled",
 ] as const;
 export type TicketStatusRecord = (typeof HISTORY_STATUSES)[number];
 
@@ -66,6 +69,8 @@ export function getDisplayStatus(ticket: {
   switch (ticket.status) {
     case "closed":
       return "closed";
+    case "cancelled":
+      return "cancelled";
     case "pending":
     case "resolved":
       return "pending";
@@ -83,6 +88,12 @@ export function getDisplayStatus(ticket: {
  * clock has stopped and there is a verdict rather than a countdown — the
  * requester still has to answer, but that is their clock, not the desk's. Same
  * rule as the API's `deriveSla`.
+ *
+ * `cancelled` is deliberately NOT here. The desk's work being over and there
+ * having been no work are different facts, and this list feeds the SLA verdict:
+ * a withdrawn ticket has a target it was never asked to meet, so calling it
+ * finished would score it "met". `assess` short-circuits it to `no_sla` before
+ * this list is consulted, the same way the API's `deriveSla` does.
  */
 export const FINISHED_STATUSES = [
   "pending",
@@ -105,10 +116,53 @@ export function isFinished(status: TicketStatusRecord): boolean {
  * Progress, and both are the same stored `new`.
  */
 export const STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  new: ["pending", "closed"],
+  new: ["pending", "closed", "cancelled"],
   pending: ["new", "closed"],
   closed: ["new"],
+  cancelled: ["new"],
 };
+
+/**
+ * The moves the DESK's status control may offer — the whitelist minus
+ * `cancelled`.
+ *
+ * Withdrawing a request belongs to the person who made it, and the API keeps
+ * `cancelled` off `PATCH /:id/status` entirely (see `deskSettableStatus` there).
+ * Offering it in the dropdown would be offering a move the server refuses.
+ */
+export function deskTransitionsFrom(status: TicketStatus): TicketStatus[] {
+  return (STATUS_TRANSITIONS[status] ?? []).filter((s) => s !== "cancelled");
+}
+
+/**
+ * Is this ticket's public conversation over? Mirrors `isConversationClosed` in
+ * the API's `shared/ticket-status.ts`.
+ *
+ * Used to decide whether to OFFER the composer. The server refuses a public
+ * comment on such a ticket regardless of what this returns; hiding the box is so
+ * somebody does not type a paragraph into a thread nobody is reading and find
+ * out on submit.
+ */
+export function isConversationClosed(status: TicketStatusRecord): boolean {
+  return status === "closed" || status === "cancelled";
+}
+
+/**
+ * Does this move have to say what was DONE? Mirrors `requiresResolution` in
+ * `backend/src/shared/ticket-status.ts` — see there for why it is keyed on the
+ * pair rather than on the destination.
+ *
+ * Here it decides only whether to ASK: which screens open the resolution dialog
+ * instead of patching straight away. The server checks it again on the write
+ * (twice, in fact), so a screen that forgot to ask gets a 400 rather than a
+ * silently empty column.
+ */
+export function requiresResolution(
+  from: TicketStatus,
+  to: TicketStatus,
+): boolean {
+  return from === "new" && (to === "pending" || to === "closed");
+}
 
 /**
  * Label and colour per status word. Keyed by the union of what is DISPLAYED and
@@ -125,6 +179,10 @@ export const STATUS_META: Record<
   in_progress: { label: "In Progress", ...BADGE.amber },
   pending: { label: "Pending", ...BADGE.violet },
   closed: { label: "Closed", ...BADGE.slate },
+  // Rose, not the slate `closed` wears. Both are endings, and a reader scanning
+  // a list has to be able to tell the one where the work was done from the one
+  // where it never happened — two greys would have made them the same glance.
+  cancelled: { label: "Cancelled", ...BADGE.rose },
   // Historical only — reachable from a timeline row, never from a ticket.
   open: { label: "Open", ...BADGE.sky },
   resolved: { label: "Resolved", ...BADGE.green },

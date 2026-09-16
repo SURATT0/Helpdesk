@@ -11,7 +11,7 @@ import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
 import { useCustomers } from "@/features/customers/queries";
-import { holds } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useProjects, useUpdateProject } from "../queries";
 import type { Project, ProjectOwner } from "../schemas";
@@ -104,16 +104,21 @@ export function ProjectsView() {
   // project:write only at the top. The API is the real gate; these keep a direct
   // visit from firing a request that would only come back 403, and show something
   // better than an error for it.
-  const canRead = user != null && user.role !== "user";
-  const canWrite = user?.role === "super_admin";
   /**
-   * Deleting is its own grant, read through the shared permission table rather
-   * than compared against a role name here. `project:delete` is held by no role
-   * explicitly, so only a super admin's `*` satisfies it — the same arrangement
-   * `ticket:delete` uses. The API refuses regardless of what this returns; this
-   * only decides whether the button is in the document.
+   * The three grants this screen's three routes are gated on, asked of the
+   * session rather than guessed from the role.
+   *
+   * All three were role comparisons, and all three were a different question
+   * from the one the API asks: reading the routing table is `project:read` (not
+   * "any role but user"), changing an owner is `project:write` (not
+   * "super_admin"), and deleting is `project:delete`. They agreed with the
+   * seeded grants and stopped agreeing the moment anybody edited the matrix.
+   * The API refuses regardless of what these return; they only decide what is
+   * in the document.
    */
-  const canDelete = user != null && holds(user.role, "project:delete");
+  const canRead = hasPermission(user, "project:read");
+  const canWrite = hasPermission(user, "project:write");
+  const canDelete = hasPermission(user, "project:delete");
   // Which tenant a project belongs to, shown only when that can differ between
   // rows. Same rule as the ticket table's customer column, and the same reason.
   const { data: customers = [] } = useCustomers({ enabled: canRead });

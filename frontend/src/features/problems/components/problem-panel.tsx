@@ -11,6 +11,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { apiErrorMessage } from "@/lib/api-error";
+import { hasPermission } from "@/lib/permissions";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import type { Ticket } from "@/features/tickets/schemas";
@@ -37,11 +38,10 @@ export function ProblemPanel({ ticket }: { ticket: Ticket }) {
   const [error, setError] = React.useState<string | null>(null);
   const unlink = useUnlinkProblem();
 
-  // Mirrors the server's problem:write grant (agent and up). Requesters see the
-  // link read-only — it explains why their ticket is waiting on something bigger.
-  const canWrite =
-    user != null &&
-    user.role !== "user";
+  // The server's problem:write grant, asked directly. Whoever does not hold it
+  // sees the link read-only — it explains why their ticket is waiting on
+  // something bigger.
+  const canWrite = hasPermission(user, "problem:write");
 
   const { data: full } = useProblem(ticket.problem?.id, {
     enabled: ticket.problem != null,

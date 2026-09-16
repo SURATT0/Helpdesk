@@ -113,13 +113,20 @@ export async function fetchTicket(id: number): Promise<Ticket> {
   return ticketEnvelopeSchema.parse(body).data;
 }
 
+/**
+ * `resolution` rides the status change rather than being a field of its own,
+ * because it describes THIS move: the desk finishing the work. Sent only for
+ * the moves that require one (see `requiresResolution`) — the server drops it
+ * on any other, so there is nothing to gain by attaching it everywhere.
+ */
 export async function updateTicketStatus(
   id: number,
   status: TicketStatus,
+  resolution?: string,
 ): Promise<Ticket> {
   const body = await apiRequest(`/tickets/${id}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(resolution ? { status, resolution } : { status }),
   });
   return ticketEnvelopeSchema.parse(body).data;
 }
@@ -159,6 +166,24 @@ export async function rejectClosure(
   reason?: string,
 ): Promise<Ticket> {
   const body = await apiRequest(`/tickets/${id}/closure/reject`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+  return ticketEnvelopeSchema.parse(body).data;
+}
+
+/**
+ * The requester withdrawing a ticket the desk has not moved yet.
+ *
+ * Its own endpoint, not `PATCH /:id/status` with `cancelled` — the API refuses
+ * that value there on purpose, because the transition whitelist can say the move
+ * is legal but not who may make it.
+ */
+export async function cancelTicket(
+  id: number,
+  reason?: string,
+): Promise<Ticket> {
+  const body = await apiRequest(`/tickets/${id}/cancel`, {
     method: "POST",
     body: JSON.stringify(reason ? { reason } : {}),
   });
