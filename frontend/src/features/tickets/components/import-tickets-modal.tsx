@@ -15,6 +15,7 @@ import { useI18n } from "@/features/i18n/context";
 import { useCategories, useImportTickets } from "../queries";
 import { parseImportCsv, IMPORT_COLUMNS, type ImportColumn } from "../csv";
 import { DB_STATUSES } from "@/lib/ticket-status";
+import { otherLast } from "@/lib/category-other";
 import type { ImportTicketRow } from "../api";
 import type { ImportErrorReason } from "../schemas";
 
@@ -93,8 +94,14 @@ export function ImportTicketsModal({
   const [dragging, setDragging] = React.useState(false);
 
   // Category names for the dropdown + a lowercase set for validation.
+  //
+  // Through `otherLast`, like every other category picker: "Other" is the answer
+  // for a row none of the categories fit, so offering it among them invites it
+  // as a first choice. Applied to the ROWS before they become names, because the
+  // rule is keyed on the category's code — a tenant may have renamed or
+  // translated their copy, and a name match would miss it.
   const categoryNames = React.useMemo(
-    () => categories.map((c) => c.name),
+    () => otherLast(categories).map((c) => c.name),
     [categories],
   );
   const categoryByLower = React.useMemo(() => {

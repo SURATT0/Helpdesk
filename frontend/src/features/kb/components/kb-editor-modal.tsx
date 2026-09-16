@@ -9,6 +9,7 @@ import { TOUCH_TARGET } from "@/components/ui/touch";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/features/i18n/context";
+import { otherLast } from "@/lib/category-other";
 import { useCategories } from "@/features/tickets/queries";
 import { useCreateArticle, useUpdateArticle } from "../queries";
 import type { KbArticle, KbArticleInput } from "../schemas";
@@ -71,13 +72,24 @@ export function KbEditorModal({
   const [readMin, setReadMin] = React.useState(String(article?.readMin ?? 3));
   const [error, setError] = React.useState<string | null>(null);
 
+  /**
+   * The picker's order: whatever the server sent, with "Other" moved to the end.
+   *
+   * Same rule as every other category picker — "Other" is the answer for an
+   * article none of the categories fit, and offering it among them invites it as
+   * a first choice. It matters more here than elsewhere, because the effect
+   * below defaults to the FIRST entry: without this a tenant whose "Other" sorts
+   * first would have every new article start life filed under it.
+   */
+  const pickable = React.useMemo(() => otherLast(categories), [categories]);
+
   // First category as the default, once they have loaded — a picker that starts
   // on nothing makes an author choose something they have no opinion about.
   React.useEffect(() => {
-    if (categoryCode == null && categories.length > 0) {
-      setCategoryCode(categories[0].code);
+    if (categoryCode == null && pickable.length > 0) {
+      setCategoryCode(pickable[0].code);
     }
-  }, [categories, categoryCode]);
+  }, [pickable, categoryCode]);
 
   const tags = React.useMemo(
     () => [
@@ -201,7 +213,7 @@ export function KbEditorModal({
                   their own categories, and what gets stored is the subject that
                   row stands for, not the row.
                 */}
-                {categories.map((c) => (
+                {pickable.map((c) => (
                   <option key={c.id} value={c.code}>
                     {c.name}
                   </option>

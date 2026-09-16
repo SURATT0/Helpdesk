@@ -15,6 +15,7 @@ import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { useI18n } from "@/features/i18n/context";
 import { needsOwnDescription } from "@/lib/category-other";
+import { compareText, compareTextLast } from "@/lib/collation";
 import { useAuth } from "@/features/auth/context";
 import { useCustomers } from "@/features/customers/queries";
 import { matchesFilters, useSearch } from "../search-context";
@@ -98,13 +99,21 @@ const COMPARATORS: Record<
   (a: Ticket, b: Ticket) => number
 > = {
   id: (a, b) => a.id - b.id,
-  subject: (a, b) => a.subject.localeCompare(b.subject),
+  // `compareText`, not `localeCompare`. The latter builds a fresh collator on
+  // every comparison — n log n of them for one sort — and asks the BROWSER's
+  // locale, so this table came out Thai-first for a reader whose machine was set
+  // to Thai and English-first for one whose was not, matching neither each other
+  // nor the order the server sends everything else in.
+  subject: (a, b) => compareText(a.subject, b.subject),
   status: (a, b) =>
     STATUS_ORDER[a.displayStatus] - STATUS_ORDER[b.displayStatus],
   priority: (a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority],
-  assignee: (a, b) =>
-    (a.assignee ?? "￿").localeCompare(b.assignee ?? "￿"),
-  category: (a, b) => a.category.localeCompare(b.category),
+  // Unassigned last, and said so rather than arranged. It used to substitute
+  // U+FFFF for the missing name — a character picked to sort after everything,
+  // which works right up until a name contains one, and reads as a typo either
+  // way. See `compareTextLast`.
+  assignee: (a, b) => compareTextLast(a.assignee, b.assignee),
+  category: (a, b) => compareText(a.category, b.category),
 };
 
 function SortHeader({
