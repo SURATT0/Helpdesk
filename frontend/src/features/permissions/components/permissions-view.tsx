@@ -2,61 +2,14 @@
 
 import { Check, Minus, Shield } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Skeleton, ErrorState } from "@/components/ui/states";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import type { Role } from "@/features/auth/schemas";
-import { ROLES, rolesHolding } from "@/lib/permissions";
-
-/**
- * A capability → the permission(s) a route asks for before allowing it.
- *
- * Each row names the grant and the roles are DERIVED from it, so this table can
- * only ever say what `ROLE_PERMISSIONS` says. It used to carry a hand-written
- * role list per row, and three of them had drifted from the API: assignment was
- * shown as super_admin-only although `PATCH /tickets/:id/assignee` and
- * `/priority` both ask for `ticket:write`; and writing the knowledge base and
- * deleting a ticket were enforced on routes but missing from the page entirely.
- *
- * Ordered by who holds it — everyone, then the desk, then the top tier — since
- * a reader scans down their own column.
- */
-export const CAPABILITIES: { key: string; perms: readonly string[] }[] = [
-  { key: "cap.viewTickets", perms: ["ticket:read"] },
-  { key: "cap.createTicket", perms: ["ticket:create"] },
-  { key: "cap.reply", perms: ["ticket:write"] },
-  { key: "cap.internalNote", perms: ["ticket:write"] },
-  // Assigning ONE ticket and setting its priority both ride on ticket:write, so
-  // this reaches an admin. Handing over a whole queue is the row below.
-  { key: "cap.assign", perms: ["ticket:write"] },
-  { key: "cap.import", perms: ["ticket:import"] },
-  { key: "cap.viewUsers", perms: ["user:read"] },
-  // Browsing a whole register is the desk's view of the customer; a requester
-  // still sees the assets on their own ticket and the problem it is linked to,
-  // which reach them through the ticket rather than here.
-  { key: "cap.registers", perms: ["asset:read", "problem:read"] },
-  // The people who work the cases are the ones who know what the fix was, so
-  // kb:write reaches an admin — and an unpublished draft is visible to whoever
-  // may edit it.
-  { key: "cap.kb", perms: ["kb:write"] },
-  // project:read and audit:read reach admin; project:write does not. Separate
-  // rows, because one row saying "view & manage" can only be right about one.
-  { key: "cap.viewRoutingProjects", perms: ["project:read"] },
-  { key: "cap.audit", perms: ["audit:read"] },
-  { key: "cap.handover", perms: ["ticket:assign"] },
-  { key: "cap.manageUsers", perms: ["user:write"] },
-  { key: "cap.routingProjects", perms: ["project:write"] },
-  // Held by no role explicitly, so only super_admin's `*` satisfies it: closing
-  // is the normal end of a ticket's life and this is the escape hatch for a row
-  // that should never have existed.
-  { key: "cap.deleteTicket", perms: ["ticket:delete"] },
-  { key: "cap.deleteProject", perms: ["project:delete"] },
-  // Configuring which events are mailed, how often, and when the SLA starts
-  // warning. Held by no role explicitly, so only super_admin's `*` satisfies it:
-  // this is the desk's own policy rather than case work. WHICH tenant's policy a
-  // holder reaches is the reach axis, not this one — see the scope table below.
-  { key: "cap.notificationSettings", perms: ["settings:write"] },
-];
+import { ROLES } from "@/lib/permissions";
+import { CAPABILITIES, rolesHolding } from "../matrix";
+import { usePermissionMatrix } from "../queries";
 
 /**
  * Row-level scope enforced in the repository WHERE clause.
@@ -102,17 +55,85 @@ export function PermissionsView() {
         </div>
       </Card>
 
-      {/* Permission matrix */}
+      <MatrixCard myRole={myRole} />
+
+      {/* Row-level ticket visibility */}
       <Card className="p-5">
         <div className="mb-3.5">
           <div className="text-section font-semibold text-ink">
-            {t("perm.matrixTitle")}
+            {t("perm.scopeTitle")}
           </div>
           <div className="mt-0.5 text-dense text-faint">
-            {t("perm.matrixNote")}
+            {t("perm.scopeNote")}
           </div>
         </div>
+        <ul className="flex flex-col gap-2">
+          {SCOPE.map((s) => (
+            <li
+              key={s.role}
+              className={cn(
+                "flex items-center gap-3 rounded-lg border px-3.5 py-2.5",
+                s.role === myRole
+                  ? "border-accent-line bg-accent-wash"
+                  : "border-line bg-white",
+              )}
+            >
+              <span className="w-24 flex-none text-body font-semibold text-ink">
+                {t(`role.${s.role}`)}
+              </span>
+              <span className="text-body text-muted">{t(s.key)}</span>
+            </li>
+          ))}
+        </ul>
+        {/* The table above is headed "ticket visibility", which undersells it:
+            the same clause is what the history, the dashboard and the reports
+            count through. Worth saying, since a reader looking at an empty
+            dashboard otherwise has no way to tell scoping from no data. */}
+        <p className="mt-3 text-caption leading-relaxed text-faint">
+          {t("perm.scopeReach")}
+        </p>
+      </Card>
+    </div>
+  );
+}
 
+/**
+ * What each role may do, read from the live matrix.
+ *
+ * It used to be derived from a hard-coded copy of the grants a fresh install
+ * starts with, which is a table that describes no actual desk the moment anybody
+ * edits their matrix — and the copy was already behind, showing `admin` without
+ * `customer:write`. The rows are the same; where the ticks go is now the API's
+ * answer rather than this file's memory of it.
+ *
+ * Its own card so the query's loading and error states are contained: "your
+ * access" and the scope table below are answered by the session and must not
+ * disappear while this is in flight.
+ */
+function MatrixCard({ myRole }: { myRole: Role | undefined }) {
+  const { t } = useI18n();
+  const { data, isLoading, isError, refetch } = usePermissionMatrix();
+
+  return (
+    <Card className="p-5">
+      <div className="mb-3.5">
+        <div className="text-section font-semibold text-ink">
+          {t("perm.matrixTitle")}
+        </div>
+        <div className="mt-0.5 text-dense text-faint">
+          {t("perm.matrixNote")}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-[420px]" />
+      ) : isError || !data ? (
+        // No fallback table. An out-of-date matrix is exactly what this card
+        // stopped rendering, and putting one back on the error path would make
+        // the failure invisible in the one direction that matters.
+        <ErrorState message={t("perm.matrixError")} onRetry={() => refetch()} />
+      ) : (
+        <>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-body">
             <thead>
@@ -142,7 +163,7 @@ export function PermissionsView() {
             </thead>
             <tbody>
               {CAPABILITIES.map((cap) => {
-                const held = rolesHolding(cap.perms);
+                const held = rolesHolding(cap.perms, data.grants);
                 return (
                 <tr
                   key={cap.key}
@@ -192,44 +213,8 @@ export function PermissionsView() {
           </table>
         </div>
         <p className="mt-3 text-caption text-faint">{t("perm.userScopeNote")}</p>
-      </Card>
-
-      {/* Row-level ticket visibility */}
-      <Card className="p-5">
-        <div className="mb-3.5">
-          <div className="text-section font-semibold text-ink">
-            {t("perm.scopeTitle")}
-          </div>
-          <div className="mt-0.5 text-dense text-faint">
-            {t("perm.scopeNote")}
-          </div>
-        </div>
-        <ul className="flex flex-col gap-2">
-          {SCOPE.map((s) => (
-            <li
-              key={s.role}
-              className={cn(
-                "flex items-center gap-3 rounded-lg border px-3.5 py-2.5",
-                s.role === myRole
-                  ? "border-accent-line bg-accent-wash"
-                  : "border-line bg-white",
-              )}
-            >
-              <span className="w-24 flex-none text-body font-semibold text-ink">
-                {t(`role.${s.role}`)}
-              </span>
-              <span className="text-body text-muted">{t(s.key)}</span>
-            </li>
-          ))}
-        </ul>
-        {/* The table above is headed "ticket visibility", which undersells it:
-            the same clause is what the history, the dashboard and the reports
-            count through. Worth saying, since a reader looking at an empty
-            dashboard otherwise has no way to tell scoping from no data. */}
-        <p className="mt-3 text-caption leading-relaxed text-faint">
-          {t("perm.scopeReach")}
-        </p>
-      </Card>
-    </div>
+        </>
+      )}
+    </Card>
   );
 }

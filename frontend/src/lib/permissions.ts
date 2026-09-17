@@ -1,17 +1,21 @@
 /**
- * Two different questions live in this file, and they have different answers.
+ * Two different questions, and neither is answered from a table in this file
+ * any more.
  *
  * **"May I?" → `hasPermission`,** which reads the list the server put on the
- * session. That is the live matrix, and it is the only thing a screen may use
- * to decide what to offer.
+ * session — the live matrix.
  *
- * **"What does each role hold?" → `ROLE_PERMISSIONS` below,** a static copy of
- * the grants a fresh install starts with. It is documentation, not an answer
- * about any actual person, and it is KNOWN to be stale — see its own note.
+ * **"What does each role hold?" → `GET /permissions/matrix`,** read by the
+ * Permissions page through `features/permissions`.
  *
- * They used to be one thing, and that was the bug: screens asked
- * `holds(user.role, "customer:archive")` to decide whether to show a control,
- * which is the static table pretending to be the live one.
+ * There used to be a `ROLE_PERMISSIONS` constant here holding the grants a
+ * fresh install starts with, and both questions were once answered from it.
+ * That was the bug twice over: screens asked `holds(user.role, …)` to decide
+ * whether to show a control, which is the static table pretending to be the
+ * live one; and the Permissions page drew its whole role × capability table
+ * from it, which told every desk that had edited its matrix something untrue.
+ * It is gone rather than merely unused — a copy of the grants sitting in the
+ * client is a thing the next screen reaches for.
  */
 
 import type { Role } from "./domain";
@@ -66,76 +70,15 @@ export function hasPermission(
 export const ROLES = ["user", "admin", "super_admin"] as const satisfies readonly Role[];
 
 /**
- * The grants each role STARTS with, mirroring `INITIAL_ROLE_PERMISSIONS` in the
- * API's `shared/permissions.ts`.
- *
- * **This is not what any role currently holds, and it cannot be.** Grants moved
- * into `role_permissions` and became editable from the Permissions screen; this
- * constant is the state of a fresh install and nothing keeps it in step with a
- * desk that has edited its matrix. It is already visibly behind — `admin` holds
- * `customer:write` on the server and not here.
- *
- * Used by exactly one screen: the all-roles table on the Permissions page,
- * which sets out what each role may do. That page needs every role's grants,
- * not the viewer's, and the API's `GET /permissions/matrix` is deliberately
- * gated on `permission:write` — "the people who may look at it are the people
- * who may change it" — so there is nothing live for it to read. Fixing that
- * needs a product decision about who may see the matrix, not another mirror.
- *
- * **Never use this to decide what to offer somebody.** That is `hasPermission`
- * above, which asks about the actual person in front of you.
- */
-export const ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
-  /**
-   * `*` — everything an admin can do, plus managing the admins themselves. The
-   * wildcard rather than a list is deliberate on the server: a new permission
-   * should reach the top role without an edit.
-   */
-  super_admin: ["*"],
-  admin: [
-    "ticket:read",
-    "ticket:write",
-    "ticket:create",
-    "ticket:import",
-    "user:read",
-    "asset:write",
-    "problem:write",
-    "asset:read",
-    "problem:read",
-    "project:read",
-    "audit:read",
-    "kb:write",
-  ],
-  /** Raise a ticket and follow it. Reading the KB needs no grant at all. */
-  user: ["ticket:read", "ticket:create"],
-};
-
-/** Does this role hold the permission? `*` satisfies every check. */
-export function holds(role: Role, permission: string): boolean {
-  const grants = ROLE_PERMISSIONS[role] ?? [];
-  return grants.includes("*") || grants.includes(permission);
-}
-
-/**
- * Which roles hold ALL of these permissions.
- *
- * Every permission, not any: a row like "browse the asset & problem registers"
- * is only true for a role that can do both halves, and a role holding one of
- * them would otherwise get a tick for something it cannot finish.
- */
-export function rolesHolding(permissions: readonly string[]): Role[] {
-  return ROLES.filter((role) => permissions.every((p) => holds(role, p)));
-}
-
-/**
  * May this person see how much work OTHERS are carrying? Mirrors
  * `maySeeTeamWorkload` in the API's `shared/auth.ts`.
  *
- * NOT expressible through `holds()` above, and that is the point: `super_admin`
- * holds `*`, so any grant name invented for this would be satisfied by the
- * wildcard and by nothing else — the same answer as checking the role, reached
- * by a longer route that also passes for every string nobody ever defined. So it
- * names the role, on both sides, in one function each.
+ * NOT expressible as a permission, and that is the point: there is no route
+ * gated on one, so any grant name invented for it would be a string the
+ * catalogue does not define — ungrantable on the matrix, and satisfied only by
+ * a wildcard, which is the same answer as checking the role reached by a longer
+ * route that also passes for every string nobody ever defined. So it names the
+ * role, on both sides, in one function each.
  *
  * The server refuses the data outright (403 from `/reports/workload/agents`);
  * this exists so the UI can avoid ASKING for what it may not have, and so a
