@@ -5,6 +5,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { StatusBadge, PriorityIndicator } from "@/components/ui/status-badge";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
+import { canHoldWorkFor } from "@/lib/assignment";
 import { PRIORITIES } from "@/lib/domain";
 import { DB_STATUSES, type TicketStatus } from "@/lib/ticket-status";
 import { cn } from "@/lib/utils";
@@ -73,9 +74,15 @@ function MenuItem({
 
 export function BulkActionBar({
   selectedIds,
+  selectedCustomerIds,
   onClear,
 }: {
   selectedIds: number[];
+  /**
+   * Every customer the selection covers — usually one, and more than one only
+   * for a reader who can see across tenants.
+   */
+  selectedCustomerIds: number[];
   onClear: () => void;
 }) {
   const { t } = useI18n();
@@ -85,7 +92,24 @@ export function BulkActionBar({
   // Which destination the resolution dialog is collecting for, or null when shut.
   const [resolving, setResolving] = React.useState<TicketStatus | null>(null);
 
-  const staff = users.filter((u) => ASSIGNABLE_ROLES.includes(u.role));
+  /**
+   * Who may be handed this selection.
+   *
+   * The role alone is not the question, and the API stopped pretending it was:
+   * a ticket may only go to somebody who can SEE it, so a selection spanning
+   * two customers can only go to someone who reaches both — in practice
+   * platform staff. Filtered here so a name in this menu is a name that works,
+   * rather than one that comes back 403 after the click.
+   *
+   * `every` over an empty list is true, which is the right fallback: a
+   * selection whose rows carry no customer (nothing does today) degrades to the
+   * old role-only offer and lets the server answer.
+   */
+  const staff = users.filter(
+    (u) =>
+      ASSIGNABLE_ROLES.includes(u.role) &&
+      selectedCustomerIds.every((customerId) => canHoldWorkFor(u, customerId)),
+  );
 
   function apply(action: BulkAction) {
     setNote(null);
