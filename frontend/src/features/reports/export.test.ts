@@ -26,7 +26,14 @@ const summary: ReportsSummary = {
     { priority: "critical", compliancePct: 40, met: 2, breached: 3 },
   ],
   byCategory: [
-    { category: "Access", judged: 9, met: 7, breached: 2, compliancePct: 77.8 },
+    {
+      code: "ACCESS",
+      category: "Access",
+      judged: 9,
+      met: 7,
+      breached: 2,
+      compliancePct: 77.8,
+    },
   ],
 };
 
