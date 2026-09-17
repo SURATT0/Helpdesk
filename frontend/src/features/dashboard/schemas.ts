@@ -9,8 +9,10 @@ export const dashboardSummarySchema = z.object({
       unassigned: z.number(),
       closedThisWeek: z.number(),
       avgResolutionHours: z.number(),
-      slaAtRisk: z.number(),
-      slaBreachUnder1h: z.number(),
+      /** Past their target and still open. Disjoint from `slaDueSoon`. */
+      slaBreached: z.number(),
+      /** Not past it yet, and inside the due-soon window. */
+      slaDueSoon: z.number(),
     }),
     byStatus: z.array(
       z.object({ status: displayStatusSchema, count: z.number() }),

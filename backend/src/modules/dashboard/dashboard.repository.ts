@@ -15,6 +15,20 @@ const ACTIVE: TicketStatus[] = ["new"];
 const ALL_PRIORITY: Priority[] = ["critical", "high", "medium", "low"];
 const HOUR = 3_600_000;
 
+/**
+ * How far ahead "due soon" looks, matching `DUE_SOON_MS` in the client's
+ * `features/tickets/sla.ts` — the tier a ticket enters before the one-hour
+ * `at_risk`. The dashboard deliberately does not split those two further: a
+ * badge on one row can afford three shades of warning, a single number on a
+ * card cannot.
+ *
+ * Not read from the desk's configurable `slaWarnMs`. That setting decides when
+ * a WARNING EMAIL goes out, and wiring it in here would make this card's
+ * meaning change per tenant while a platform-wide viewer reads one number
+ * across all of them.
+ */
+const DUE_SOON_HOURS = 4;
+
 export type DashboardSummary = {
   stats: {
     totalTickets: number;
@@ -22,8 +36,10 @@ export type DashboardSummary = {
     unassigned: number;
     closedThisWeek: number;
     avgResolutionHours: number;
-    slaAtRisk: number;
-    slaBreachUnder1h: number;
+    /** Past their target and still open — already missed. */
+    slaBreached: number;
+    /** Not past it yet, and inside the due-soon window. Disjoint from above. */
+    slaDueSoon: number;
   };
   byStatus: { status: DisplayStatus; count: number }[];
   openByPriority: { priority: Priority; count: number }[];
@@ -109,13 +125,34 @@ export const dashboardRepository = {
       ? Math.round((resHours.reduce((a, b) => a + b, 0) / resHours.length) * 10) / 10
       : 0;
 
-    const t1h = now.getTime() + HOUR;
-    const t4h = now.getTime() + 4 * HOUR;
-    const slaAtRisk = active.filter(
-      (t) => t.dueAt && t.dueAt.getTime() > now.getTime() && t.dueAt.getTime() <= t4h,
+    /**
+     * Two counts, and the line between them is `now`.
+     *
+     * They used to overlap, which made one of them unreadable: "breaching
+     * within the hour" was `dueAt <= now + 1h` with no floor, so it also held
+     * every ticket already past its target — one overdue by a week was reported
+     * as breaching within the hour. The headline beside it excluded the past
+     * (`dueAt > now`), so the two were counting on different sides of the same
+     * moment and nothing on the page answered "how many have we already
+     * missed?", which is the question somebody opens this card to ask.
+     *
+     * Now disjoint. `slaBreached` is past the target and still open;
+     * `slaDueSoon` is not past it yet and within the window. A ticket is in
+     * exactly one, and adding them is meaningful.
+     *
+     * Both read `active`, which is `new` alone: `resolved_at` is stamped on the
+     * first arrival at `pending` and the SLA resolution clock stops there, so a
+     * finished ticket awaiting confirmation has no deadline left to miss.
+     */
+    const dueSoonUntil = now.getTime() + DUE_SOON_HOURS * HOUR;
+    const slaBreached = active.filter(
+      (t) => t.dueAt && t.dueAt.getTime() < now.getTime(),
     ).length;
-    const slaBreachUnder1h = active.filter(
-      (t) => t.dueAt && t.dueAt.getTime() <= t1h,
+    const slaDueSoon = active.filter(
+      (t) =>
+        t.dueAt &&
+        t.dueAt.getTime() >= now.getTime() &&
+        t.dueAt.getTime() <= dueSoonUntil,
     ).length;
 
     return {
@@ -125,8 +162,8 @@ export const dashboardRepository = {
         unassigned: active.filter((t) => t.assigneeId == null).length,
         closedThisWeek,
         avgResolutionHours,
-        slaAtRisk,
-        slaBreachUnder1h,
+        slaBreached,
+        slaDueSoon,
       },
       byStatus,
       openByPriority,

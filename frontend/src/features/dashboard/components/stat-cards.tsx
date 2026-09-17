@@ -63,7 +63,14 @@ export function StatCards() {
         </div>
       ))}
 
-      {/* SLA at risk — accent card */}
+      {/* SLA — accent card, two counts that do not overlap.
+
+          One figure with the other tucked into a sub-line would have made this
+          card answer a question it cannot: which of the two is the headline
+          depends on the day. Missing three is worse than three about to miss,
+          but a bold 0 over "already missed" reads as "nothing to do" on a
+          morning when four are an hour from breaching. Side by side, each
+          labelled, the reader decides. */}
       <div className="relative overflow-hidden rounded-lg border border-[#fde0c2] px-[18px] py-4">
         <div
           className="absolute inset-0"
@@ -73,12 +80,25 @@ export function StatCards() {
           <div className="text-body font-medium text-[#9a5b13]">
             {t("dashboard.stat.slaRisk")}
           </div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-figure font-bold text-warn">
-              {s.slaAtRisk}
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            {/* Danger, not warn: this one is a deadline that has already gone
+                past, and it wore the same amber as the tickets still in front
+                of theirs. */}
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-figure font-bold text-danger-ink">
+                {s.slaBreached}
+              </span>
+              <span className="text-dense font-semibold text-danger-ink">
+                {t("dashboard.stat.slaBreached")}
+              </span>
             </span>
-            <span className="text-dense font-semibold text-warn">
-              {t("dashboard.stat.breach1h", { n: s.slaBreachUnder1h })}
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-figure font-bold text-warn">
+                {s.slaDueSoon}
+              </span>
+              <span className="text-dense font-semibold text-warn">
+                {t("dashboard.stat.slaDueSoon")}
+              </span>
             </span>
           </div>
         </div>
