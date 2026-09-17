@@ -38,6 +38,11 @@ export function signAccessToken(user: SignableUser): string {
       customerId: user.customerId,
       customerIds: user.customerIds,
       mustChangePassword: user.mustChangePassword,
+      // A snapshot, and not one anybody acts on: `requireAuth` replaces it with
+      // the live grants before any route sees the user, and the session payload
+      // the client reads is built from `grantsFor` too. So a revoked permission
+      // bites at the next request rather than at the next sign-in, and this
+      // claim is the token's shape rather than an answer.
       permissions: permissionsFor(user.role),
     },
     env.jwtAccessSecret,

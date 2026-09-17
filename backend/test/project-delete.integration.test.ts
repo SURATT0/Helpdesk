@@ -6,9 +6,12 @@ import { prisma, resetDb, tenantSuperAdmin } from "./db";
 /**
  * Who may delete a routing project, and what a deletion leaves behind.
  *
- * `project:delete` is held by no role explicitly, so only `super_admin`'s `*`
- * satisfies it — the same arrangement `ticket:delete` uses. What the UI calls an
- * "agent" is the `admin` role, and it is refused here like everyone else.
+ * The starting matrix gives `project:delete` to `super_admin` and to nobody else
+ * — the same arrangement `ticket:delete` uses. What the UI calls an "agent" is
+ * the `admin` role, and it is refused here like everyone else. These tests run
+ * against that starting matrix, the one the migration writes; a desk that grants
+ * the permission elsewhere changes the answer, and that is the point of its
+ * being a grant rather than a role check.
  *
  * The deletion is soft: the row stays, `projectScopeWhere` hides it. These tests
  * check both halves — that it disappears from every read, and that it is still
