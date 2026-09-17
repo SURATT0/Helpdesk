@@ -23,11 +23,14 @@ import {
 /**
  * The permission a project deletion needs.
  *
- * Held by no role explicitly, so only `super_admin`'s `*` satisfies it — the
- * same arrangement `ticket:delete` uses, and for the same reason: closing or
+ * The starting matrix gives it to `super_admin` and to nobody else — the same
+ * arrangement `ticket:delete` uses, and for the same reason: closing or
  * emptying is the normal end of something's life, and deletion is the escape
- * hatch for a row that should never have existed. Adding it to a grant list is
- * what would widen it, and nothing does.
+ * hatch for a row that should never have existed.
+ *
+ * Widening it is an edit to `role_permissions` rather than an edit here, and
+ * `assertMayDelete` below asks the live grants, so such an edit takes effect
+ * without this file changing.
  */
 export const PROJECT_DELETE = "project:delete";
 

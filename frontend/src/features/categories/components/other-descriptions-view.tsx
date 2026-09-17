@@ -36,9 +36,10 @@ import type { OtherDescription } from "../schemas";
 export function OtherDescriptionsView() {
   const { t } = useI18n();
   const { user } = useAuth();
-  // Mirrors the server's `category:write`, held by no role explicitly so only a
-  // super admin's wildcard satisfies it. The API is the gate; this only decides
-  // whether to ask for data that would come back 403.
+  // Asks the live grants, which is the only place the answer lives: the starting
+  // matrix gives `category:write` to a super admin alone, but it is editable and
+  // a desk may have moved it. The API is the gate; this only decides whether to
+  // ask for data that would come back 403.
   const canManage = hasPermission(user, "category:write");
   const { data, isLoading, isError, refetch } = useOtherDescriptions({
     enabled: canManage,
