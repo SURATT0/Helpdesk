@@ -167,6 +167,39 @@ test("a user sees their own role flagged", async ({ page }) => {
   await expect(page.getByText("Only tickets you opened")).toBeVisible();
 });
 
+/**
+ * The table is the API's answer, and a requester gets it.
+ *
+ * It used to be drawn from a hard-coded copy of a fresh install's grants,
+ * because `GET /permissions/matrix` was behind `permission:write` and there was
+ * nothing live for the page to read. So this is worth its own case at the
+ * bottom tier specifically: if the read were gated again, the page would show
+ * the error state rather than quietly falling back to a table that describes
+ * nobody.
+ */
+test("a requester reads the live matrix, not a copy of one", async ({ page }) => {
+  await loginAs(page, "marcus.chen@acme.com"); // user — holds nothing to read it with
+  await page.goto("/permissions");
+
+  const cell = (cap: string, role: string) =>
+    page.locator(`tr[data-cap="${cap}"] td[data-role="${role}"]`);
+
+  // Their own row, ticked — and the rows above them, which they hold none of.
+  await expect(cell("cap.createTicket", "user")).toHaveAttribute(
+    "data-allowed",
+    "true",
+  );
+  await expect(cell("cap.manageUsers", "user")).toHaveAttribute(
+    "data-allowed",
+    "false",
+  );
+  // Somebody else's column too — the table is about roles, not about them.
+  await expect(cell("cap.kb", "admin")).toHaveAttribute("data-allowed", "true");
+  // And it arrived. A 403 on the read now shows the error state, so an absent
+  // error is the evidence that the cells above came from the API.
+  await expect(page.getByText(/Couldn't load what each role can do/)).toHaveCount(0);
+});
+
 test("the matrix names the three tiers and holds role apart from reach", async ({
   page,
 }) => {

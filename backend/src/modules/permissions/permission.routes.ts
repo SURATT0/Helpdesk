@@ -5,16 +5,19 @@ import { permissionController } from "./permission.controller";
 const router = Router();
 
 /**
- * The role × permission matrix.
+ * The role × permission matrix: readable by anyone signed in, writable with
+ * `permission:write`.
  *
- * Both routes are gated in the SERVICE on `permission:write`, not by
- * `requirePermission` here, and deliberately: the read needs the same grant as
- * the write, and a middleware pair saying so twice is a place for the two to
- * drift apart. What each role may do is the shape of the desk's trust — the
- * people who may look at it are the people who may change it.
+ * The WRITE is gated in the SERVICE rather than by `requirePermission` here,
+ * because a refusal is part of what that endpoint does and middleware that sees
+ * only the role has nothing to say about it.
  *
- * Not to be confused with `/permissions` on the web app, which shows a person
- * what THEY can do and needs no grant at all.
+ * The READ used to carry the same gate, on the grounds that the people who may
+ * look at the shape of the desk's trust are the people who may change it. It
+ * does not any more: `/permissions` on the web app sets out what each role may
+ * do, every user can open it, and with nothing live to read it was rendering a
+ * hard-coded copy of a fresh install's grants — which is the same disclosure,
+ * only wrong. See `permissionService.matrix`.
  */
 router.get("/matrix", asyncHandler(permissionController.matrix));
 router.put("/matrix", asyncHandler(permissionController.setGrants));

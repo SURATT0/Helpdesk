@@ -77,17 +77,30 @@ function assertSafe(
 
 export const permissionService = {
   /**
-   * The whole matrix, for the screen that edits it.
+   * The whole matrix — to the screen that edits it, and to the page that simply
+   * sets out what each role may do.
    *
-   * Behind `permission:write` rather than a read grant of its own: what each
-   * role may do is the shape of the desk's trust, and the people who may look at
-   * it are the people who may change it. The Permissions PAGE every user can
-   * already see is a different thing — it derives what YOU can do, not the table.
+   * Readable by anyone signed in. It was behind `permission:write` on the
+   * grounds that the people who may look at the shape of the desk's trust are
+   * the people who may change it, and that had a cost nobody had counted: the
+   * Permissions page shows every user a role × capability table, could not read
+   * this, and so rendered a HARD-CODED copy of the grants a fresh install starts
+   * with. Every desk that edited its matrix had a page telling its staff
+   * something untrue, and the mirror could not be fixed without an answer to
+   * read — a second copy of the table is not a smaller leak than the table.
+   *
+   * What it actually discloses is which roles hold which permission names, all
+   * of which the product already names on that page. It identifies no person and
+   * grants nothing: a reader learns what an admin may do, not who the admins
+   * are, and still gets a 403 from every route they do not hold.
+   *
+   * The WRITE is a different question and keeps its gate — see `setGrants`.
+   *
+   * `actor` stays on the signature: nothing here reads it, and a read that took
+   * no principal would be a read nobody could later confine to one.
    */
   async matrix(actor: AuthUser): Promise<PermissionMatrix> {
-    if (!hasPermission(actor, PERMISSION_WRITE)) {
-      throw Forbidden("You don't have permission to change what roles may do");
-    }
+    void actor;
     return {
       permissions: PERMISSIONS,
       grants: await currentGrants(),

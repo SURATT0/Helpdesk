@@ -67,13 +67,30 @@ describe("the grants the product starts with", () => {
 });
 
 describe("who may read and change the matrix", () => {
-  it("refuses a requester and an agent, and answers a super admin", async () => {
+  it("answers everybody who is signed in", async () => {
+    // The read is open. What each role may do is set out on a page every user
+    // can open, and while this was gated that page rendered a hard-coded copy of
+    // a fresh install's grants — the same disclosure, only wrong. Reading it
+    // grants nothing: every route still refuses whoever does not hold it.
     for (const email of [REQUESTER, AGENT]) {
       const res = await request(app)
         .get(`${API}/permissions/matrix`)
         .set(bearer(await login(email)));
+      expect(res.status, email).toBe(200);
+      expect(res.body.data.grants.user, email).toEqual(["ticket:read", "ticket:create"]);
+    }
+  });
+
+  it("refuses a requester and an agent the WRITE, and answers a super admin", async () => {
+    for (const email of [REQUESTER, AGENT]) {
+      const res = await request(app)
+        .put(`${API}/permissions/matrix`)
+        .set(bearer(await login(email)))
+        .send({ role: "user", permissions: ["ticket:read", "ticket:create", "ticket:write"] });
       expect(res.status, email).toBe(403);
     }
+    // And nothing moved.
+    expect(await grantsOf("user")).toEqual(["ticket:create", "ticket:read"]);
 
     const ok = await request(app)
       .get(`${API}/permissions/matrix`)
