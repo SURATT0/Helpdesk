@@ -44,18 +44,30 @@ function reachWhere(user: AuthUser): Prisma.TicketWhereInput {
 }
 
 /**
- * Is that customer one this actor may act in?
+ * Is that customer one this PRINCIPAL may act in?
  *
  * The read-side counterpart is `reachWhere` above; this is the same question
  * asked about one row instead of a whole list, and the two decisions live
- * together so they cannot answer differently. A candidate with no customer is
- * outside everyone's reach but a platform-wide actor's — reaching "no customer"
- * is not something a grant can express.
+ * together so they cannot answer differently. A customer of `null` is outside
+ * everyone's reach but a platform-wide principal's — reaching "no customer" is
+ * not something a grant can express.
+ *
+ * Takes the principal structurally rather than as an `AuthUser`, because it is
+ * asked about two different people: the ACTOR, who has been granted reach and
+ * carries `customerIds`, and a prospective ASSIGNEE, who is a database row and
+ * does not. That absence is not an oversight — `customerReach` reads it as
+ * "their own customer and nothing more", which is exactly the rule for an
+ * assignee: reach lets somebody SEE a tenant's work, it never makes them a
+ * member of it, so a granted agent stays out of that customer's queue the same
+ * way they stay out of its directory and its assignee picker.
  */
-function withinReach(actor: AuthUser, customerId: number | null): boolean {
-  if (isPlatformWide(actor)) return true;
+function withinReach(
+  principal: { role: Role; customerId: number | null; customerIds?: number[] },
+  customerId: number | null,
+): boolean {
+  if (isPlatformWide(principal)) return true;
   if (customerId == null) return false;
-  return customerReach(actor).includes(customerId);
+  return customerReach(principal).includes(customerId);
 }
 
 /** A prospective assignee, reduced to what the decision below needs. */
@@ -68,15 +80,34 @@ export type AssignmentCandidate = {
 };
 
 /**
- * May `actor` hand a queue of tickets to `candidate`?
+ * May `actor` hand work belonging to `workCustomerId` to `candidate`?
  *
  * Pure so it can be unit tested, like the where-clause builders above. Which
  * *tickets* move is decided by `ticketScopeWhere` in the repository; this decides
  * only who is allowed to receive them, which that clause cannot express.
  *
- *   user candidate       → never; users raise tickets, they don't hold queues
- *   platform-wide actor  → any staff member, any customer
- *   actor with reach     → only staff inside a customer they reach
+ * THREE questions, and the third one is easy to forget because two of them
+ * collapse into one for most callers:
+ *
+ *   1. is the candidate the sort of person who holds work at all?
+ *      a requester never is, and neither is a closed account
+ *   2. may the ACTOR hand work to them?
+ *      platform-wide → anyone; otherwise only staff inside a customer they reach
+ *   3. can the CANDIDATE see the work being handed over?
+ *      platform-wide → yes; otherwise only their own customer's
+ *
+ * Question 3 is the one that was missing, and its absence did not show for a
+ * customer-bound actor: their reach is one customer, the work they can touch is
+ * inside it, and question 2 therefore answered 3 by accident. For a
+ * platform-wide actor question 2 is vacuous, so nothing was asked at all — an
+ * Acme ticket could be assigned to a Globex agent, accepted with a 200, and then
+ * 404 for the person it was assigned to. `ticketScopeWhere` still hid it, so
+ * nothing leaked; the ticket simply left every queue at once, which is the
+ * failure this check's own comment at the call site was written to prevent.
+ *
+ * Note the asymmetry in how reach is read on each side, which is deliberate:
+ * the actor's GRANTED reach counts for question 2, and does not for question 3
+ * — see `withinReach`.
  *
  * An actor who reaches no customer and is not platform-wide can grant nothing,
  * mirroring how `ticketScopeWhere` grants them nothing beyond their own tickets.
@@ -84,6 +115,7 @@ export type AssignmentCandidate = {
 export function mayReceiveAssignment(
   actor: AuthUser,
   candidate: AssignmentCandidate,
+  workCustomerId: number | null,
 ): boolean {
   if (candidate.role === "user") return false;
   // A closed account cannot be handed work. Checked before reach, because it is
@@ -91,7 +123,8 @@ export function mayReceiveAssignment(
   // "who may receive" is what makes it hold for a single ticket, a whole queue
   // handover, and owning a routing project alike.
   if (!candidate.isActive) return false;
-  return withinReach(actor, candidate.customerId);
+  if (!withinReach(actor, candidate.customerId)) return false;
+  return withinReach(candidate, workCustomerId);
 }
 
 /** A prospective requester for an imported row, reduced to what the decision needs. */

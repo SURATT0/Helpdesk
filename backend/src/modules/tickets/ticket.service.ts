@@ -676,7 +676,7 @@ export const ticketService = {
     assigneeId: number | null,
     user: AuthUser,
   ): Promise<Ticket> {
-    await this.get(id, user); // row scope → 404 before any write
+    const ticket = await this.get(id, user); // row scope → 404 before any write
     /**
      * The same eligibility check the queue handover makes.
      *
@@ -686,12 +686,19 @@ export const ticketService = {
      * routes to the same outcome disagreeing about who may hold a ticket is the
      * kind of gap that only shows up as a ticket nobody is working.
      *
+     * The TICKET's customer is passed, not just the two people: that is the
+     * third question `mayReceiveAssignment` asks, and the one that used to go
+     * unasked whenever the actor was platform-wide.
+     *
      * `null` clears the assignee, which needs no candidate and stays allowed.
      */
     if (assigneeId != null) {
       const candidate = await ticketRepository.findAssignmentCandidate(assigneeId);
       if (!candidate) throw BadRequest(`Unknown user #${assigneeId}`);
-      if (!mayReceiveAssignment(user, candidate)) {
+      // `tickets.customer_id` is NOT NULL and the DTO carries the relation
+      // unconditionally, so this is always a real tenant; `??` is the safe
+      // direction anyway, since an absent one is refused rather than waved past.
+      if (!mayReceiveAssignment(user, candidate, ticket.customer?.id ?? null)) {
         // Deliberately one message, as in `reassign` — distinguishing the reasons
         // would leak the directory of tenants the actor cannot see.
         throw NotAssignable(assigneeId);
@@ -725,26 +732,41 @@ export const ticketService = {
       throw SameAssignee();
     }
 
+    const statuses = input.statuses ?? [...ACTIVE_STATUSES];
+    /**
+     * The queue is read BEFORE the receiver is judged, because judging them
+     * needs to know which tenants the queue spans.
+     *
+     * Nothing is written by the read, so the order costs only a query on the
+     * refusal path — and the alternative is what this used to do: approve the
+     * receiver against the actor's reach alone, then move tickets the receiver
+     * cannot see.
+     */
+    const { ids, customerIds, remaining } =
+      await ticketRepository.findIdsByAssignee(
+        input.fromUserId,
+        statuses,
+        user,
+        REASSIGN_BATCH_LIMIT,
+      );
+
     if (input.toUserId != null) {
       const candidate = await ticketRepository.findAssignmentCandidate(
         input.toUserId,
       );
       if (!candidate) throw BadRequest(`Unknown user #${input.toUserId}`);
-      if (!mayReceiveAssignment(user, candidate)) {
+      // Every customer in the queue, not the first: a handover is refused whole
+      // rather than moving the half the receiver happens to be able to see.
+      const refused = customerIds.some(
+        (customerId) => !mayReceiveAssignment(user, candidate, customerId),
+      );
+      if (refused) {
         // Same message either way: telling a manager apart "that user is in
         // another customer" from "that user is a requester" would leak the
         // directory of tenants they cannot see.
         throw NotAssignable(input.toUserId);
       }
     }
-
-    const statuses = input.statuses ?? [...ACTIVE_STATUSES];
-    const { ids, remaining } = await ticketRepository.findIdsByAssignee(
-      input.fromUserId,
-      statuses,
-      user,
-      REASSIGN_BATCH_LIMIT,
-    );
 
     const movedTicketIds: number[] = [];
     for (const id of ids) {

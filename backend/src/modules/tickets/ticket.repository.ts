@@ -544,21 +544,25 @@ export const ticketRepository = {
     statuses: TicketStatus[],
     user: AuthUser,
     limit: number,
-  ): Promise<{ ids: number[]; remaining: number }> {
+  ): Promise<{ ids: number[]; customerIds: number[]; remaining: number }> {
     const where: Prisma.TicketWhereInput = {
       AND: [ticketScopeWhere(user), { assigneeId, status: { in: statuses } }],
     };
     const [rows, total] = await Promise.all([
       prisma.ticket.findMany({
         where,
-        select: { id: true },
+        select: { id: true, customerId: true },
         orderBy: { id: "asc" },
         take: limit,
       }),
       prisma.ticket.count({ where }),
     ]);
     const ids = rows.map((r) => r.id);
-    return { ids, remaining: Math.max(0, total - ids.length) };
+    // Which tenants this queue actually spans. Usually one — but the person
+    // being emptied may be platform staff holding work for several, and the
+    // receiver has to be able to see every customer in it, not just the first.
+    const customerIds = [...new Set(rows.map((r) => r.customerId))];
+    return { ids, customerIds, remaining: Math.max(0, total - ids.length) };
   },
 
   async findHistory(ticketId: number): Promise<HistoryEntry[]> {

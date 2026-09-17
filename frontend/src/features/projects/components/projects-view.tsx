@@ -66,6 +66,7 @@ function OwnerCell({
   owner,
   ariaLabel,
   users,
+  customerId,
   saving,
   canWrite,
   onChange,
@@ -73,6 +74,8 @@ function OwnerCell({
   owner: ProjectOwner;
   ariaLabel: string;
   users: ReturnType<typeof useUsers>["data"];
+  /** The project this slot belongs to — whose work the holder takes. */
+  customerId: number;
   saving: boolean;
   canWrite: boolean;
   onChange: (id: number | null) => void;
@@ -89,6 +92,7 @@ function OwnerCell({
       <OwnerSelect
         value={owner?.id ?? null}
         users={users ?? []}
+        customerId={customerId}
         disabled={saving}
         ariaLabel={ariaLabel}
         onChange={onChange}
@@ -249,6 +253,7 @@ export function ProjectsView() {
                       owner={p.owner}
                       ariaLabel={t("projects.col.owner")}
                       users={users}
+                      customerId={p.customerId}
                       saving={savingId === p.id}
                       canWrite={canWrite}
                       onChange={(ownerId) =>
@@ -260,6 +265,7 @@ export function ProjectsView() {
                       owner={p.backupOwner}
                       ariaLabel={t("projects.col.backup")}
                       users={users}
+                      customerId={p.customerId}
                       saving={savingId === p.id}
                       canWrite={canWrite}
                       onChange={(backupOwnerId) =>
