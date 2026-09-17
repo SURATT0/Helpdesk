@@ -198,6 +198,15 @@ export function maySeeWorkloadOf(
  * Coarse permission grants per role. `*` = all (admin). Reads are gated by
  * row-level scoping rather than a permission (everyone may read what their
  * scope allows), so `ticket:read` is granted broadly; writes are permissioned.
+ *
+ * **No longer the grant table.** Grants live in `role_permissions` and are
+ * editable; `requireAuth` overwrites `user.permissions` with `grantsFor(role)`
+ * on every request, so nothing is gated on what is written here. Its one
+ * remaining job is to fill the `permissions` claim when an access token is
+ * minted — a claim that is then replaced before any route reads it. It is kept
+ * as the shape a token has always carried rather than deleted, and
+ * `INITIAL_ROLE_PERMISSIONS` in `shared/permissions.ts` (which expands the top
+ * role's `*` into an explicit list) is what the database actually started from.
  */
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   // Everything an admin can do, plus managing the admins themselves. `*` rather

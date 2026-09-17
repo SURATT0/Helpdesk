@@ -46,15 +46,15 @@ export const CAPABILITIES: { key: string; perms: readonly string[] }[] = [
   { key: "cap.handover", perms: ["ticket:assign"] },
   { key: "cap.manageUsers", perms: ["user:write"] },
   { key: "cap.routingProjects", perms: ["project:write"] },
-  // Held by no role explicitly, so only super_admin's `*` satisfies it: closing
-  // is the normal end of a ticket's life and this is the escape hatch for a row
-  // that should never have existed.
+  // The starting matrix gives this to super_admin alone: closing is the normal
+  // end of a ticket's life and this is the escape hatch for a row that should
+  // never have existed.
   { key: "cap.deleteTicket", perms: ["ticket:delete"] },
   { key: "cap.deleteProject", perms: ["project:delete"] },
   // Configuring which events are mailed, how often, and when the SLA starts
-  // warning. Held by no role explicitly, so only super_admin's `*` satisfies it:
-  // this is the desk's own policy rather than case work. WHICH tenant's policy a
-  // holder reaches is the reach axis, not this one — see the scope table below.
+  // warning. The starting matrix gives this to super_admin alone: it is the
+  // desk's own policy rather than case work. WHICH tenant's policy a holder
+  // reaches is the reach axis, not this one — see the scope table below.
   { key: "cap.notificationSettings", perms: ["settings:write"] },
 ];
 

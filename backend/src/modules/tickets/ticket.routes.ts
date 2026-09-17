@@ -38,11 +38,12 @@ router.post(
 );
 router.get("/:id", asyncHandler(ticketController.get));
 router.get("/:id/history", asyncHandler(ticketController.history));
-// Soft-delete a ticket. `ticket:delete` is held by no role explicitly, so only
-// super_admin's "*" satisfies it — closing is the normal end of a ticket's life and
-// this is the escape hatch for a row that should never have existed. Row scope is
-// still enforced in the service, so a customer's own super admin cannot reach
-// another tenant's ticket.
+// Soft-delete a ticket. The starting matrix gives `ticket:delete` to super_admin
+// and to nobody else — closing is the normal end of a ticket's life and this is
+// the escape hatch for a row that should never have existed — but the matrix is
+// editable, so `requirePermission` asks who holds it NOW rather than assuming.
+// Row scope is still enforced in the service, so a customer's own super admin
+// cannot reach another tenant's ticket.
 router.delete(
   "/:id",
   requirePermission("ticket:delete"),
