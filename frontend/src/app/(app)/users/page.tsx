@@ -22,6 +22,7 @@ import { ProjectSelect } from "@/features/users/components/project-select";
 import { SuspensionToggle } from "@/features/users/components/suspension-toggle";
 import { useI18n } from "@/features/i18n/context";
 import { apiErrorMessage } from "@/lib/api-error";
+import type { Project } from "@/features/projects/schemas";
 import type {
   User,
   UserFilters,
@@ -31,6 +32,15 @@ import type {
 import { BADGE, type ColourPair } from "@/lib/palette";
 import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+
+/**
+ * The list a row gets when its customer owns no projects — and the list
+ * platform staff always get, since they belong to no customer.
+ *
+ * A shared constant rather than `[]` at the call site: a fresh empty array on
+ * every render is a new prop for every such row, every time the table redraws.
+ */
+const EMPTY_PROJECTS: Project[] = [];
 
 // Descending privilege, so the badge colours read as a ladder at a glance.
 const ROLE_STYLE: Record<UserRole, ColourPair> = {
@@ -130,7 +140,29 @@ export default function UsersPage() {
   // Projects are only needed for the editable picker, and requesters/agents
   // cannot write anyway — so don't fetch them for a read-only view.
   const { data: projectData } = useProjects({ enabled: canEdit });
-  const projects = projectData?.projects ?? [];
+  /**
+   * The routing projects each customer owns, so a row can be offered only its
+   * own tenant's.
+   *
+   * The picker used to receive the whole list. For a customer-bound viewer that
+   * WAS one tenant's projects and the distinction never showed; for platform
+   * staff it is every project that exists, so a requester at one company was
+   * offered another company's routing — and `users.project_id` is what decides
+   * who their next ticket is assigned to.
+   *
+   * Grouped once rather than filtered per row: the table re-renders on every
+   * mutation, and a fresh array per row per render is a new prop identity for
+   * each `<ProjectSelect>` each time.
+   */
+  const projectsByCustomer = React.useMemo(() => {
+    const byCustomer = new Map<number, Project[]>();
+    for (const p of projectData?.projects ?? []) {
+      const list = byCustomer.get(p.customerId);
+      if (list) list.push(p);
+      else byCustomer.set(p.customerId, [p]);
+    }
+    return byCustomer;
+  }, [projectData]);
   const pendingId = update.isPending ? update.variables?.id : undefined;
 
   return (
@@ -256,7 +288,14 @@ export default function UsersPage() {
                   {canEdit ? (
                     <ProjectSelect
                       value={u.project?.id ?? null}
-                      projects={projects}
+                      // Their own customer's projects, and nobody else's.
+                      // Platform staff belong to no customer, so they get an
+                      // empty list — which is the same answer the API gives.
+                      projects={
+                        (u.customer
+                          ? projectsByCustomer.get(u.customer.id)
+                          : undefined) ?? EMPTY_PROJECTS
+                      }
                       disabled={pendingId === u.id}
                       ariaLabel={`${t("users.col.project")} — ${u.name}`}
                       onChange={(projectId) =>
