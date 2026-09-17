@@ -15,11 +15,14 @@ import {
 /**
  * The permission archiving a customer needs.
  *
- * Held by no role explicitly, so only `super_admin`'s `*` satisfies it — the
- * same arrangement `project:delete` and `ticket:delete` use. Creating a tenant
- * is an admin's job; ending one is not the same act, and the asymmetry is
- * deliberate: a mistaken create leaves an empty row nobody has to care about,
- * while an archive removes a company from every picker at once.
+ * The starting matrix gives it to `super_admin` and to nobody else — the same
+ * arrangement `project:delete` and `ticket:delete` use. Creating a tenant is an
+ * admin's job; ending one is not the same act, and the asymmetry is deliberate:
+ * a mistaken create leaves an empty row nobody has to care about, while an
+ * archive removes a company from every picker at once.
+ *
+ * Where it goes from there is the desk's to decide — `role_permissions` is
+ * editable, and this gate reads the live grant, not the list it started from.
  */
 export const CUSTOMER_ARCHIVE = "customer:archive";
 

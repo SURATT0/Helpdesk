@@ -17,11 +17,15 @@ import {
 /**
  * The permission writing the category list needs.
  *
- * Held by no role explicitly, so only `super_admin`'s `*` satisfies it — the
- * same arrangement `project:delete` and `customer:archive` use, and for the same
+ * The starting matrix gives it to `super_admin` and to nobody else — the same
+ * arrangement `project:delete` and `customer:archive` use, and for the same
  * reason. A category is the shape of a tenant's reporting: adding one changes
  * what every future chart has a line for, and an agent working cases has no
  * occasion to.
+ *
+ * A STARTING point, not a rule: `role_permissions` is editable, so a desk that
+ * wants its admins maintaining the list can say so, and this check reads the
+ * live grant either way.
  *
  * Deliberately NOT applied to the LIST. Reading the categories is a picker's
  * data, needed by every requester to file anything at all, and already scoped to
