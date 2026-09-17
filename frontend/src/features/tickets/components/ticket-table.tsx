@@ -497,6 +497,18 @@ export function TicketTable() {
       {canSelect && selected.size > 0 && rows.length > 0 ? (
         <BulkActionBar
           selectedIds={[...selected]}
+          // Which tenants the selection covers, so the Assign menu can offer
+          // only people who can see all of them. Usually one — but a
+          // platform-wide reader's list spans every customer, and nothing stops
+          // them ticking rows from two.
+          selectedCustomerIds={[
+            ...new Set(
+              rows
+                .filter((r) => selected.has(r.id))
+                .map((r) => r.customer?.id)
+                .filter((id): id is number => id != null),
+            ),
+          ]}
           onClear={() => setSelected(new Set())}
         />
       ) : null}

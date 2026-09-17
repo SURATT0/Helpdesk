@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { apiErrorMessage } from "@/lib/api-error";
+import { canHoldWorkFor } from "@/lib/assignment";
 import { cn } from "@/lib/utils";
 import { toneForName } from "@/features/tickets/data";
 import { useReassignTickets } from "@/features/tickets/queries";
@@ -41,10 +42,28 @@ export function HandoverQueueModal({
   const [result, setResult] = React.useState<ReassignResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const eligible = React.useMemo(
-    () => candidates.filter((u) => u.id !== from.id && u.role !== "user"),
-    [candidates, from.id],
-  );
+  /**
+   * Who could actually receive this queue.
+   *
+   * A ticket may only go to somebody who can see it, so the queue's customer is
+   * part of the question — and for anyone who belongs to a customer, their
+   * queue IS that customer's: the API will not assign them another tenant's
+   * ticket. So `from.customer` names the tenant exactly, and the list is what
+   * the server would accept.
+   *
+   * Platform staff are the one case this cannot narrow. They hold work across
+   * tenants, so which customers their queue spans is a fact about rows nobody
+   * has loaded here. Rather than guess restrictively and hide a valid choice,
+   * the offer stays role-only for them and the server answers — the dialog
+   * already renders its refusal, which is the honest place for a question the
+   * client cannot decide.
+   */
+  const eligible = React.useMemo(() => {
+    const others = candidates.filter((u) => u.id !== from.id && u.role !== "user");
+    const queueCustomerId = from.customer?.id;
+    if (queueCustomerId == null) return others;
+    return others.filter((u) => canHoldWorkFor(u, queueCustomerId));
+  }, [candidates, from.id, from.customer?.id]);
 
   function submit() {
     if (toUserId === "") return;
