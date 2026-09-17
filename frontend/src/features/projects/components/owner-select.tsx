@@ -3,6 +3,7 @@
 import { FIELD_TEXT_12 } from "@/components/ui/input";
 import { useI18n } from "@/features/i18n/context";
 import type { User } from "@/features/users/schemas";
+import { canHoldWorkFor } from "@/lib/assignment";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,18 +25,25 @@ import { cn } from "@/lib/utils";
 export function OwnerSelect({
   value,
   users,
+  customerId,
   disabled,
   ariaLabel,
   onChange,
 }: {
   value: number | null;
   users: User[];
+  /** The PROJECT's customer — whose work this slot hands out. */
+  customerId: number;
   disabled?: boolean;
   ariaLabel: string;
   onChange: (userId: number | null) => void;
 }) {
   const { t } = useI18n();
-  const assignable = users.filter((u) => u.role !== "user");
+  // Staff who can actually see this customer's tickets. It used to filter on
+  // the role alone, which for a platform-wide viewer meant every tenant's
+  // staff — and the server agreed, because its check asked about the caller
+  // rather than about the work. See `canHoldWorkFor`.
+  const assignable = users.filter((u) => canHoldWorkFor(u, customerId));
 
   return (
     <select

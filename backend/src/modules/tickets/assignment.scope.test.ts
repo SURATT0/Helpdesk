@@ -43,10 +43,55 @@ describe("mayReceiveAssignment", () => {
     expect(actorMay(actor(), candidate({ customerId: 8 }))).toBe(false);
   });
 
-  it("lets a platform admin assign across customers", () => {
+  it("lets a platform admin assign inside any customer", () => {
+    // Reaching every tenant means being able to hand out every tenant's work —
+    // to the people of THAT tenant.
     expect(
-      actorMay(actor({ role: "super_admin", customerId: null }), candidate({ customerId: 8 })),
+      actorMay(
+        actor({ role: "super_admin", customerId: null }),
+        candidate({ customerId: 8 }),
+        8,
+      ),
     ).toBe(true);
+  });
+
+  it("refuses a platform admin routing one customer's work to another's staff", () => {
+    // The gap this argument was added to close. Reaching both tenants says the
+    // ACTOR may hand work over; it says nothing about whether the RECEIVER can
+    // see what they are being handed, and a customer-bound agent cannot see
+    // another customer's ticket. Accepted, it produced a 200 followed by a 404
+    // for the person it was assigned to — the ticket left every queue at once.
+    expect(
+      actorMay(
+        actor({ role: "super_admin", customerId: null }),
+        candidate({ customerId: 8 }),
+        7,
+      ),
+    ).toBe(false);
+  });
+
+  it("lets platform staff hold any customer's work", () => {
+    // The other direction, and it has to keep working: somebody with no tenant
+    // of their own sees every ticket, so work routed to them is work somebody
+    // is really holding. This is what makes a platform super admin a legitimate
+    // owner of a customer's routing project.
+    const platformStaff = candidate({ role: "super_admin", customerId: null });
+    for (const workCustomer of [7, 8]) {
+      expect(
+        actorMay(
+          actor({ role: "super_admin", customerId: null }),
+          platformStaff,
+          workCustomer,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("refuses work whose customer is unknown", () => {
+    // Nothing legitimate reaches here — `tickets.customer_id` is NOT NULL — but
+    // an absent tenant must read as "nobody may hold it" rather than as a
+    // wildcard, which is the direction the rest of the reach rules fail in.
+    expect(actorMay(actor(), candidate(), null)).toBe(false);
   });
 
   it("grants a customer-less actor below the top role nothing", () => {
@@ -82,7 +127,16 @@ describe("mayReceiveAssignment", () => {
   });
 });
 
-// Tiny indirection so each assertion reads as "actor may / may not".
-function actorMay(a: AuthUser, c: AssignmentCandidate): boolean {
-  return mayReceiveAssignment(a, c);
+/**
+ * Tiny indirection so each assertion reads as "actor may / may not".
+ *
+ * `workCustomerId` defaults to 7, the customer both fixtures sit in, so every
+ * case that is not about the work's tenant reads as before.
+ */
+function actorMay(
+  a: AuthUser,
+  c: AssignmentCandidate,
+  workCustomerId: number | null = 7,
+): boolean {
+  return mayReceiveAssignment(a, c, workCustomerId);
 }

@@ -90,16 +90,28 @@ export type UpdateProjectInput = {
  * rather than writing a second check is the point: a requester must never end up
  * holding tickets, and a manager must not be able to route work to another
  * tenant's staff.
+ *
+ * `customerId` is the PROJECT's, and passing it is what makes that second
+ * promise true. The check used to be given only the two people, so it asked
+ * whether the actor could hand work to this person at all and never whether
+ * this person could see the work — the same question for a customer-bound
+ * manager, no question at all for platform staff. The cost lands later and
+ * silently: the owner takes every ticket the project routes, and
+ * `findRoutingForRequester` does no tenant check of its own.
+ *
+ * Platform staff remain eligible, and should: they see every customer's
+ * tickets, so work routed to them is work somebody is actually holding.
  */
 async function assertOwnersAssignable(
   actor: AuthUser,
   slots: Array<number | null | undefined>,
+  customerId: number,
 ): Promise<void> {
   for (const userId of slots) {
     if (userId == null) continue; // omitted, or an explicit clear
     const candidate = await projectRepository.findOwnerCandidate(userId);
     if (!candidate) throw BadRequest(`Unknown user #${userId}`);
-    if (!mayReceiveAssignment(actor, candidate)) {
+    if (!mayReceiveAssignment(actor, candidate, customerId)) {
       // Deliberately the same message whatever the reason — distinguishing "is a
       // requester" from "belongs to another customer" would leak the directory of
       // tenants the actor cannot see.
@@ -134,7 +146,11 @@ export const projectService = {
           : "You have no customer to create a project in",
       );
     }
-    await assertOwnersAssignable(actor, [input.ownerId, input.backupOwnerId]);
+    await assertOwnersAssignable(
+      actor,
+      [input.ownerId, input.backupOwnerId],
+      customerId,
+    );
     // Checked here so the refusal names the project rather than a constraint.
     // The partial unique index is still what guarantees it — this only decides
     // what the caller is told, and what they are told decides whether they can
@@ -161,7 +177,11 @@ export const projectService = {
     // Row scope first, so an out-of-scope project 404s before we start
     // validating owners against it.
     const current = await this.get(id, actor);
-    await assertOwnersAssignable(actor, [input.ownerId, input.backupOwnerId]);
+    await assertOwnersAssignable(
+      actor,
+      [input.ownerId, input.backupOwnerId],
+      current.customerId,
+    );
     // A rename collides the same way a create does, and must say so the same
     // way. Skipped when the name is not changing — including a change of case
     // on the same project, which is a rename somebody is entitled to make and
