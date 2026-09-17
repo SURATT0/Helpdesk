@@ -325,7 +325,10 @@ export function ReportsBody() {
           </div>
           {data.byCategory.map((r, i) => (
             <div
-              key={r.category}
+              // The code, not the label: the rows are one per category code and
+              // two tenants can word their copy of one differently, so the label
+              // is not unique and a React key made of it would drop a row.
+              key={r.code}
               className={cn(
                 `grid ${ROW} items-center px-5 py-2.5 text-body`,
                 i < data.byCategory.length - 1 && "border-b border-rule",

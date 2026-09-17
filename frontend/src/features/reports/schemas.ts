@@ -23,6 +23,12 @@ export const reportsSummarySchema = z.object({
     ),
     byCategory: z.array(
       z.object({
+        /**
+         * `categories.code` — the grouping key, and what the row is keyed on.
+         * The label beside it is a name and two rows can share one, because a
+         * tenant may word its copy of a category differently from the next.
+         */
+        code: z.string(),
         category: z.string(),
         judged: z.number(),
         met: z.number(),
