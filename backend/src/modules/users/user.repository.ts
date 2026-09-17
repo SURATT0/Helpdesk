@@ -310,20 +310,52 @@ export const userRepository = {
       });
       if (!exists) return null;
 
-      // A project is a routing target, so attaching a user to one must respect
-      // the same tenant boundary as everything else: without this, a manager
-      // could point their own user at another customer's project and have that
-      // customer's caseworker start receiving the tickets.
-      //
-      // Goes through `projectScopeWhere` rather than restating its condition.
-      // It used to spell out the isPlatformWide/customerId test inline — a
-      // second copy that happened to agree, until soft delete gave the function
-      // a third clause this copy would not have had. A deleted project would
-      // have stayed selectable here, and the user attached to it would route
-      // through a project no screen can show.
+      /**
+       * A project is a routing target, so attaching a user to one must respect
+       * the same tenant boundary as everything else: the project has to belong
+       * to the customer THIS USER belongs to.
+       *
+       * Two conditions, answering two different questions, and the first one is
+       * the fix for a real gap. It used to ask only `projectScopeWhere(actor)`
+       * — the caller's reach. For a customer-bound admin that is the same
+       * question by accident, because they can only reach one customer and can
+       * only edit its people; for a PLATFORM-WIDE actor it is every project
+       * that exists, so the check passed for anything. The screen offered the
+       * same set, on the same assumption, so both halves of the argument failed
+       * together and for exactly one class of caller.
+       *
+       * What it costs is not a leak — the ticket keeps the requester's
+       * `customerId`, so `ticketScopeWhere` still hides it from the foreign
+       * assignee. It is worse in a quieter way: `findRoutingForRequester` reads
+       * this column with no customer check of its own, so that user's next
+       * ticket is assigned to somebody who cannot see it, and it leaves every
+       * queue at once.
+       *
+       * `projectScopeWhere` stays as the second condition rather than being
+       * replaced by the tenant match. It carries the soft-delete clause, and a
+       * deleted project would otherwise stay attachable — routing the user
+       * through a project no screen can show.
+       *
+       * A user with no customer of their own (platform staff) can hold no
+       * project at all: a project belongs to exactly one customer, and they
+       * belong to none. Said as its own branch with its own message rather than
+       * left to match zero rows, because "unknown project" would send the
+       * caller looking for a project that is right there.
+       */
       if (data.projectId != null) {
+        if (exists.customerId == null) {
+          throw BadRequest(
+            "Platform staff belong to no customer, so no routing project is theirs to hold",
+          );
+        }
         const project = await tx.project.findFirst({
-          where: { AND: [{ id: data.projectId }, projectScopeWhere(actor)] },
+          where: {
+            AND: [
+              { id: data.projectId },
+              { customerId: exists.customerId },
+              projectScopeWhere(actor),
+            ],
+          },
           select: { id: true },
         });
         if (!project) throw BadRequest(`Unknown project #${data.projectId}`);
