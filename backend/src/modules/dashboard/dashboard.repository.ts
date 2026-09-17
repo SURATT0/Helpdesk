@@ -55,8 +55,31 @@ export const dashboardRepository = {
           where: { AND: [scope, { resolvedAt: { not: null } }] },
           select: { createdAt: true, resolvedAt: true },
         }),
+        /**
+         * Tickets CLOSED in the last seven days.
+         *
+         * Both halves of this are load-bearing. It counted `resolvedAt` alone,
+         * which is stamped on the first arrival at `pending` — the desk saying
+         * the work is done, before the requester has answered — so the tile read
+         * "closed this week" while counting tickets nobody had closed. The
+         * reports page had already moved its closure trend off that column for
+         * the same reason; this is the KPI that did not follow.
+         *
+         * And `closedAt` on its own is not enough either: it is stamped on the
+         * move into `closed` and deliberately never cleared, because the 30-day
+         * reopen check reads it back. So a reopened ticket still carries the
+         * timestamp of its earlier closure and would be counted here while
+         * sitting in the New column two tiles away. Requiring the status too is
+         * exactly what `findClosed` does for the closed-ticket log, and for
+         * exactly this reason.
+         *
+         * `cancelled` needs no exclusion: a withdrawal leaves `closedAt` null,
+         * because the work never happened.
+         */
         prisma.ticket.count({
-          where: { AND: [scope, { resolvedAt: { gte: weekAgo } }] },
+          where: {
+            AND: [scope, { status: "closed", closedAt: { gte: weekAgo } }],
+          },
         }),
       ]);
 
