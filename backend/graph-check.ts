@@ -1,0 +1,63 @@
+/**
+ * ตรวจ Microsoft 365 integration ครบวงจรในสคริปต์เดียว
+ *   npx tsx graph-check.ts                 → ดูสิทธิ์ + ทดสอบ inbound
+ *   GRAPH_SEND=true PROBE_TO=x@y npx tsx graph-check.ts  → ทดสอบขาส่งด้วย
+ */
+import { graphToken, graphFetch, safeText } from "./src/modules/integrations/email/graph-client";
+import { GraphEmailSource } from "./src/modules/integrations/sources/graph-email.source";
+import { mailSender } from "./src/modules/integrations/email/mail-sender";
+import { env } from "./src/config/env";
+
+const claims = (t: string) => JSON.parse(Buffer.from(t.split(".")[1], "base64").toString());
+
+async function main() {
+  const p = claims(await graphToken());
+  const roles: string[] = p.roles ?? [];
+  console.log("=== สิทธิ์ที่ token พกมา ===");
+  console.log("roles   :", JSON.stringify(roles));
+  console.log("app     :", p.app_displayname, `(${p.appid})`);
+  console.log("mailbox :", env.integrations.graph.mailbox);
+  const canRead = roles.includes("Mail.ReadWrite") || roles.includes("Mail.Read");
+  console.log("อ่านเมลได้:", canRead ? "ใช่" : "ไม่ - ยังขาด Mail.ReadWrite");
+
+  const box = encodeURIComponent(env.integrations.graph.mailbox!);
+
+  console.log("\n=== ขาส่ง ===");
+  if (!process.env.PROBE_TO) {
+    console.log("(ข้าม - ไม่ได้ตั้ง PROBE_TO)");
+  } else if (mailSender.transport !== "graph") {
+    console.log("(ข้าม - transport =", mailSender.transport + ")");
+  } else {
+    try {
+      const res = await mailSender.send({
+        to: process.env.PROBE_TO,
+        subject: "Deskly - outbound through the real sender",
+        text: "Sent by GraphMailSender: draft created, internetMessageId read, draft sent.",
+        html: "<p>Sent by <b>GraphMailSender</b>.</p>",
+        headers: { "X-Deskly-Ticket-Id": "probe" },
+      } as never);
+      console.log("สำเร็จ:", JSON.stringify(res));
+    } catch (e) {
+      console.log("ล้มเหลว:", (e as Error).message);
+    }
+  }
+
+  console.log("\n=== ขารับ ===");
+  const peek = await graphFetch(
+    `/users/${box}/mailFolders/inbox/messages?$filter=isRead eq false&$top=5&$select=subject,from,receivedDateTime`,
+  );
+  if (!peek.ok) {
+    console.log("อ่าน inbox ไม่ได้:", peek.status, (await safeText(peek)).slice(0, 140));
+    return;
+  }
+  const { value } = (await peek.json()) as {
+    value: { subject: string; from?: { emailAddress?: { address?: string } }; receivedDateTime: string }[];
+  };
+  console.log(`เมลที่ยังไม่ได้อ่าน: ${value.length}`);
+  for (const m of value) console.log(`  - ${m.from?.emailAddress?.address ?? "?"} : ${m.subject}`);
+  if (value.length === 0) { console.log("(ไม่มีเมลใหม่ให้ ingest)"); return; }
+
+  console.log("\nเรียก syncMail()...");
+  console.log(JSON.stringify(await new GraphEmailSource().syncMail(), null, 2));
+}
+main().catch((e) => { console.error("FAILED:", e?.message ?? e); process.exit(1); });
