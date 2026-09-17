@@ -1,8 +1,20 @@
 {
-  // Production build config: same as tsconfig.json but excludes test files so
-  // `dist/` never ships compiled *.test.js (which pulls vitest into the runtime
-  // image and pollutes `vitest run`). `typecheck` still uses tsconfig.json, so
-  // tests remain type-checked.
+  // Production build config: same as tsconfig.json but excludes what the server
+  // does not need at runtime. `typecheck` still uses tsconfig.json, so all of it
+  // stays type-checked — the point is what ships, not what is checked.
+  //
+  //   *.test.ts    so `dist/` never ships compiled *.test.js, which pulls vitest
+  //                into the runtime image and pollutes `vitest run`
+  //   src/scripts  operator tools run with `tsx` against a checkout. They import
+  //                real modules, so they must be type-checked or they rot in
+  //                silence — which is why they live under src/ — but nothing in
+  //                the image ever runs them.
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "test"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts",
+    "src/scripts/**",
+    "test"
+  ]
 }

@@ -1,12 +1,17 @@
 /**
  * ตรวจ Microsoft 365 integration ครบวงจรในสคริปต์เดียว
- *   npx tsx graph-check.ts                 → ดูสิทธิ์ + ทดสอบ inbound
- *   GRAPH_SEND=true PROBE_TO=x@y npx tsx graph-check.ts  → ทดสอบขาส่งด้วย
+ *   npx tsx src/scripts/graph-check.ts                 → ดูสิทธิ์ + ทดสอบ inbound
+ *   GRAPH_SEND=true PROBE_TO=x@y npx tsx src/scripts/graph-check.ts  → ทดสอบขาส่งด้วย
+ *
+ * อยู่ใต้ src/ เพื่อให้ `npm run typecheck` ตรวจถึง — ตอนอยู่ที่ราก backend/
+ * มันอยู่นอก `include` ของ tsconfig และเน่าได้เงียบ ๆ เมื่อ signature เปลี่ยน
+ * ส่วน tsconfig.build.json กัน src/scripts/ ออก dist/ ไว้แล้ว เครื่องมือ
+ * diagnostic จึงไม่ติดไปกับ production image
  */
-import { graphToken, graphFetch, safeText } from "./src/modules/integrations/email/graph-client";
-import { GraphEmailSource } from "./src/modules/integrations/sources/graph-email.source";
-import { mailSender } from "./src/modules/integrations/email/mail-sender";
-import { env } from "./src/config/env";
+import { graphToken, graphFetch, safeText } from "../modules/integrations/email/graph-client";
+import { GraphEmailSource } from "../modules/integrations/sources/graph-email.source";
+import { mailSender } from "../modules/integrations/email/mail-sender";
+import { env } from "../config/env";
 
 const claims = (t: string) => JSON.parse(Buffer.from(t.split(".")[1], "base64").toString());
 
