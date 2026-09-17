@@ -30,12 +30,18 @@ async function main() {
   } else {
     try {
       const res = await mailSender.send({
+        // The mailbox GRAPH_MAILBOX names — the same address GraphMailSender
+        // sends as, since an app-only token sends through a mailbox rather than
+        // as a person. Stated rather than cast away: this used to be `as never`,
+        // which silenced `OutboundMail.from` being required and would have sent
+        // with no sender at all through any transport that reads the field.
+        from: env.integrations.graph.mailbox!,
         to: process.env.PROBE_TO,
         subject: "Deskly - outbound through the real sender",
         text: "Sent by GraphMailSender: draft created, internetMessageId read, draft sent.",
         html: "<p>Sent by <b>GraphMailSender</b>.</p>",
         headers: { "X-Deskly-Ticket-Id": "probe" },
-      } as never);
+      });
       console.log("สำเร็จ:", JSON.stringify(res));
     } catch (e) {
       console.log("ล้มเหลว:", (e as Error).message);
