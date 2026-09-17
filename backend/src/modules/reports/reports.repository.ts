@@ -21,6 +21,42 @@ function localDay(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/**
+ * Order two labels the way a reader of them would.
+ *
+ * One collator, built once at module scope: `Intl.Collator` is expensive to
+ * construct and this runs inside a sort. Thai, because that is what a category
+ * is usually named here and byte order strands every word beginning with a
+ * leading vowel (เ แ โ ใ ไ) at the end — the same rule the Thai collation on
+ * `categories.name` applies in the database. It only ever breaks a tie between
+ * equally busy rows, so a reader sees it as "stable", not as an ordering.
+ */
+const labelCollator = new Intl.Collator("th-TH", {
+  sensitivity: "base",
+  numeric: true,
+});
+const compareLabel = labelCollator.compare;
+
+/**
+ * The name to show for a group of category rows that share a code.
+ *
+ * The most common spelling wins; a tie goes to the first alphabetically, so the
+ * label does not depend on row order. Falls back to the code itself, which
+ * cannot happen with a non-empty group and is the only honest answer if it ever
+ * does — better an ugly `NETWORK` than a blank cell.
+ */
+function commonestName(names: Map<string, number>, code: string): string {
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [name, count] of names) {
+    if (count > bestCount || (count === bestCount && best != null && compareLabel(name, best) < 0)) {
+      best = name;
+      bestCount = count;
+    }
+  }
+  return best ?? code;
+}
+
 function median(nums: number[]): number {
   if (nums.length === 0) return 0;
   const sorted = [...nums].sort((a, b) => a - b);
@@ -67,6 +103,15 @@ export type ReportsSummary = {
     breached: number;
   }[];
   byCategory: {
+    /**
+     * The grouping key — `categories.code`, shared by every tenant's copy of the
+     * same category. Travels with the row so a client has something stable to
+     * key on: two groups can carry the same LABEL when tenants word their copies
+     * differently, and two rows with the same label is exactly what a React key
+     * cannot survive.
+     */
+    code: string;
+    /** What to show. A name, chosen from the group — see `commonestName`. */
     category: string;
     judged: number;
     met: number;
@@ -175,7 +220,10 @@ export const reportsRepository = {
           dueAt: true,
           resolvedAt: true,
           closedAt: true,
-          category: { select: { name: true } },
+          // Both, and the `code` is the one that groups: two tenants' copies of
+          // the same category are separate rows carrying the same code, so the
+          // name is a label and the code is the identity. See `byCategory`.
+          category: { select: { name: true, code: true } },
         },
       }),
       /**
@@ -225,24 +273,49 @@ export const reportsRepository = {
       };
     });
 
-    // SLA compliance grouped by category (over judged tickets), busiest first.
-    const catMap = new Map<string, { met: number; total: number }>();
+    /**
+     * SLA compliance grouped by category (over judged tickets), busiest first.
+     *
+     * Grouped by `code`, not by `name`. A category belongs to one customer, so
+     * every tenant owns its own copy of the starter set and the copies share a
+     * code — Acme's "Network" and Globex's are two rows both carrying `NETWORK`.
+     * Grouping by the name got that right only for as long as nobody renamed
+     * anything: a tenant translating their copy to "เครือข่าย" split one line of
+     * this report into two, and two unrelated codes that happen to share a name
+     * merged into one. Renaming is a display decision, and this stops it being a
+     * reporting one.
+     *
+     * The label is still a NAME, because nobody reads `HARDWARE_FAULT`. Which
+     * name, when the group spans tenants that word it differently, is decided by
+     * count — the most common spelling, ties broken alphabetically so the answer
+     * does not depend on which ticket was read first. A single-tenant reader
+     * never sees this happen: every row in their group is their own copy.
+     */
+    const catMap = new Map<
+      string,
+      { met: number; total: number; names: Map<string, number> }
+    >();
     for (const t of judged) {
-      const name = t.category.name;
-      const c = catMap.get(name) ?? { met: 0, total: 0 };
+      const { code, name } = t.category;
+      const c = catMap.get(code) ?? { met: 0, total: 0, names: new Map() };
       c.total += 1;
       if (isMet(t)) c.met += 1;
-      catMap.set(name, c);
+      c.names.set(name, (c.names.get(name) ?? 0) + 1);
+      catMap.set(code, c);
     }
     const byCategory = [...catMap.entries()]
-      .map(([category, c]) => ({
-        category,
+      .map(([code, c]) => ({
+        code,
+        category: commonestName(c.names, code),
         judged: c.total,
         met: c.met,
         breached: c.total - c.met,
         compliancePct: c.total ? round1((c.met / c.total) * 100) : 0,
       }))
-      .sort((a, b) => b.judged - a.judged);
+      // Busiest first, then by label: an equal count used to leave the order to
+      // whichever ticket the query happened to return first, so two reloads of
+      // the same data could hand the reader two different tables.
+      .sort((a, b) => b.judged - a.judged || compareLabel(a.category, b.category));
 
     const firstByTicket = new Map<number, number>();
     for (const h of firstReplies) {
