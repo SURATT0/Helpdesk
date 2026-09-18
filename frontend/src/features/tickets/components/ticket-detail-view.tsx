@@ -381,41 +381,51 @@ export function TicketDetailView({ id }: { id: number }) {
   const comments = commentsQuery.data ?? [];
   commentsRef.current = comments; // latest snapshot for the scroll/jump handlers
 
-  // The requester's opening description + every comment, as one chat timeline.
+  /**
+   * The thread, as one timeline.
+   *
+   * A ticket raised since the opening message became a row already HAS its
+   * description in `comments` — synthesising a second bubble from
+   * `ticket.description` would print it twice. A ticket raised before that does
+   * not, so the synthetic bubble stays as the fallback for them. Those are
+   * deliberately not backfilled, which is why this is a permanent branch rather
+   * than a temporary one: `openingCommentId` is null for every ticket that
+   * predates the column, forever.
+   */
   const messages = [
-    {
-      key: "desc",
-      id: 0,
-      authorId: undefined as number | undefined,
-      author: ticket.requester,
-      tone: "red" as const,
-      roleKey: "user",
-      time: formatTime(ticket.createdAt, lang),
-      body: ticket.description,
-      internal: false,
-      fromAgent: false,
-      sendStatus: undefined as CommentSendStatus | undefined,
-      clientId: undefined as string | undefined,
-      /**
-       * Files the ticket carries rather than any message — which in practice
-       * means the ones attached while it was being raised, since that form
-       * uploads against the ticket and there is no message yet to hang them on.
-       *
-       * They used to be listed in the sidebar and NOWHERE ELSE, so the person
-       * reading the thread saw a description that said "here is a screenshot"
-       * with no screenshot under it. The file was uploaded, stored, and served
-       * to them on request — it simply had no bubble to appear in, because the
-       * opening message is built here from `ticket.description` and had this
-       * list hard-coded empty.
-       *
-       * Drawn here rather than given a comment row of their own: nothing about
-       * the stored data changes, the sidebar keeps listing them, and the files
-       * appear where the sentence that describes them is. A chat file is
-       * already shown in both places, so this is the same arrangement rather
-       * than a new one.
-       */
-      attachments: ticketAttachments,
-    },
+    ...(ticket.openingCommentId != null
+      ? []
+      : [
+          {
+            key: "desc",
+            id: 0,
+            authorId: undefined as number | undefined,
+            author: ticket.requester,
+            tone: "red" as const,
+            roleKey: "user",
+            time: formatTime(ticket.createdAt, lang),
+            body: ticket.description,
+            internal: false,
+            fromAgent: false,
+            sendStatus: undefined as CommentSendStatus | undefined,
+            clientId: undefined as string | undefined,
+            /**
+             * The ticket's own files, for these older tickets.
+             *
+             * `commentId === null` means "belongs to the ticket, not to a
+             * message". On a ticket from before the opening message was a row,
+             * that is where the files picked while raising it ended up — and
+             * with no bubble of their own they appeared in the sidebar and
+             * nowhere else, so the reader saw a description saying "here is a
+             * screenshot" with no screenshot under it.
+             *
+             * A ticket raised since then has them on the opening comment
+             * instead, so this list is empty for it — and it is not reached
+             * anyway, because the branch above skips this bubble entirely.
+             */
+            attachments: ticketAttachments,
+          },
+        ]),
     ...comments.map((c) => ({
       key: c.clientId ?? `c${c.id}`,
       id: c.id,
