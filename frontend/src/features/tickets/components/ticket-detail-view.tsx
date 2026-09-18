@@ -18,6 +18,7 @@ import { EditTicketModal } from "./edit-ticket-modal";
 import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { MessageAttachments } from "@/features/attachments/components/message-attachments";
+import { useAttachments } from "@/features/attachments/queries";
 import { Composer } from "./composer";
 import { PropertiesRail } from "./properties-rail";
 import { CancelTicketDialog } from "./cancel-ticket-dialog";
@@ -180,6 +181,26 @@ function TypingDots() {
 
 export function TicketDetailView({ id }: { id: number }) {
   const { data: ticket, isLoading, isError, error, refetch } = useTicket(id);
+  /**
+   * The ticket's files, for the opening bubble further down.
+   *
+   * Up here with the other queries because the loading and error branches below
+   * return early, and a hook called after one of those is called conditionally —
+   * React counts hooks per render and throws when the count changes. Keyed on
+   * the `id` prop rather than `ticket.id` for the same reason: the ticket is not
+   * loaded yet at this point.
+   *
+   * The same query the sidebar panel runs, so React Query serves both from one
+   * cache entry and this adds no request.
+   */
+  const { data: allAttachments } = useAttachments(id);
+  const ticketAttachments = React.useMemo(
+    // `commentId === null` is "belongs to the ticket, not to a message" — in
+    // practice the files attached while it was being raised, since that form
+    // uploads before any message exists to hang them on.
+    () => (allAttachments ?? []).filter((a) => a.commentId == null),
+    [allAttachments],
+  );
   const { user } = useAuth();
   const { t, lang } = useI18n();
   const statusMutation = useUpdateTicketStatus();
@@ -375,9 +396,25 @@ export function TicketDetailView({ id }: { id: number }) {
       fromAgent: false,
       sendStatus: undefined as CommentSendStatus | undefined,
       clientId: undefined as string | undefined,
-      // The opening message is the ticket description, which carries no files of
-      // its own — ticket-level attachments live in the sidebar.
-      attachments: [] as Comment["attachments"],
+      /**
+       * Files the ticket carries rather than any message — which in practice
+       * means the ones attached while it was being raised, since that form
+       * uploads against the ticket and there is no message yet to hang them on.
+       *
+       * They used to be listed in the sidebar and NOWHERE ELSE, so the person
+       * reading the thread saw a description that said "here is a screenshot"
+       * with no screenshot under it. The file was uploaded, stored, and served
+       * to them on request — it simply had no bubble to appear in, because the
+       * opening message is built here from `ticket.description` and had this
+       * list hard-coded empty.
+       *
+       * Drawn here rather than given a comment row of their own: nothing about
+       * the stored data changes, the sidebar keeps listing them, and the files
+       * appear where the sentence that describes them is. A chat file is
+       * already shown in both places, so this is the same arrangement rather
+       * than a new one.
+       */
+      attachments: ticketAttachments,
     },
     ...comments.map((c) => ({
       key: c.clientId ?? `c${c.id}`,
