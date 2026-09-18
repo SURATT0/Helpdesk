@@ -63,7 +63,7 @@ function MessageBubble({
   time,
   children,
   internal,
-  fromAgent,
+  mine,
   grouped,
   status,
   receipt,
@@ -75,8 +75,17 @@ function MessageBubble({
   time: string;
   children: React.ReactNode;
   internal?: boolean;
-  /** Agent-side message → right-aligned + tinted, like a chat app. */
-  fromAgent?: boolean;
+  /**
+   * Written by whoever is reading → right-aligned and tinted, like every chat
+   * app.
+   *
+   * The reader's own id, NOT their role. Keyed on the role this said "agents on
+   * the right" to everybody, so a requester opened their own ticket and found
+   * their messages on the left and the desk's on the right — the mirror image of
+   * what a conversation is supposed to look like. Whose side a message is on is
+   * a fact about who is looking, so it cannot be decided by the message alone.
+   */
+  mine?: boolean;
   /** Consecutive message from the same author → hide avatar + header, tighten. */
   grouped?: boolean;
   /** Send state for the caller's own optimistic message (sending / failed). */
@@ -87,11 +96,13 @@ function MessageBubble({
   onRetry?: () => void;
 }) {
   const { t } = useI18n();
-  // Chat-style bubbles: agent on the right (green accent), requester on the
-  // left (white); internal notes keep their amber regardless of side.
+  // Chat-style bubbles: the reader's own on the right (green accent), everybody
+  // else's on the left (white); an internal note keeps its amber whichever side
+  // it is on, because "only the desk sees this" is a different fact from "you
+  // wrote this" and the two have to stay separable.
   const bubble = internal
     ? "border-warn-edge bg-warn-tint"
-    : fromAgent
+    : mine
       ? "border-accent-line bg-accent-soft"
       : "border-line bg-white";
   return (
@@ -99,7 +110,7 @@ function MessageBubble({
       className={cn(
         "flex gap-3 first:mt-0",
         grouped ? "mt-1" : "mt-4",
-        fromAgent && "flex-row-reverse",
+        mine && "flex-row-reverse",
       )}
     >
       {grouped ? (
@@ -108,8 +119,15 @@ function MessageBubble({
         <Avatar name={author} tone={tone} size={32} className="flex-none" />
       )}
       <div
+        data-side={mine ? "mine" : "theirs"}
         className={cn(
-          "max-w-[82%] rounded-lg border px-4 py-3.5",
+          // 78%, not 82%: the gap beside a bubble is the ONLY thing that says
+          // which side it is on, and at 375px the avatar and the padding have
+          // already taken 84px before the percentage is applied. 82% left about
+          // 50px of daylight there, which reads as "full width" rather than as a
+          // side. `min-w-0` so a long unbroken string wraps inside the cap
+          // instead of setting the flex item's width from its content.
+          "min-w-0 max-w-[78%] rounded-lg border px-4 py-3.5",
           bubble,
         )}
       >
@@ -117,7 +135,7 @@ function MessageBubble({
           <div
             className={cn(
               "mb-1.5 flex items-baseline gap-2",
-              fromAgent && "flex-row-reverse",
+              mine && "flex-row-reverse",
             )}
           >
             <span className="text-control font-semibold text-ink">{author}</span>
@@ -399,14 +417,22 @@ export function TicketDetailView({ id }: { id: number }) {
           {
             key: "desc",
             id: 0,
-            authorId: undefined as number | undefined,
+            /**
+             * Whoever raised the ticket wrote this, even though it has no
+             * comment row to say so.
+             *
+             * It used to be `undefined`, which was harmless while the side was
+             * decided by role and is not now: a requester opening their own
+             * older ticket would find the sentence they themselves wrote sitting
+             * on the other person's side of the conversation.
+             */
+            authorId: ticket.requesterId as number | undefined,
             author: ticket.requester,
             tone: "red" as const,
             roleKey: "user",
             time: formatTime(ticket.createdAt, lang),
             body: ticket.description,
             internal: false,
-            fromAgent: false,
             sendStatus: undefined as CommentSendStatus | undefined,
             clientId: undefined as string | undefined,
             /**
@@ -437,7 +463,6 @@ export function TicketDetailView({ id }: { id: number }) {
       body: c.body,
       attachments: c.attachments ?? [],
       internal: c.internal,
-      fromAgent: c.author.role !== "user",
       sendStatus: c.sendStatus,
       clientId: c.clientId,
     })),
@@ -642,12 +667,31 @@ export function TicketDetailView({ id }: { id: number }) {
             <div className="flex flex-col">
               {messages.map((m, i) => {
                 const prev = messages[i - 1];
+                /**
+                 * Whose side this message is on, from the reader's point of
+                 * view — so the same thread is a mirror image to the two people
+                 * in it, which is what a conversation looks like everywhere
+                 * else.
+                 *
+                 * An optimistic message has no author id back from the server
+                 * yet; it is unmistakably the reader's own, since they just
+                 * typed it, so a pending send stays on the right rather than
+                 * jumping sides when the response lands.
+                 */
+                const mine =
+                  m.authorId != null ? m.authorId === user?.id : !!m.sendStatus;
+                const prevMine =
+                  prev == null
+                    ? false
+                    : prev.authorId != null
+                      ? prev.authorId === user?.id
+                      : !!prev.sendStatus;
                 // Group consecutive messages from the same author on the same side.
                 const grouped =
                   !!prev &&
                   prev.author === m.author &&
                   prev.internal === m.internal &&
-                  prev.fromAgent === m.fromAgent;
+                  prevMine === mine;
                 const bubble = (
                   <MessageBubble
                     key={m.key}
@@ -656,7 +700,7 @@ export function TicketDetailView({ id }: { id: number }) {
                     role={t(`role.${m.roleKey}`)}
                     time={m.time}
                     internal={m.internal}
-                    fromAgent={m.fromAgent}
+                    mine={mine}
                     grouped={grouped}
                     status={m.sendStatus}
                     receipt={m.key === lastOwnKey ? lastOwnReceipt : null}
@@ -687,10 +731,16 @@ export function TicketDetailView({ id }: { id: number }) {
                     {/* Files sent with this message, drawn in the bubble. An
                         optimistic message has none yet — they appear when the
                         upload that follows the post lands and the thread
-                        refetches. */}
+                        refetches.
+
+                        `items-end` on the reader's own side: the grid and the
+                        file cards are narrower than the bubble whenever the text
+                        above them is not, so left-aligning them inside a
+                        right-hand bubble leaves the picture pointing back at the
+                        wrong side of the conversation. */}
                     <MessageAttachments
                       attachments={m.attachments ?? []}
-                      className="mt-2"
+                      className={cn("mt-2", mine && "items-end")}
                     />
                   </MessageBubble>
                 );
