@@ -778,12 +778,10 @@ const en: Dict = {
   "users.col.name": "NAME",
   "users.col.email": "EMAIL",
   "users.col.role": "ROLE",
-  "users.col.team": "TEAM",
   "users.col.joined": "JOINED",
   "users.loading": "Loading users…",
   "users.loadError": "Couldn't load users",
   "users.empty": "No users found",
-  "users.col.project": "PROJECT",
   "users.col.routing": "ROUTING",
   "users.col.account": "ACCOUNT",
   "users.noProject": "None",
@@ -825,7 +823,7 @@ const en: Dict = {
   "reach.close": "Close",
   "reach.error": "Couldn't change customer access",
   "users.explainer":
-    "A user's project decides who their new tickets are assigned to. Marking someone away sends their project's tickets to the backup caseworker instead — it does not change what they can see or work on.",
+    "Marking someone away sends their project's tickets to the backup caseworker instead — it does not change what they can see or work on.",
   "users.saveError": "Couldn't save that change",
 
   // --- directory filters ---------------------------------------------------
@@ -1960,12 +1958,10 @@ const th: Dict = {
   "users.col.name": "ชื่อ",
   "users.col.email": "อีเมล",
   "users.col.role": "บทบาท",
-  "users.col.team": "ทีม",
   "users.col.joined": "เข้าร่วมเมื่อ",
   "users.loading": "กำลังโหลดผู้ใช้…",
   "users.loadError": "โหลดผู้ใช้ไม่สำเร็จ",
   "users.empty": "ไม่พบผู้ใช้",
-  "users.col.project": "โปรเจกต์",
   "users.col.routing": "รับงาน",
   "users.col.account": "บัญชี",
   "users.noProject": "ไม่มี",
@@ -2007,7 +2003,7 @@ const th: Dict = {
   "reach.close": "ปิด",
   "reach.error": "เปลี่ยนสิทธิ์เข้าถึงลูกค้าไม่สำเร็จ",
   "users.explainer":
-    "โปรเจกต์ของผู้ใช้กำหนดว่า Ticket ใหม่ของเขาจะถูก assign ให้ใคร การตั้งว่าไม่สะดวกจะทำให้ Ticket ของโปรเจกต์นั้นไปที่ผู้ดูแลสำรองแทน — ไม่ได้เปลี่ยนสิ่งที่เขามองเห็นหรือทำงานได้",
+    "การตั้งว่าไม่สะดวกจะทำให้ Ticket ของโปรเจกต์นั้นไปที่ผู้ดูแลสำรองแทน — ไม่ได้เปลี่ยนสิ่งที่เขามองเห็นหรือทำงานได้",
   "users.saveError": "บันทึกการเปลี่ยนแปลงไม่สำเร็จ",
 
   // --- directory filters ---------------------------------------------------
