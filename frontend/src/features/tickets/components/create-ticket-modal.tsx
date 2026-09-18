@@ -8,6 +8,7 @@ import { FIELD_TEXT_13, Input, Label, Textarea } from "@/components/ui/input";
 import { TOUCH_TARGET } from "@/components/ui/touch";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { DiscardDraftDialog } from "./discard-draft-dialog";
 import { randomId } from "@/lib/random-id";
 import { apiErrorMessage } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
@@ -131,6 +132,15 @@ export function CreateTicketModal({
   const [attachError, setAttachError] = React.useState<string | null>(null);
 
   /**
+   * Whether the "throw the draft away?" question is on screen.
+   *
+   * Separate from the draft itself so that answering "keep writing" leaves
+   * every field exactly as it was — the dialog is a question about the form,
+   * never a stage the form passes through.
+   */
+  const [confirmingDiscard, setConfirmingDiscard] = React.useState(false);
+
+  /**
    * De-duplication key for the submission being composed.
    *
    * Regenerated whenever the content changes, which is what makes it mean "this
@@ -249,6 +259,10 @@ export function CreateTicketModal({
     setFiles([]);
     setAttaching(false);
     setAttachError(null);
+    // The question cannot outlive the form it was about. Without this,
+    // discarding leaves `confirmingDiscard` true and the next open shows an
+    // empty form with a confirmation already sitting on top of it.
+    setConfirmingDiscard(false);
     createTicket.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -287,15 +301,53 @@ export function CreateTicketModal({
     !busy;
 
   /**
-   * Refuse to close while the request is in flight — the ticket may already
-   * exist, so there is nothing left to cancel, and letting the dialog go would
-   * leave `submit` to finish into a closed dialog and navigate to a ticket the
-   * person believed they had abandoned. Routed through here rather than only
-   * disabling the Cancel button because Escape and the backdrop reach `onClose`
-   * on their own.
+   * Has anybody actually typed anything?
+   *
+   * Only fields a PERSON can have put there. `categoryId` and `customerId` are
+   * both filled in by effects above — the single customer is preselected, and
+   * the category defaults to the first of the list once a customer is known —
+   * so treating either as evidence of work would make an untouched form refuse
+   * to close, which is the annoyance this whole change exists to avoid in the
+   * other direction.
+   *
+   * `priority` is the interesting one: it is not empty, it is `medium`, so the
+   * test is whether it was MOVED off the default rather than whether it is set.
+   */
+  const isDirty =
+    subject.trim().length > 0 ||
+    description.trim().length > 0 ||
+    categoryOther.trim().length > 0 ||
+    files.length > 0 ||
+    projectId != null ||
+    priority !== "medium";
+
+  /**
+   * Every way out of this dialog comes through here: the close button, Cancel,
+   * Escape and a click on the backdrop. That was already true — it exists so a
+   * submit in flight cannot be abandoned — and it is why the draft guard needs
+   * no new prop on the shared Dialog: one condition in one place covers all
+   * four, and the 18 other modals using that component are untouched.
+   *
+   * Three answers, in order of how little they trust the click:
+   *
+   * 1. Mid-submit: refuse outright. The ticket may already exist, and letting
+   *    the dialog go would leave `submit` to finish into a closed dialog and
+   *    navigate to a ticket the person believed they had abandoned.
+   * 2. The question is already up: do nothing. Escape reaches BOTH dialogs —
+   *    they each listen on `document` — and without this the two handlers race
+   *    to decide whether the confirmation should be open, with the answer
+   *    resting on which one registered its listener first.
+   * 3. Work in the form: ask. Otherwise close, because a clean form has nothing
+   *    to protect and making somebody confirm an empty one is just a second
+   *    click.
    */
   function requestClose() {
     if (busy) return;
+    if (confirmingDiscard) return;
+    if (isDirty) {
+      setConfirmingDiscard(true);
+      return;
+    }
     onClose();
   }
 
@@ -713,6 +765,23 @@ export function CreateTicketModal({
           </Button>
         </div>
       </div>
+
+      {/* Inside the Dialog so it unmounts with it, but portalled to <body> on
+          its own, so it is not clipped by the panel's `overflow-hidden` and
+          brings its own backdrop above this one. */}
+      {confirmingDiscard ? (
+        <DiscardDraftDialog
+          onKeep={() => setConfirmingDiscard(false)}
+          onDiscard={() => {
+            // Shut the question first. `onClose` flips `open`, and the reset
+            // effect that follows clears this too — but only on the next
+            // render, and a frame of the confirmation sitting over a closing
+            // modal is visible.
+            setConfirmingDiscard(false);
+            onClose();
+          }}
+        />
+      ) : null}
     </Dialog>
   );
 }
