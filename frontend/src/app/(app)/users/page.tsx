@@ -9,7 +9,6 @@ import { LoadingRow, ErrorState, EmptyState } from "@/components/ui/states";
 import { TableScroll } from "@/components/ui/table-scroll";
 import { toneForName } from "@/features/tickets/data";
 import { useAuth } from "@/features/auth/context";
-import { useProjects } from "@/features/projects/queries";
 import { useUpdateUser, useUsers } from "@/features/users/queries";
 import { AccountToggle } from "@/features/users/components/account-toggle";
 import { ApprovalQueue } from "@/features/users/components/approval-queue";
@@ -18,11 +17,9 @@ import { CustomerAccess } from "@/features/users/components/customer-access";
 import { UserFiltersBar } from "@/features/users/components/user-filters";
 import { AvailabilityToggle } from "@/features/users/components/availability-toggle";
 import { HandoverQueueModal } from "@/features/users/components/handover-queue-modal";
-import { ProjectSelect } from "@/features/users/components/project-select";
 import { SuspensionToggle } from "@/features/users/components/suspension-toggle";
 import { useI18n } from "@/features/i18n/context";
 import { apiErrorMessage } from "@/lib/api-error";
-import type { Project } from "@/features/projects/schemas";
 import type {
   User,
   UserFilters,
@@ -32,15 +29,6 @@ import type {
 import { BADGE, type ColourPair } from "@/lib/palette";
 import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-
-/**
- * The list a row gets when its customer owns no projects — and the list
- * platform staff always get, since they belong to no customer.
- *
- * A shared constant rather than `[]` at the call site: a fresh empty array on
- * every render is a new prop for every such row, every time the table redraws.
- */
-const EMPTY_PROJECTS: Project[] = [];
 
 // Descending privilege, so the badge colours read as a ladder at a glance.
 const ROLE_STYLE: Record<UserRole, ColourPair> = {
@@ -68,17 +56,22 @@ const ROLE_STYLE: Record<UserRole, ColourPair> = {
  * overflow to the `truncate` inside each cell, which is what it is there for.
  */
 const COLS =
-  "grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_140px_170px_120px_110px_120px_130px]";
+  "grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_110px_120px_130px]";
 
 /**
  * Width floor for the horizontal scroller, and it has to move with the columns.
  *
- * 900px of fixed columns + 32px of row padding, leaving ~178px for the two `fr`
+ * 590px of fixed columns + 32px of row padding, leaving ~178px for the two `fr`
  * columns to share — enough that the name and email stay readable rather than
  * becoming decoration. Adding the ACCOUNT column without raising this squeezed
  * them to zero on a phone, which is exactly what the mobile-tables spec measures.
+ *
+ * It came down by 310 with TEAM (140) and PROJECT (170). Lowering it is the
+ * point rather than a tidy-up: leaving the floor at 1110 would have kept the
+ * table scrolling sideways on a phone to reach empty space where two columns
+ * used to be.
  */
-const MIN_WIDTH = 1110;
+const MIN_WIDTH = 800;
 
 /**
  * The account's state, shown beside the name — and ONLY when it is not the
@@ -137,32 +130,6 @@ export default function UsersPage() {
   const canGrantReach = me?.platformWide === true;
   const [handoverFor, setHandoverFor] = React.useState<User | null>(null);
   const [creating, setCreating] = React.useState(false);
-  // Projects are only needed for the editable picker, and requesters/agents
-  // cannot write anyway — so don't fetch them for a read-only view.
-  const { data: projectData } = useProjects({ enabled: canEdit });
-  /**
-   * The routing projects each customer owns, so a row can be offered only its
-   * own tenant's.
-   *
-   * The picker used to receive the whole list. For a customer-bound viewer that
-   * WAS one tenant's projects and the distinction never showed; for platform
-   * staff it is every project that exists, so a requester at one company was
-   * offered another company's routing — and `users.project_id` is what decides
-   * who their next ticket is assigned to.
-   *
-   * Grouped once rather than filtered per row: the table re-renders on every
-   * mutation, and a fresh array per row per render is a new prop identity for
-   * each `<ProjectSelect>` each time.
-   */
-  const projectsByCustomer = React.useMemo(() => {
-    const byCustomer = new Map<number, Project[]>();
-    for (const p of projectData?.projects ?? []) {
-      const list = byCustomer.get(p.customerId);
-      if (list) list.push(p);
-      else byCustomer.set(p.customerId, [p]);
-    }
-    return byCustomer;
-  }, [projectData]);
   const pendingId = update.isPending ? update.variables?.id : undefined;
 
   return (
@@ -228,8 +195,6 @@ export default function UsersPage() {
             <span>{t("users.col.name")}</span>
             <span>{t("users.col.email")}</span>
             <span>{t("users.col.role")}</span>
-            <span>{t("users.col.team")}</span>
-            <span>{t("users.col.project")}</span>
             <span>{t("users.col.routing")}</span>
             <span>{t("users.col.account")}</span>
             <span>{t("users.col.joined")}</span>
@@ -280,35 +245,6 @@ export default function UsersPage() {
                     {t(`role.${u.role}`)}
                   </span>
                 </span>
-                <span className="truncate text-body text-subtle">
-                  {u.team?.name ?? "—"}
-                </span>
-
-                <span className="pr-3">
-                  {canEdit ? (
-                    <ProjectSelect
-                      value={u.project?.id ?? null}
-                      // Their own customer's projects, and nobody else's.
-                      // Platform staff belong to no customer, so they get an
-                      // empty list — which is the same answer the API gives.
-                      projects={
-                        (u.customer
-                          ? projectsByCustomer.get(u.customer.id)
-                          : undefined) ?? EMPTY_PROJECTS
-                      }
-                      disabled={pendingId === u.id}
-                      ariaLabel={`${t("users.col.project")} — ${u.name}`}
-                      onChange={(projectId) =>
-                        update.mutate({ id: u.id, input: { projectId } })
-                      }
-                    />
-                  ) : (
-                    <span className="truncate text-body text-subtle">
-                      {u.project?.name ?? "—"}
-                    </span>
-                  )}
-                </span>
-
                 <span>
                   <AvailabilityToggle
                     available={u.availableForAssignment}
