@@ -29,9 +29,22 @@ const PNG = Buffer.from(
   "base64",
 );
 
+/**
+ * The paragraph holding exactly this text.
+ *
+ * `exact` for two reasons, both of which bit: `getByText` matches a SUBSTRING,
+ * so the bubble's own div — whose text is the header plus the body — matches
+ * alongside the paragraph and every assertion on the pair is a strict-mode
+ * violation. And the match is case-INSENSITIVE, so "Ana here 123" is found
+ * inside "D-ana here 123" and a test with two senders picks up the wrong one.
+ */
+function textOf(page: Page, body: string): Locator {
+  return page.getByText(body, { exact: true });
+}
+
 /** The bubble holding this text: the paragraph's own parent. */
 function bubbleOf(page: Page, body: string): Locator {
-  return page.getByText(body).locator("xpath=..");
+  return textOf(page, body).locator("xpath=..");
 }
 
 /** Type a chat message and wait for it to appear. */
@@ -40,7 +53,7 @@ async function send(page: Page, body: string) {
   await box.waitFor();
   await box.fill(body);
   await box.press("Enter");
-  await expect(page.getByText(body)).toBeVisible({ timeout: 15_000 });
+  await expect(textOf(page, body)).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -103,8 +116,12 @@ test("each reader sees their own messages on the right and the other side's on t
 test("two agents on one ticket are told apart by name, not by side", async ({
   page,
 }) => {
-  const fromDana = `Dana here ${Date.now()}`;
-  const fromAna = `Ana here ${Date.now()}`;
+  // Deliberately not "Dana here" and "Ana here": one is a substring of the
+  // other, which is how this test found the matcher's case-insensitive
+  // substring rule the hard way.
+  const stamp = Date.now();
+  const fromDana = `First responder ${stamp}`;
+  const fromAna = `Second opinion ${stamp}`;
 
   await loginAs(page, AGENT);
   await page.goto(`/tickets/${TICKET}`);
