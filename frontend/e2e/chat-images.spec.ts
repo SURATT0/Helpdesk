@@ -24,8 +24,9 @@ const TICKET = 1042;
  *
  * Scoped to the COMPOSER: the sidebar has a file input of its own, and an
  * unscoped selector matches both. They are also not interchangeable — the
- * sidebar's upload is ticket-level, so a file added there is deliberately
- * attached to no message and would never appear in a bubble.
+ * sidebar's upload is ticket-level, attached to no message, and so lands in the
+ * OPENING bubble beside the description rather than in a bubble of its own.
+ * (It used to land in no bubble at all; see opening-message-attachments.spec.)
  *
  * It used to scope to `chat-scroll`, which worked only because the composer was
  * then the last child of the scrolling conversation. It is a `flex-none` sibling
