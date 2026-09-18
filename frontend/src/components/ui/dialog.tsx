@@ -8,6 +8,45 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
+ * How many dialogs are currently holding the page still, and what the page
+ * looked like before the first of them.
+ *
+ * Counted rather than saved-and-restored per dialog, because two can be open at
+ * once — a confirmation over a form is the case — and each remembering its own
+ * "previous" makes the outcome depend on the order React happens to run the
+ * cleanups in. When both closed together, the inner one's memory of `hidden`
+ * could land after the outer one's memory of `""`, and the page stayed frozen
+ * until a reload. Measured, not theorised: `document.body.style.overflow` was
+ * still `hidden` with zero dialogs left in the DOM.
+ *
+ * Module scope is the right scope: there is one `<body>`, so the count has to be
+ * shared by every Dialog rather than held per instance.
+ */
+let scrollLocks = 0;
+let overflowBeforeFirstLock = "";
+
+/** Freeze the page; returns the release. Safe to nest. */
+function lockBodyScroll(): () => void {
+  if (scrollLocks === 0) {
+    overflowBeforeFirstLock = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  scrollLocks += 1;
+  let released = false;
+  return () => {
+    // Guarded because React's StrictMode runs an effect's cleanup twice in
+    // development, and a double decrement would unlock the page under a dialog
+    // that is still open.
+    if (released) return;
+    released = true;
+    scrollLocks -= 1;
+    if (scrollLocks === 0) {
+      document.body.style.overflow = overflowBeforeFirstLock;
+    }
+  };
+}
+
+/**
  * The modal shell, owned in one place.
  *
  * Six modals used to hand-roll this, and they disagreed about the things a user
@@ -85,15 +124,11 @@ export function Dialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Freeze the page behind. Restoring the previous value rather than clearing it
-  // keeps back-to-back modals from leaving the body permanently stuck.
+  // Freeze the page behind, through the shared count above — so a dialog that
+  // opens over another releases the page only when the last of them goes.
   React.useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return lockBodyScroll();
   }, [open]);
 
   function onPanelKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {

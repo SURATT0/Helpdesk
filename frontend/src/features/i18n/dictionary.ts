@@ -517,6 +517,11 @@ const en: Dict = {
   "create.title": "New ticket",
   "create.subtitle": "Describe the issue — we'll route it to the right team",
   "create.close": "Close",
+  "create.discardTitle": "Throw this away?",
+  "create.discardBody":
+    "You've written something here. Closing now loses it — including any files you attached.",
+  "create.discardKeep": "Keep writing",
+  "create.discardConfirm": "Discard",
   "create.subject": "Subject",
   "create.subjectPlaceholder": "Short summary of the issue",
   "create.suggested": "SUGGESTED ARTICLES — THIS MIGHT SOLVE IT FASTER",
@@ -1704,6 +1709,11 @@ const th: Dict = {
   "create.title": "สร้าง Ticket ใหม่",
   "create.subtitle": "อธิบายปัญหา — เราจะส่งไปยังทีมที่เหมาะสม",
   "create.close": "ปิด",
+  "create.discardTitle": "ทิ้งที่กรอกไว้?",
+  "create.discardBody":
+    "คุณกรอกข้อมูลไว้แล้ว ถ้าปิดตอนนี้ข้อมูลจะหาย รวมถึงไฟล์ที่แนบไว้ด้วย",
+  "create.discardKeep": "กรอกต่อ",
+  "create.discardConfirm": "ทิ้งเลย",
   "create.subject": "เรื่อง",
   "create.subjectPlaceholder": "สรุปปัญหาสั้นๆ",
   "create.suggested": "บทความแนะนำ — อาจช่วยแก้ได้เร็วขึ้น",
