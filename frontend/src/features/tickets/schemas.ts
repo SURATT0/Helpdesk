@@ -85,6 +85,18 @@ export const ticketSchema = z.object({
    */
   customer: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
   /**
+   * The message this ticket was raised with — its description as a real comment.
+   *
+   * Two readers: the new-ticket form uploads its files against this id, and the
+   * thread uses its absence to know the ticket predates the opening message
+   * being a row. Those are not backfilled, so null means "render `description`
+   * yourself", never "this ticket has no description".
+   *
+   * `.default(null)` so a response from a server that has not shipped this yet
+   * parses rather than throwing the whole ticket away.
+   */
+  openingCommentId: z.number().nullable().default(null),
+  /**
    * The SLA target and the actual finish time — the only SLA fields the client
    * takes. The server also sends `slaDue`/`slaState`, a pre-rendered snapshot
    * that clamps an overrun to "0h 0m" and collapses three different situations
