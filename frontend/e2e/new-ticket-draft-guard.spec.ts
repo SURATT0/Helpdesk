@@ -34,6 +34,41 @@ test("a click outside keeps the draft and asks first", async ({ page }) => {
   await expect(page.getByLabel("Subject")).toHaveValue("printer on fire");
 });
 
+test("Escape keeps the draft and asks first", async ({ page }) => {
+  await page.getByLabel("Subject").fill("printer on fire");
+
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByText("Throw this away?")).toBeVisible();
+  await expect(page.getByLabel("Subject")).toHaveValue("printer on fire");
+});
+
+test("the close button asks too, and keeps working", async ({ page }) => {
+  // Scoped to the dialog. An unscoped search for a close control is how a
+  // selector ends up on the sign-out icon in the sidebar instead.
+  const modal = page.getByRole("dialog", { name: "New ticket" });
+  await page.getByLabel("Subject").fill("printer on fire");
+
+  await modal.getByRole("button", { name: "Close" }).click();
+
+  await expect(page.getByText("Throw this away?")).toBeVisible();
+  await expect(modal).toBeVisible();
+
+  // Still the way out once the draft is gone: keep, clear the field, close.
+  await page.getByRole("button", { name: "Keep writing" }).click();
+  await page.getByLabel("Subject").fill("");
+  await modal.getByRole("button", { name: "Close" }).click();
+  await expect(modal).toHaveCount(0);
+});
+
+test("Cancel asks too", async ({ page }) => {
+  await page.getByLabel("Subject").fill("printer on fire");
+
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+  await expect(page.getByText("Throw this away?")).toBeVisible();
+});
+
 test("an untouched form still closes on a click outside", async ({ page }) => {
   await page.mouse.click(8, 8);
 
