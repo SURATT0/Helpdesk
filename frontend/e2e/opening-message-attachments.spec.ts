@@ -167,9 +167,12 @@ test("a document raised with the ticket is a card to download, not a torn image"
   });
   await page.getByRole("button", { name: "Create ticket" }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/, { timeout: 15_000 });
+  // Read BEFORE signing in as the agent: `loginAs` navigates, so by the time it
+  // returns `page.url()` is the dashboard and re-visiting it goes nowhere.
+  const url = page.url();
 
   await loginAs(page, DEMO.email);
-  await page.goto(page.url());
+  await page.goto(url);
 
   const opening = page.getByText(body).locator("xpath=..");
   // Named by the file it downloads, which is also how a screen reader finds it.
