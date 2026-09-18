@@ -32,6 +32,7 @@ const AGENT = "dana.reyes@acme.com"; // admin, Acme — assignee of 1042
 const REQUESTER = "marcus.chen@acme.com"; // user, Acme — requester of 1042
 const OUTSIDER = "l.osei@acme.com"; // user, Acme — unrelated to 1042
 const GLOBEX = "priya.shah@acme.com"; // user, Globex
+const PLATFORM = "sam.rivera@acme.com"; // super_admin, no customer → platform-wide
 
 /** The ticket the image cases hang off: Acme, Marcus requests, Dana assigned. */
 const TICKET = 1042;
@@ -475,6 +476,26 @@ describe("who may see the bytes", () => {
         .get(`${API}/attachments/${id}/thumb`)
         .set(bearer(await login(email)));
       expect(res.status, email).toBe(200);
+    }
+  });
+
+  it("serves a platform-wide super admin, who belongs to no customer at all", async () => {
+    // The one caller whose reach comes from `isPlatformWide` rather than from a
+    // customer of their own. Worth its own case because the bytes are guarded by
+    // `ticketService.get` — so this asserts that the attachment endpoint really
+    // does inherit the ticket's answer, including for the principal whose reach
+    // is computed differently from everybody else's.
+    const created = await upload(await login(AGENT), {
+      file: await png(40, 40),
+      name: "platform.png",
+      type: "image/png",
+    });
+    const id = created.body.data.id;
+
+    const sam = await login(PLATFORM);
+    for (const path of [`/attachments/${id}`, `/attachments/${id}/thumb`]) {
+      const res = await request(app).get(`${API}${path}`).set(bearer(sam));
+      expect(res.status, path).toBe(200);
     }
   });
 

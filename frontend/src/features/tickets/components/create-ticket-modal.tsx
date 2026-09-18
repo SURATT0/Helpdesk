@@ -374,7 +374,13 @@ export function CreateTicketModal({
         const failed: string[] = [];
         for (const file of files) {
           try {
-            await uploadAttachment(ticket.id, file);
+            // Against the opening MESSAGE, not the ticket, so the file belongs
+            // to the thing that describes it — the thread draws a file inside
+            // its message's bubble, and a file belonging to the ticket alone has
+            // no bubble to appear in. `?? undefined` keeps the old behaviour on
+            // a server that has not shipped the opening comment yet: the file
+            // still lands, just on the ticket.
+            await uploadAttachment(ticket.id, file, ticket.openingCommentId ?? undefined);
           } catch {
             failed.push(file.name);
           }

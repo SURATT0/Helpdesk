@@ -747,6 +747,23 @@ model Comment {
   author      User           @relation(fields: [authorId], references: [id])
   body        String
   internal    Boolean        @default(false)
+  /// The message a ticket was RAISED with — its description, as a real row.
+  ///
+  /// Written by ticket creation so the files picked on that form have something
+  /// to belong to: an attachment points at a comment, and before this there was
+  /// no comment yet, so they were stored against the ticket alone and appeared
+  /// in no bubble.
+  ///
+  /// False for every message anybody sends afterwards, and false for every
+  /// ticket raised before this existed — those are NOT backfilled, so a reader
+  /// has to treat its absence as "this ticket predates the column" rather than
+  /// as "this ticket has no description". The thread falls back to rendering
+  /// `tickets.description` for them.
+  ///
+  /// At most one per ticket. Not enforced by an index: nothing but the creation
+  /// path ever sets it, and a partial unique index here would be a constraint on
+  /// a column whose only writer is three lines long.
+  isOpening   Boolean        @default(false) @map("is_opening")
   // Channel this message arrived on. Web and email messages share one thread —
   // `channel` is presentation metadata, never a filter on the conversation.
   channel     CommentChannel @default(web)
