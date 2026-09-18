@@ -52,14 +52,19 @@ test("the agent sees the screenshot the requester raised the ticket with", async
   await page.goto(url);
   await expect(page.getByText("The screenshot is attached.")).toBeVisible();
 
-  const openingBubble = page
-    .getByTestId("chat-scroll")
-    .locator("img")
-    .first();
-  await expect(openingBubble).toBeVisible({ timeout: 15_000 });
+  // The GRID, not the `<img>` — the same handle chat-images.spec uses, and for
+  // a reason worth keeping: the fixture is a 1×1 PNG, so the image element is
+  // one CSS pixel and Playwright calls a 1px box hidden. Asserting on it made
+  // this fail against a feature that was working, with the log showing the
+  // decoded blob sitting right there in the bubble.
+  const grid = page.getByTestId("chat-scroll").locator("[data-image-grid]");
+  await expect(grid).toBeVisible({ timeout: 15_000 });
+  await expect(grid.locator("img")).toHaveCount(1);
   // A real picture rather than a broken one: the bytes arrived and decoded.
   await expect
-    .poll(() => openingBubble.evaluate((el: HTMLImageElement) => el.naturalWidth))
+    .poll(() =>
+      grid.locator("img").evaluate((el: HTMLImageElement) => el.naturalWidth),
+    )
     .toBeGreaterThan(0);
 
   // And it is still listed in the sidebar — the bubble is an addition, not a
@@ -83,5 +88,7 @@ test("a ticket raised with no files draws no empty attachment row", async ({
   await expect(page).toHaveURL(/\/tickets\/\d+$/, { timeout: 15_000 });
 
   await expect(page.getByText("Nothing attached to this one.")).toBeVisible();
-  await expect(page.getByTestId("chat-scroll").locator("img")).toHaveCount(0);
+  await expect(
+    page.getByTestId("chat-scroll").locator("[data-image-grid]"),
+  ).toHaveCount(0);
 });
