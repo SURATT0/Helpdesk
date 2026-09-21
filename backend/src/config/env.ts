@@ -273,6 +273,12 @@ export const env = {
       process.env.EMAIL_AUTO_CLOSE_REMINDER_LEAD_MS ?? 24 * 60 * 60 * 1000,
     ),
   },
+  // Public intake form (design doc: docs/bluefish-intake-system-design_1.md).
+  publicIntake: {
+    // Prefix on the public reference `tickets.number` carries — `BF-YYYYMMDD-####`.
+    // Not the ticket identifier; see the field comment on Ticket.number.
+    ticketPrefix: process.env.TICKET_PREFIX ?? "BF",
+  },
   // Outbound SMTP for agent reply emails. When SMTP_HOST is set the reply
   // endpoint sends real mail via nodemailer; otherwise a "log" transport records
   // the message (so the feature works end-to-end in dev without a mail server).
