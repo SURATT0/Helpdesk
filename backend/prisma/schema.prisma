@@ -147,26 +147,103 @@ enum CommentChannel {
   email
 }
 
+/// Which surface a TICKET arrived through. Deliberately a separate enum from
+/// `CommentChannel` above, which is about one message: a ticket raised in the app
+/// can carry messages that arrived by mail, so collapsing the two would make the
+/// ticket's own origin unanswerable the moment somebody replies.
+///
+/// `web_intake` is the public form (`web-intake` in the design document — a
+/// hyphen is not a legal enum value here, and the wire format is not what the
+/// column stores). It is the only value written today; see `Ticket.channel`.
+enum TicketChannel {
+  /// Raised by a signed-in person in the app.
+  web
+  /// Arrived as mail and became a ticket (`emailService.ingest`).
+  email
+  /// Loaded from a spreadsheet.
+  csv_import
+  /// Submitted through the public intake form by somebody with no account.
+  web_intake
+}
+
+/// What became of one public-form submission.
+///
+/// `linked` and `triage` both produced a real ticket and differ only in whether
+/// the sender's email domain named a customer we know. `spam` is a submission the
+/// honeypot caught: it is kept, deliberately, because the only way to tell a
+/// tuned honeypot from a broken one is to look at what it caught — but it has no
+/// ticket and nobody was mailed.
+enum IntakeStatus {
+  linked
+  triage
+  spam
+}
+
+/// Where a file stands with the virus scanner.
+///
+/// Four states from the design document, and a fifth that is the absence of a
+/// row's answer: NULL means the file was never subject to scanning. That covers
+/// every attachment uploaded in the app by a signed-in person and every row
+/// written before this column existed, and it is not the same fact as `clean`,
+/// which is a scanner saying so. A reader that needs "safe to hand over" must
+/// treat `pending`, `infected` and `error` as no and the other two as yes.
+enum AttachmentScanStatus {
+  pending
+  clean
+  infected
+  error
+}
+
+/// Which backend holds a stored object.
+///
+/// Recorded per row rather than read from `STORAGE_DRIVER` at download time,
+/// which is what the app does today: flipping that variable from `local` to `s3`
+/// currently makes every file already on disk unreadable, because the reader
+/// looks for all of them in the new place. Nullable for the rows that predate
+/// this, which the reader falls back to the env driver for — exactly its present
+/// behaviour, so nothing changes for them.
+enum StorageProvider {
+  disk
+  s3
+}
+
 // A tenant organization. The top-level isolation boundary: staff see everything
 // within their own customer (across departments) but nothing of other customers;
 // platform admins (customerId = null) span all customers.
 model Customer {
-  id          Int                   @id @default(autoincrement())
-  name        String                @unique
-  users       User[]
-  teams       Team[]
-  tickets     Ticket[]
-  assets      Asset[]
-  problems    Problem[]
-  projects    Project[]
-  settings    NotificationSettings?
+  id             Int                   @id @default(autoincrement())
+  name           String                @unique
+  users          User[]
+  teams          Team[]
+  tickets        Ticket[]
+  assets         Asset[]
+  problems       Problem[]
+  projects       Project[]
+  settings       NotificationSettings?
   /// This customer's categories. Every category belongs to one tenant now —
   /// there are no shared rows left; what crosses tenants is `Category.code`.
-  categories  Category[]
+  categories     Category[]
   /// Staff granted reach INTO this customer without belonging to it.
-  reachGrants UserCustomer[]
-  createdAt   DateTime              @default(now()) @map("created_at")
-  updatedAt   DateTime              @updatedAt @map("updated_at")
+  reachGrants    UserCustomer[]
+  /// Email domains that identify this tenant, for the public intake form's
+  /// customer match (`customerMatch.ts`): a submission whose `businessEmail`
+  /// domain appears here is linked to this customer automatically; no match
+  /// leaves the ticket in the system tenant below, for a human to triage.
+  ///
+  /// A plain array rather than a join table — a handful of domains per tenant,
+  /// looked up by exact match, with no need for the domain to carry its own
+  /// attributes. Lowercase, no leading `@`; the matcher normalises what it reads
+  /// out of `businessEmail` to the same shape before comparing.
+  domains        String[]              @default([])
+  /// The one tenant that is not a real customer: where an intake submission
+  /// lands when its email domain matches nobody, and the customer a ticket needs
+  /// even though no tenant claims it — see the system user on `User` below and
+  /// backend/CLAUDE.md. Exactly one row should ever carry this; application code
+  /// filters it out of the customer picker and management screens by this flag,
+  /// never by name or id, so renaming it cannot make it reappear as a real tenant.
+  isSystemTenant Boolean               @default(false) @map("is_system_tenant")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
 
   /// Archived, not deleted. A tenant is never removed from disk: its id is on
   /// every ticket, audit row and project it ever had, and a hard delete would
@@ -407,6 +484,17 @@ model User {
   // `Ticket.requesterId` is RESTRICT, so a person who ever raised a ticket can
   // never be removed without erasing their history with them.
   isActive               Boolean               @default(true) @map("is_active")
+  // The `requesterId` for a ticket nobody signed in to raise — public intake
+  // submissions, whose sender has no Deskly account. `Ticket.requesterId` is
+  // required and RESTRICT, so a ticket needs a real row here rather than a null;
+  // this flag is what tells the rest of the app that row is a placeholder rather
+  // than a person, so notifications addressed to the requester and the
+  // requester-only actions (cancel, confirm, reject) route around it instead of
+  // treating a fixed shared account as if one specific person were signed into
+  // it. `isActive` stays true and `passwordHash` stays null, which already keeps
+  // it from ever signing in — this flag is about what OTHER code does with it,
+  // not about locking the door twice.
+  isSystemAccount        Boolean               @default(false) @map("is_system_account")
   // Which language this person has CHOSEN to be written to in.
   //
   // Nullable, and deliberately without a default: null means "has never said",
@@ -573,6 +661,26 @@ model Category {
 
 model Ticket {
   id             Int                   @id @default(autoincrement())
+  /// Public reference for a ticket raised through the public intake form, in the
+  /// shape `BF-YYYYMMDD-####` (the prefix comes from `TICKET_PREFIX`).
+  ///
+  /// NOT the identifier. `id` is, everywhere — in every URL, in `[Deskly #123]`
+  /// on outbound mail, and in the `#123` the web app prints. This column exists
+  /// because an external person who has no account and no link needs something to
+  /// quote back, and a bare integer from a database sequence is both unmemorable
+  /// and a running total of how much work the desk has ever had.
+  ///
+  /// Nullable, and staying that way: it is issued by the intake channel alone, so
+  /// every ticket raised in the app, by mail or from a spreadsheet has none and
+  /// must still open. Nulls do not collide in Postgres, which is what lets this
+  /// be a nullable unique rather than a required one — the same shape, and for
+  /// the same reason, as `idempotencyKey` below.
+  ///
+  /// Issued from `ticket_number_counters`, never from `count(*)`; see that model.
+  /// Both halves of the reference are parsed back out of inbound mail — see
+  /// `parseTicketRef`, which has to accept this form AND `#id`, because every
+  /// mail thread open today quotes the older one.
+  number         String?               @unique
   subject        String
   description    String
   status         TicketStatus          @default(new)
@@ -687,6 +795,36 @@ model Ticket {
   // Both are optional and manually chosen; nothing is inferred from the session.
   affectedUsers  TicketAffectedUser[]
   affectedAssets TicketAffectedAsset[]
+  /// The raw form submission this ticket was opened from, if it came that way.
+  /// Kept as its own row rather than folded in here so that a PDPA erasure can
+  /// take the personal data the sender typed without taking the ticket the desk
+  /// worked — see `IntakeSubmission`.
+  intake         IntakeSubmission?
+  /// Which surface this ticket arrived through.
+  ///
+  /// Nullable and deliberately NOT backfilled. Every ticket that predates this
+  /// column came in through one of three doors and the row does not record which,
+  /// so any value written for them would be a guess that reports would then read
+  /// as a fact. NULL says "not recorded", which is the only true thing available.
+  ///
+  /// Today the intake path is the only writer, so a non-null value means exactly
+  /// `web_intake`. The other three values are in the enum because they are what
+  /// the column MEANS, and the paths that would write them (the app's own form,
+  /// mail intake, the spreadsheet import) are not part of this change.
+  channel        TicketChannel?
+  /// When the problem was reported, as opposed to when this row was written.
+  ///
+  /// They are the same moment for a ticket raised in the app, and they are not
+  /// for one that arrived another way: the intake form stamps the browser's
+  /// `submittedAt`, so a submission that queued behind a retry is dated when the
+  /// person sent it rather than when the server got round to it.
+  ///
+  /// Backfilled from `created_at` on the rows that predate it, which is not a
+  /// guess — for an in-app ticket the two really were the same instant. That is
+  /// what makes it safe for this one to be NOT NULL while `channel` above stays
+  /// nullable, and it is the whole difference between the two: one had a true
+  /// value available and the other did not.
+  reportedAt     DateTime              @default(now()) @map("reported_at")
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
 
@@ -704,6 +842,9 @@ model Ticket {
   // Every read pairs the tenant filter with `deletedAt IS NULL` (ticketScopeWhere),
   // so the two travel together rather than as two separate indexes.
   @@index([customerId, deletedAt])
+  // "Which tickets came from the form" — the triage queue's own filter, and the
+  // one dimension the new channel adds to reporting.
+  @@index([channel])
   @@map("tickets")
 }
 
@@ -768,21 +909,21 @@ model Comment {
 // File attachments on a ticket. Bytes live in IFileStorage (local/S3); only
 // metadata + the storage key are in the DB.
 model Attachment {
-  id          Int      @id @default(autoincrement())
-  ticketId    Int      @map("ticket_id")
-  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  id              Int                   @id @default(autoincrement())
+  ticketId        Int                   @map("ticket_id")
+  ticket          Ticket                @relation(fields: [ticketId], references: [id])
   // The message this file was sent with, so the thread can draw it inside that
   // bubble. Nullable, and it has to be: a file added from the sidebar belongs to
   // the ticket and to no message, and every row written before this column
   // existed is in the same position. A null means "show it in the sidebar only",
   // never "orphaned".
-  commentId   Int?     @map("comment_id")
-  comment     Comment? @relation(fields: [commentId], references: [id])
-  uploaderId  Int      @map("uploader_id")
-  uploader    User     @relation(fields: [uploaderId], references: [id])
+  commentId       Int?                  @map("comment_id")
+  comment         Comment?              @relation(fields: [commentId], references: [id])
+  uploaderId      Int                   @map("uploader_id")
+  uploader        User                  @relation(fields: [uploaderId], references: [id])
   /// The name the uploader's own machine had. Kept verbatim, shown on hover, and
   /// never used to build a path — see `storageKey` below.
-  filename    String
+  filename        String
   /// The name the app shows and downloads as: `T<ticket>-<seq>-<slug>.<ext>`.
   ///
   /// Nullable only so the column could be added without inventing values in SQL.
@@ -791,21 +932,41 @@ model Attachment {
   /// migration would be two implementations of one rule that could drift.
   /// `prisma/backfill-display-names.ts` fills the old rows using that same
   /// function; every row written since carries it.
-  displayName String?  @map("display_name")
-  contentType String   @map("content_type")
-  sizeBytes   Int      @map("size_bytes")
+  displayName     String?               @map("display_name")
+  contentType     String                @map("content_type")
+  sizeBytes       Int                   @map("size_bytes")
   /// Opaque object key. Random + a extension verified from the file's own magic
   /// bytes — no part of it comes from user input, and it carries no ticket id.
-  storageKey  String   @map("storage_key")
+  storageKey      String                @map("storage_key")
   /// Key of the 800px-wide copy the thread loads. Null when the image was
   /// already small enough, or when resizing failed — the reader falls back to
   /// the full file, which is why a failed resize never fails an upload.
-  thumbKey    String?  @map("thumb_key")
+  thumbKey        String?               @map("thumb_key")
   /// Intrinsic pixel size of the ORIGINAL, so the thread can reserve the box
   /// before the bytes arrive. Null for non-images and for rows that predate it.
-  width       Int?
-  height      Int?
-  createdAt   DateTime @default(now()) @map("created_at")
+  width           Int?
+  height          Int?
+  /// The public-form submission this file arrived with, when it came that way.
+  ///
+  /// Beside `ticketId` rather than instead of it, because they answer different
+  /// questions and a PDPA erasure needs both: the ticket is where the desk sees
+  /// the file, and the submission is the unit the retention rule deletes.
+  submissionId    Int?                  @map("submission_id")
+  submission      IntakeSubmission?     @relation(fields: [submissionId], references: [id])
+  /// SHA-256 of the bytes as received. Nullable for rows written before it was
+  /// computed; a null means "not recorded", never "no checksum matched".
+  checksum        String?
+  /// Where this file stands with the virus scanner. NULL for every file that was
+  /// never subject to scanning — see `AttachmentScanStatus`, which explains why
+  /// that is a different fact from `clean`.
+  scanStatus      AttachmentScanStatus? @map("scan_status")
+  /// When the scanner last answered. Null while `scanStatus` is `pending`, and
+  /// for the rows that were never scanned at all.
+  scannedAt       DateTime?             @map("scanned_at")
+  /// Which storage backend holds `storageKey`. Null = decided by the env driver,
+  /// which is what every existing row relies on; see `StorageProvider`.
+  storageProvider StorageProvider?      @map("storage_provider")
+  createdAt       DateTime              @default(now()) @map("created_at")
 
   // One display name per ticket, enforced by the database rather than hoped for.
   // The sequence is derived from how many files the ticket already has, and two
@@ -816,7 +977,155 @@ model Attachment {
   @@unique([ticketId, displayName])
   @@index([ticketId])
   @@index([commentId])
+  @@index([submissionId])
+  // The scanner's own work queue: the files still waiting on a verdict.
+  @@index([scanStatus])
   @@map("attachments")
+}
+
+/// One submission of the public intake form, exactly as it arrived.
+///
+/// A separate row from the `Ticket` it opens, and that separation is the point
+/// rather than normalisation for its own sake. Three things follow from it:
+///
+///   1. **PDPA erasure has something to delete.** A request to remove a person's
+///      data can take this row, its consent log and its files while leaving the
+///      ticket the desk actually worked — which is a record of the desk's own
+///      activity, not of the sender.
+///   2. **Spam is recorded without a ticket.** A submission the honeypot caught
+///      has `ticketId` NULL: nothing entered the queue and nobody was mailed, but
+///      the evidence is on disk, because the only way to know whether a honeypot
+///      is catching bots or customers is to look at what it caught.
+///   3. **What the sender typed survives triage.** The desk retitles, recategorises
+///      and reassigns; this row still says what was submitted, which is what an
+///      audit of "did we answer what they asked" needs.
+///
+/// Everything here is attacker-supplied and is stored after validation and
+/// length-capping, never trusted on read.
+model IntakeSubmission {
+  id                Int          @id @default(autoincrement())
+  /// The ticket this opened. NULL for `spam` only — see above. Unique because one
+  /// submission opens at most one ticket, and a second row pointing at the same
+  /// ticket would mean two people's data behind one case.
+  ticketId          Int?         @unique @map("ticket_id")
+  ticket            Ticket?      @relation(fields: [ticketId], references: [id])
+  /// What the sender typed. `name`/`companyName` are display data and nothing is
+  /// resolved from them; the email is what the customer match reads.
+  name              String
+  businessEmail     String       @map("business_email")
+  companyName       String       @map("company_name")
+  phone             String
+  /// The service code the form offered (`rpa-consult`, …). Kept RAW and mapped to
+  /// a category by code at write time, never stored as a category id: a category
+  /// id means something different in every tenant, and this row may be read long
+  /// after the ticket was moved to another one.
+  service           String
+  /// The body, capped at 2000 characters by the validator.
+  message           String
+  /// Which form sent this (`web-intake-form`). A string rather than an enum: it
+  /// identifies a deployed page, and a second page appearing must not need a
+  /// migration.
+  source            String
+  status            IntakeStatus
+  /// The customer the email domain matched, if any — the reason this row is
+  /// `linked` rather than `triage`. Recorded here because the TICKET cannot hold
+  /// it: an unmatched ticket is filed under the triage tenant, so afterwards
+  /// `tickets.customer_id` no longer distinguishes "matched that customer" from
+  /// "nothing matched". Not a foreign key on purpose — it is a record of a
+  /// decision taken at a moment in time, and an archived customer must not make
+  /// the decision unreadable.
+  matchedCustomerId Int?         @map("matched_customer_id")
+  /// The sender used a free mailbox (gmail, hotmail, …). A flag for triage, never
+  /// a refusal: plenty of small businesses have no domain of their own.
+  isFreeMail        Boolean      @default(false) @map("is_free_mail")
+  /// For the audit trail and for answering "where did this burst come from".
+  /// Nullable because a proxy can leave us without either.
+  ip                String?
+  userAgent         String?      @map("user_agent")
+  /// When the BROWSER says it was sent, and `createdAt` is when the server wrote
+  /// it. Two columns because the gap between them is the only evidence of a slow
+  /// or retried submission, and because `submittedAt` is client-supplied and must
+  /// never be mistaken for a server fact.
+  submittedAt       DateTime     @map("submitted_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  consents    ConsentLog[]
+  attachments Attachment[]
+
+  /// The rate limiter counts in memory; this is what answers "has this address
+  /// written before, and how often" after a restart.
+  @@index([businessEmail])
+  /// The retention sweep's query: submissions of a given status, oldest first.
+  @@index([status, createdAt])
+  @@map("intake_submissions")
+}
+
+/// Evidence that somebody agreed to something, and to WHICH wording.
+///
+/// A log rather than a flag, and append-only like `ticket_status_history`: PDPA
+/// asks what a person consented to and when, which a boolean on the submission
+/// cannot answer once the wording has been edited. The text is snapshotted here
+/// in full rather than referenced by version alone, so an answer survives the
+/// notice page being rewritten or taken down.
+///
+/// Many rows per submission are allowed even though today's form writes exactly
+/// one. A withdrawal, or a re-consent to new wording, is another event and belongs
+/// beside the first rather than overwriting it — a consent record that can be
+/// overwritten is not evidence of anything.
+model ConsentLog {
+  id             Int              @id @default(autoincrement())
+  submissionId   Int              @map("submission_id")
+  submission     IntakeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  /// The exact wording shown, and the version label the page was serving. Both,
+  /// because the label is how a lawyer refers to it and the text is what the
+  /// person actually read.
+  consentText    String           @map("consent_text")
+  consentVersion String           @map("consent_version")
+  /// Whether this event granted or withdrew. Always true from the form, which
+  /// refuses to submit otherwise (422); the column exists so a withdrawal has
+  /// somewhere truthful to go.
+  granted        Boolean          @default(true)
+  /// Captured with the event rather than read from the submission, because a
+  /// later consent event can arrive from a different place entirely.
+  ip             String?
+  userAgent      String?          @map("user_agent")
+  grantedAt      DateTime         @map("granted_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([submissionId])
+  @@map("consent_logs")
+}
+
+/// The daily sequence behind `tickets.number`. One row per day, holding the last
+/// number issued for it.
+///
+/// A counter table rather than `count(*) + 1`, which is not a sequence but a
+/// race: two requests counting at the same moment read the same total and both
+/// claim the number after it. Issuance is a single statement —
+/// `INSERT … ON CONFLICT (day) DO UPDATE SET seq = seq + 1 RETURNING seq` — so
+/// Postgres serialises the two on the row lock and hands each a different answer.
+/// No advisory lock is needed, and the unique index on `tickets.number` is the
+/// belt behind the braces.
+///
+/// A Postgres sequence could not do this: sequences do not reset, and the number
+/// resets every day by design. Nor could it be derived from `tickets` itself —
+/// deleting a ticket would free its number to be issued twice.
+///
+/// Numbers are consumed by rolled-back transactions and never reused, exactly as
+/// a sequence behaves. Gaps are correct: the alternative is two tickets sharing a
+/// reference.
+model TicketNumberCounter {
+  /// The day the sequence belongs to, as `YYYYMMDD` in the server's timezone.
+  /// A string because it is a LABEL that appears verbatim in the reference, not
+  /// an instant — storing a date would invite a timezone conversion between
+  /// issuing the number and printing it, and one hour's tickets would carry
+  /// yesterday's date.
+  day       String   @id
+  /// The last number issued for that day. Starts at 1 on the day's first ticket.
+  seq       Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ticket_number_counters")
 }
 
 // Per-user notifications, fired on ticket transitions and new comments.
@@ -855,14 +1164,14 @@ model Notification {
 /// Creating roles is deliberately out of scope: it would mean giving up the
 /// Postgres enum on `users.role`, which every scope query compares against.
 model RolePermission {
-  role       Role
-  permission String
+  role        Role
+  permission  String
   /// Who granted it and when. The audit trail carries the full before/after of
   /// every edit; these two are here so a single row can answer "where did this
   /// come from" without a search.
   grantedById Int?     @map("granted_by_id")
   grantedBy   User?    @relation("RolePermissionGrantedBy", fields: [grantedById], references: [id])
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@id([role, permission])
   @@index([role])
