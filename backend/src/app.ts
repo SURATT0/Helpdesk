@@ -80,6 +80,14 @@ export function createApp() {
   // are "public, no auth" surfaces with their own rules.
   app.use(`${API_PREFIX}/public/tickets`, publicIntakeRoutes);
   app.use("/intake", express.static(path.join(__dirname, "../public/intake")));
+  // Same single-source-of-truth file the seed script reads (see
+  // prisma/seed-service-catalog.ts) — served here so the form can build its
+  // service dropdown from it at load time rather than embedding a copy. `../
+  // config` (not `../public/intake/config`) because it is the same file
+  // backend/config/services.json is, not a copy of it. Mounted at
+  // `/intake/config` — a subpath of the form's own — so the form's fetch can
+  // stay a relative path (`./config/services.json`), same as its ENDPOINT.
+  app.use("/intake/config", express.static(path.join(__dirname, "../config")));
 
   // The allow-list, not the canonical address: one deployment is often reachable
   // by several names at once (localhost for the developer and the E2E suite, a

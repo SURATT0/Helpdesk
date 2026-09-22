@@ -334,29 +334,11 @@
 
           <div class="field full">
             <label for="service">บริการที่ต้องการ *</label>
-            <select id="service" name="service" required>
-              <option value="" selected disabled>เลือกบริการ</option>
-              <optgroup label="3D — Document Management">
-                <option value="blue-digital">Blue Digital — Scan and convert documents into digital files</option>
-                <option value="blue-document">Blue Document — Document printing and processing</option>
-                <option value="blue-develop">Blue Develop — Design and develop document workflow systems</option>
-              </optgroup>
-              <optgroup label="3S — Computer Media Management">
-                <option value="blue-swap">Blue Swap — Media rotation and exchange</option>
-                <option value="blue-site">Blue Site — Offsite storage for computer media</option>
-                <option value="blue-shield">Blue Shield — Secure media destruction</option>
-              </optgroup>
-              <optgroup label="Box of Fish — Document Storage">
-                <option value="blue-box">Blue Box — Box storage with pickup and delivery</option>
-                <option value="blue-file">Blue File — Active file storage for records in daily use</option>
-                <option value="blue-destroys">Blue Destroys — Secure document destruction</option>
-              </optgroup>
-              <optgroup label="RPA — Robotic Process Automation">
-                <option value="rpa-license">RPA Enterprise License — Licensing for software robots</option>
-                <option value="rpa-consult">RPA Consulting — Process assessment and rollout planning</option>
-                <option value="rpa-implement">Bot Development &amp; Support — Build, test and maintain your bots</option>
-              </optgroup>
-              <option value="other">Other — not listed above</option>
+            <!-- Options are built at load time from config/services.json (see
+                 the script block below and docs/adding-a-service.md) — this
+                 element carries only the placeholder until that runs. -->
+            <select id="service" name="service" required disabled>
+              <option value="" selected disabled>กำลังโหลดรายการบริการ…</option>
             </select>
             <p class="err" id="err-service"></p>
           </div>
@@ -442,6 +424,83 @@ const btn = document.getElementById('submit');
 const statusEl = document.getElementById('status');
 const msg = document.getElementById('message');
 const countEl = document.getElementById('count');
+
+// ── รายการบริการ (service dropdown) ─────────────────────────────────
+// แหล่งเดียว: backend/config/services.json — ดึงมาตอนโหลดหน้า แทนที่จะฝัง
+// <option> ไว้ตรงนี้ เพื่อให้เพิ่ม/แก้ไข/retire บริการได้จากไฟล์เดียว โดยไม่ต้อง
+// แก้ฟอร์มนี้เลย (ดู docs/adding-a-service.md) รายการด้านล่างเป็นสำเนาสำรอง
+// เท่านั้น ใช้เมื่อโหลดไฟล์จริงไม่สำเร็จ (ออฟไลน์ชั่วคราว, deploy ผิดจังหวะ) —
+// dropdown ต้องไม่ว่างเปล่า ไม่งั้นลูกค้าจะส่งฟอร์มไม่ได้เลย
+const FALLBACK_SERVICES = [
+  { group: "3D — Document Management", order: 1, services: [
+    { code: "blue-digital", label: "Blue Digital", desc: "Scan and convert documents into digital files", active: true },
+    { code: "blue-document", label: "Blue Document", desc: "Document printing and processing", active: true },
+    { code: "blue-develop", label: "Blue Develop", desc: "Design and develop document workflow systems", active: true }
+  ]},
+  { group: "3S — Computer Media Management", order: 2, services: [
+    { code: "blue-swap", label: "Blue Swap", desc: "Media rotation and exchange", active: true },
+    { code: "blue-site", label: "Blue Site", desc: "Offsite storage for computer media", active: true },
+    { code: "blue-shield", label: "Blue Shield", desc: "Secure media destruction", active: true }
+  ]},
+  { group: "Box of Fish — Document Storage", order: 3, services: [
+    { code: "blue-box", label: "Blue Box", desc: "Box storage with pickup and delivery", active: true },
+    { code: "blue-file", label: "Blue File", desc: "Active file storage for records in daily use", active: true },
+    { code: "blue-destroys", label: "Blue Destroys", desc: "Secure document destruction", active: true }
+  ]},
+  { group: "RPA — Robotic Process Automation", order: 4, services: [
+    { code: "rpa-license", label: "RPA Enterprise License", desc: "Licensing for software robots", active: true },
+    { code: "rpa-consult", label: "RPA Consulting", desc: "Process assessment and rollout planning", active: true },
+    { code: "rpa-implement", label: "Bot Development & Support", desc: "Build, test and maintain your bots", active: true }
+  ]}
+];
+
+const serviceSelect = document.getElementById('service');
+
+// เฉพาะ active:true เท่านั้นที่ขึ้นในฟอร์ม — โค้ดที่ถูก retire ยังอยู่ในไฟล์
+// (และในฐานข้อมูล) เพื่อให้ตั๋วเก่าที่อ้างถึงโค้ดนั้นยังแสดงชื่อบริการได้ แค่ไม่
+// เสนอให้เลือกใหม่อีก "Other" ไม่ใช่ส่วนหนึ่งของ config เลย จึงต่อท้ายเสมอ
+// ไม่ว่า config หรือ fallback จะมีอะไรบ้าง
+function renderServiceOptions(config){
+  while (serviceSelect.options.length) serviceSelect.remove(0);
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.selected = true;
+  placeholder.disabled = true;
+  placeholder.textContent = 'เลือกบริการ';
+  serviceSelect.appendChild(placeholder);
+
+  config.slice().sort((a, b) => a.order - b.order).forEach(group => {
+    const active = group.services.filter(s => s.active);
+    if (!active.length) return;
+    const og = document.createElement('optgroup');
+    og.label = group.group;
+    active.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.code;
+      opt.textContent = s.label + ' — ' + s.desc;
+      og.appendChild(opt);
+    });
+    serviceSelect.appendChild(og);
+  });
+
+  const other = document.createElement('option');
+  other.value = 'other';
+  other.textContent = 'Other — not listed above';
+  serviceSelect.appendChild(other);
+}
+
+function setServiceLoading(loading){
+  serviceSelect.disabled = loading;
+  btn.disabled = loading;
+  statusEl.textContent = loading ? 'กำลังโหลดรายการบริการ…' : '';
+}
+
+setServiceLoading(true);
+fetch('./config/services.json')
+  .then(res => { if (!res.ok) throw new Error('bad status ' + res.status); return res.json(); })
+  .then(config => renderServiceOptions(config))
+  .catch(() => renderServiceOptions(FALLBACK_SERVICES))
+  .finally(() => setServiceLoading(false));
 
 const FREE_MAIL = ['gmail.com','hotmail.com','hotmail.co.th','yahoo.com','yahoo.co.th','outlook.com','live.com','icloud.com','msn.com','protonmail.com'];
 const MAX = 2000;
