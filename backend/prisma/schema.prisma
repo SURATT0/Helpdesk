@@ -801,6 +801,22 @@ model Ticket {
   /// the column MEANS, and the paths that would write them (the app's own form,
   /// mail intake, the spreadsheet import) are not part of this change.
   channel        TicketChannel?
+  /// The service the intake form's dropdown recorded, when this ticket
+  /// arrived that way — nullable, because every other channel has nothing to
+  /// put here.
+  ///
+  /// A code, deliberately NOT a foreign key to `ServiceCatalog.code`: the
+  /// catalog is seeded from `config/services.json`, and a ticket can arrive
+  /// naming a code that file does not have YET (the config changed before
+  /// the seed ran against this environment) — a hard FK would refuse the
+  /// insert, which is exactly the "drop the ticket on the floor" outcome the
+  /// design accepts anything else to avoid. The write path
+  /// (publicIntake/intake.repository.ts) checks the catalog itself and
+  /// falls back to the literal string `"other"` for a code it does not
+  /// recognise, logging a warning — so this column holds either a code that
+  /// existed in the catalog at some point (active or since retired) or that
+  /// one sentinel, never an arbitrary string.
+  serviceCode    String?               @map("service_code")
   /// When the problem was reported, as opposed to when this row was written.
   ///
   /// They are the same moment for a ticket raised in the app, and they are not
@@ -834,6 +850,8 @@ model Ticket {
   // "Which tickets came from the form" — the triage queue's own filter, and the
   // one dimension the new channel adds to reporting.
   @@index([channel])
+  // The ticket list's service filter.
+  @@index([serviceCode])
   @@map("tickets")
 }
 
@@ -1335,6 +1353,51 @@ model KbArticle {
   @@index([categoryCode])
   @@index([status])
   @@map("kb_articles")
+}
+
+/// The public-intake form's service dropdown, and the one thing this table is
+/// for — like `KbArticle`, global rather than per-customer: the same 12
+/// services (§ config/services.json) are offered to every submitter
+/// regardless of which tenant their email domain later matches. See
+/// `Ticket.serviceCode`'s own comment for why that column is not a foreign
+/// key to this one.
+///
+/// `code` is the primary key rather than a separate surrogate id: nothing
+/// else needs to reference a row here by anything OTHER than its code (the
+/// form sends it, `Ticket.serviceCode` stores it), so a second identifier
+/// would answer a question nobody asks.
+///
+/// Seeded from `config/services.json` by `prisma/seed-services.ts`
+/// (idempotent — upserts by code, never inserts a duplicate) and re-run
+/// standalone whenever that file changes; see docs/adding-a-service.md. A
+/// code REMOVED from the file is not deleted here — `active` is set to
+/// false instead, because an old ticket's `serviceCode` still points at it
+/// and needs a label to render.
+model ServiceCatalog {
+  code      String   @id
+  label     String
+  /// Short description shown after the label in the dropdown — "Blue Digital
+  /// — Scan and convert documents into digital files". Free to reword; only
+  /// `code` is permanent.
+  desc      String
+  /// The optgroup this service is offered under, and the label shown for it.
+  /// A plain string rather than its own table: there is no second thing that
+  /// needs to reference "the 3D group" independently of the services in it.
+  group     String
+  /// Where this service sits within its group AND where its group sits among
+  /// the others — one field serving both, since a service's group is fixed
+  /// once assigned and the two orderings are never sorted independently in
+  /// practice. The seed script and the form both read this before falling
+  /// back to file order.
+  order     Int
+  /// Whether the form still offers it. False, never deleted, once a service
+  /// is retired — see this model's own comment.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([active, group, order])
+  @@map("service_catalog")
 }
 
 /// One outbound email, queued rather than sent.

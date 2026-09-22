@@ -14,6 +14,7 @@ import {
 } from "../src/modules/categories/category.code";
 import { INITIAL_ROLE_PERMISSIONS } from "../src/shared/permissions";
 import { KB_ARTICLES } from "./kb-seed-data";
+import { seedServiceCatalog } from "./seed-service-catalog";
 
 /**
  * The password every seeded account gets — read from the environment, never
@@ -774,6 +775,16 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
 
   await seedRolePermissions(prisma);
   await seedSystemIntakeTenant(prisma);
+  // Unlike the two calls above, `service_catalog` references nothing and
+  // nothing references it, so resetDb()'s TRUNCATE never reaches it via
+  // CASCADE and this row set actually survives a reset on its own. Called
+  // here anyway, unconditionally: it is a cheap upsert, and it means a dev
+  // or test database always reflects whatever config/services.json
+  // currently says, even if someone edited that file between runs without
+  // remembering to reseed by hand. A real deployment never calls
+  // seedDatabase() at all; it runs `npm run db:seed:services` directly
+  // against config/services.json — see docs/adding-a-service.md.
+  await seedServiceCatalog(prisma);
 }
 
 /**

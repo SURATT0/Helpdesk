@@ -243,6 +243,38 @@ describe("ticket numbering — atomic under concurrency, never count(*)+1", () =
   });
 });
 
+describe("service catalog linkage", () => {
+  it("records the submitted code on the ticket when it matches the catalog", async () => {
+    const outcome = await submitIntake(
+      { ...VALID, service: "rpa-consult", businessEmail: "someone@no-such-domain-example.test" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: outcome.ticketId } });
+    expect(ticket.serviceCode).toBe("rpa-consult");
+  });
+
+  it("still creates the ticket, filed as 'other', when the submitted code is not in the catalog", async () => {
+    const before = await prisma.ticket.count();
+    const outcome = await submitIntake(
+      {
+        ...VALID,
+        service: "not-a-real-service-code",
+        businessEmail: "someone@no-such-domain-example.test",
+      },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    expect(await prisma.ticket.count()).toBe(before + 1);
+    if (outcome.kind !== "created") return;
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: outcome.ticketId } });
+    expect(ticket.serviceCode).toBe("other");
+  });
+});
+
 describe("attachments — validated before anything is written, stored as pending after", () => {
   it("rejects the whole submission (no ticket written) when a file's bytes don't match its declared type", async () => {
     const before = await prisma.ticket.count();

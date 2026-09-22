@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../shared/db";
+import { logger } from "../../shared/logger";
 import { TEXT_MAX } from "../../shared/text";
 import { storedCategoryOther } from "../../shared/category-other";
 import { computeDueAt } from "../tickets/sla";
@@ -130,6 +131,24 @@ async function runOnce(
       TEXT_MAX.SUBJECT,
     );
 
+    // A code the catalog does not recognise is never a reason to drop the
+    // ticket (§04) — the form's cached copy of config/services.json can lag
+    // a real deploy, or a caller can hit this endpoint directly with junk.
+    // Either way the submission still lands, just filed as "other" with a
+    // warning a human can go read, the same shape categoryOther already uses
+    // for the free-text description above.
+    const matchedService = await tx.serviceCatalog.findUnique({
+      where: { code: data.service },
+      select: { code: true },
+    });
+    const serviceCode = matchedService?.code ?? "other";
+    if (!matchedService) {
+      logger.warn(
+        { submittedService: data.service },
+        "public intake: submitted service code not found in catalog, recording as 'other'",
+      );
+    }
+
     const ticket = await tx.ticket.create({
       data: {
         subject,
@@ -143,6 +162,7 @@ async function runOnce(
           categoryCode: "OTHER",
           categoryOther: `Public intake — service requested: ${data.service}`,
         }),
+        serviceCode,
         projectId: null,
         channel: "web_intake",
         number: ticketNumber,

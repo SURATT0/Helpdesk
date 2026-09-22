@@ -1280,6 +1280,20 @@ describe("tickets — assignee identity and filter", () => {
     expect(scoped.status).toBe(200);
     expect(scoped.body.data).toHaveLength(0);
   });
+
+  it("filters the list by service code", async () => {
+    const dana = await login("dana.reyes@acme.com");
+    await prisma.ticket.update({
+      where: { id: 1042 },
+      data: { serviceCode: "rpa-consult" },
+    });
+    const res = await request(app)
+      .get(`${API}/tickets?serviceCode=rpa-consult`)
+      .set(bearer(dana));
+    expect(res.status).toBe(200);
+    const ids: number[] = res.body.data.map((t: { id: number }) => t.id);
+    expect(ids).toEqual([1042]);
+  });
 });
 
 describe("tickets — status transitions", () => {

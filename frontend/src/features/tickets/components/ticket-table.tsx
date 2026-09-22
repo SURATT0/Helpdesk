@@ -182,6 +182,7 @@ export function TicketTable() {
     priorities,
     assignees,
     customers: selectedCustomers,
+    serviceCodes,
     slaStates,
     activeCount,
   } = useSearch();
@@ -258,6 +259,7 @@ export function TicketTable() {
       priorities,
       assignees,
       customers: selectedCustomers,
+      serviceCodes,
       slaStates,
     };
     const base = (data?.tickets ?? []).filter((x) =>
@@ -280,6 +282,7 @@ export function TicketTable() {
     priorities,
     assignees,
     selectedCustomers,
+    serviceCodes,
     slaStates,
     sort,
     now,

@@ -127,6 +127,13 @@ export type Ticket = {
   /** What the person typed when they chose "Other", or null for every other category. */
   categoryOther: string | null;
   /**
+   * The public-intake form's service code, or `null` for every other channel.
+   * A code, not the catalog's label — the catalog can rename or retire it
+   * (see `ServiceCatalog`), so a reader wanting the current label looks it up
+   * by this code rather than being shown a copy that can drift.
+   */
+  serviceCode: string | null;
+  /**
    * The project this ticket belongs to, or null.
    *
    * Grouping and routing, never visibility: a ticket in a project is still
@@ -207,6 +214,13 @@ export type TicketFilter = {
    * two answers to the same question.
    */
   projectId?: number;
+  /**
+   * One catalog code, or `"other"` for a ticket whose submitted code the
+   * catalog never recognised. Only public-intake tickets carry a value here
+   * (`Ticket.serviceCode` is null for every other channel), so filtering by
+   * it is implicitly filtering to that channel.
+   */
+  serviceCode?: string;
 };
 
 export type HistoryEntry = {
@@ -347,6 +361,7 @@ function toTicketDto(
     category: row.category.name,
     categoryCode: row.category.code,
     categoryOther: row.categoryOther,
+    serviceCode: row.serviceCode,
     project: row.project,
     customer: row.customer,
     slaDue,
@@ -410,6 +425,7 @@ export const ticketRepository = {
                 }
               : {}),
             ...(filter.projectId != null ? { projectId: filter.projectId } : {}),
+            ...(filter.serviceCode != null ? { serviceCode: filter.serviceCode } : {}),
           },
         ],
       },
