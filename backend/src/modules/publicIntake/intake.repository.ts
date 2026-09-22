@@ -4,6 +4,7 @@ import { TEXT_MAX } from "../../shared/text";
 import { storedCategoryOther } from "../../shared/category-other";
 import { computeDueAt } from "../tickets/sla";
 import { matchCustomerByDomain } from "./customerMatch";
+import { queueIntakeEmails } from "./intake-mail";
 import { issueTicketNumber } from "./ticket-number";
 import type { ValidatedIntake } from "./intake.validators";
 
@@ -186,6 +187,22 @@ async function runOnce(
         userAgent: meta.userAgent,
         grantedAt: data.submittedAt,
       },
+    });
+
+    // Queued here, inside this same transaction — "write the DB, then mail"
+    // (design doc §03 step 8) means the intent to mail commits WITH the
+    // ticket. The actual SMTP send happens later, off `sweepIntakeMail`'s own
+    // timer, against a row a rolled-back attempt would never have left behind.
+    await queueIntakeEmails(tx, systemUser.id, {
+      ticketId: ticket.id,
+      ticketNumber,
+      name: data.name,
+      businessEmail: data.businessEmail,
+      companyName: data.companyName,
+      phone: data.phone,
+      service: data.service,
+      message: data.message,
+      matchedCustomerName: matched?.name ?? null,
     });
 
     return {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { missingKeys } from "../../shared/i18n";
-import { EMAIL_EVENTS } from "./email.events";
+import { TICKET_EMAIL_EVENTS } from "./email.events";
 import type { RequesterPayload, StaffPayload } from "./email.events";
 import { buildSubject, renderEmail, truncate, SUBJECT_MAX } from "./email.templates";
 
@@ -61,7 +61,7 @@ describe("subject line", () => {
 
   it("is identical for every event on one ticket, which is what threads them", () => {
     const subjects = new Set(
-      EMAIL_EVENTS.map(
+      TICKET_EMAIL_EVENTS.map(
         (e) => renderEmail(e, requesterPayload, "en", OPTS).subject,
       ),
     );
@@ -199,7 +199,7 @@ describe("language", () => {
 
   it("has a translation for every event, in both languages", () => {
     expect(missingKeys("th")).toEqual([]);
-    for (const event of EMAIL_EVENTS) {
+    for (const event of TICKET_EMAIL_EVENTS) {
       for (const lang of ["en", "th"] as const) {
         const { text } = renderEmail(event, staffPayload, lang, OPTS);
         // A missing key falls back to the key itself, which would show up here.

@@ -20,7 +20,7 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 export async function matchCustomerByDomain(
   tx: Tx,
   businessEmail: string,
-): Promise<{ id: number } | null> {
+): Promise<{ id: number; name: string } | null> {
   const domain = businessEmail.split("@")[1]?.toLowerCase().trim();
   if (!domain) return null;
 
@@ -30,6 +30,6 @@ export async function matchCustomerByDomain(
       isSystemTenant: false,
       deletedAt: null,
     },
-    select: { id: true },
+    select: { id: true, name: true },
   });
 }

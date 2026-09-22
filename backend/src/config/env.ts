@@ -295,6 +295,13 @@ export const env = {
       port: Number(process.env.CLAMAV_PORT ?? 3310),
       timeoutMs: Number(process.env.CLAMAV_TIMEOUT_MS ?? 15_000),
     },
+    // Reply-To on both intake mails (design doc §07), so a reply threads back
+    // in through email-to-ticket instead of bouncing off a noreply address.
+    // Falls back to the existing agent-reply identity (SMTP_FROM) rather than
+    // requiring a second address to configure — most deployments mean the
+    // same inbox by both names; set SUPPORT_INBOX separately only where they
+    // genuinely differ.
+    supportInbox: process.env.SUPPORT_INBOX || undefined,
   },
   // Outbound SMTP for agent reply emails. When SMTP_HOST is set the reply
   // endpoint sends real mail via nodemailer; otherwise a "log" transport records

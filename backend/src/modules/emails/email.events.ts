@@ -12,11 +12,14 @@ import type { DisplayStatus, Priority } from "../../shared/domain";
  */
 
 /**
- * Every event that can produce mail. The string is stored in
- * `email_outbox.event_type`, so these values are data — renaming one needs a
- * migration, not just an edit.
+ * Every ticket-lifecycle event that can produce mail, addressed through
+ * `emailOutboxService.queue()` — a real Deskly account on both ends (a
+ * requester who signed in to raise the ticket, or staff), recipients resolved
+ * from `email.recipients.ts`, rendered by the shared `renderEmail` template.
+ * The string is stored in `email_outbox.event_type`, so these values are
+ * data — renaming one needs a migration, not just an edit.
  */
-export const EMAIL_EVENTS = [
+export const TICKET_EMAIL_EVENTS = [
   // → the requester
   "ticket.created",
   "comment.public_reply",
@@ -36,6 +39,30 @@ export const EMAIL_EVENTS = [
   // → collapsed summaries, minted by the sweep rather than by an event
   "digest.multiple_updates",
   "digest.bulk_assigned",
+] as const;
+
+/**
+ * The two public-intake mails (design doc §07) — sent to an address that
+ * never had a Deskly account (`businessEmail`) and to a fixed operational
+ * inbox (`SUPPORT_INBOX`), never through `emailOutboxService.queue()`'s
+ * account-based recipient resolution. They share this table (and its
+ * atomic-claim, backoff-and-retry machinery — see `claimDue`'s `eventTypeIn`)
+ * because that machinery is generic; they do NOT share `renderEmail`, whose
+ * fact table and `/tickets/:id` link assume a reader who can sign in and see
+ * one. See `publicIntake/intake-mail.ts` for their own render + delivery.
+ */
+export const INTAKE_EMAIL_EVENTS = [
+  "intake.confirmation",
+  "intake.team_notify",
+] as const;
+
+/**
+ * Every event that can produce mail, ticket-lifecycle and public-intake
+ * alike — the full vocabulary `email_outbox.event_type` may hold.
+ */
+export const EMAIL_EVENTS = [
+  ...TICKET_EMAIL_EVENTS,
+  ...INTAKE_EMAIL_EVENTS,
 ] as const;
 
 export type EmailEvent = (typeof EMAIL_EVENTS)[number];
@@ -68,6 +95,11 @@ export const REQUESTER_EVENTS = new Set<EmailEvent>([
   "ticket.auto_close_reminder",
   "ticket.closed",
   "digest.multiple_updates",
+  // Not enforced here in practice — see INTAKE_EMAIL_EVENTS above, its own
+  // sweep never calls `queue()`/`assertAudience` — but the true fact about who
+  // this event addresses belongs in this table regardless of which code path
+  // acts on it.
+  "intake.confirmation",
 ]);
 
 /** The ticket facts every mail carries, whoever is reading. */
