@@ -149,6 +149,13 @@ services:
       # multiple API replicas, start the `redis` service (`--profile scale`) and
       # uncomment this so events fan out across instances via Redis pub/sub.
       # REDIS_URL: redis://redis:6379
+      # Public-intake attachment scanning (design doc §08.3). The hostname is
+      # this compose network's own service name below, so this "just works"
+      # for the full stack with no .env needed. NOT a hard dependency (see the
+      # clamav service's own comment): a slow or unreachable scanner leaves an
+      # attachment `pending` rather than failing anything the api does.
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
     depends_on:
       postgres:
         condition: service_healthy
@@ -170,6 +177,50 @@ services:
       timeout: 5s
       retries: 5
       start_period: 25s
+
+  # Virus scanner for public-intake attachments (design doc §08.3). Part of
+  # the default stack, not a profile: unlike mailpit/redis/pgadmin, scanning
+  # is a real acceptance criterion of the feature, not a dev convenience.
+  #
+  # Version pinned, never `latest` (the design doc says so explicitly, after
+  # being burned by exactly this on Postgres once already — see the `postgres`
+  # service above). Bare `clamav/clamav:1.5.4`, not a `-debian`/`-slim`
+  # variant: this compose file otherwise never picks a base-OS flavour, and
+  # picking one here would be a distinction with no reason behind it.
+  #
+  # NOT a hard dependency for `api` (no `depends_on` from api to this): the
+  # api's own scan client (backend/src/modules/publicIntake/fileScan.ts)
+  # already treats an unreachable or still-starting scanner as "error", which
+  # leaves an attachment `pending` for later retry rather than failing
+  # anything — see intake-attachments.ts. Making the api wait on this would
+  # trade that graceful degradation for a slower, more fragile boot.
+  clamav:
+    image: clamav/clamav:1.5.4
+    container_name: deskly-clamav
+    restart: unless-stopped
+    volumes:
+      # Signature database persists here so a restart does not re-download
+      # the full set (freshclam runs inside the container on every boot that
+      # finds none, per ClamAV's own docs) — several hundred MB, and the first
+      # download can take minutes on a slow link.
+      - deskly-clamav-db:/var/lib/clamav
+    ports:
+      - "3310:3310"
+    healthcheck:
+      # The image's own purpose-built script (/usr/local/bin/clamdcheck.sh) —
+      # confirmed present by exec'ing into a running container rather than
+      # assumed from the docs, which do not mention it. Tried a bash `/dev/tcp`
+      # check first; this image has no bash at all (ash/busybox only), which
+      # is exactly the kind of assumption worth verifying against the real
+      # image instead of the generic Linux tools another container might have.
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # The first-boot database download can take several minutes; a short
+      # start_period would just flap the reported status without changing
+      # anything that actually depends on it (nothing does — see above).
+      start_period: 180s
 
   # Local mail catcher: an SMTP server that accepts everything and delivers
   # nothing, with a web inbox at http://localhost:8025. Off by default (a dev
@@ -275,3 +326,4 @@ volumes:
   deskly-pgdata:
   deskly-uploads:
   deskly-pgadmin:
+  deskly-clamav-db:

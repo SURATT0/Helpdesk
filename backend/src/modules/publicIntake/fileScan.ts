@@ -71,7 +71,13 @@ export async function scanBuffer(buffer: Buffer): Promise<ScanResult> {
     });
 
     socket.on("close", () => {
-      const line = reply.trim();
+      // clamd's `z`-prefixed commands (zINSTREAM here) are NUL-terminated on
+      // BOTH ends of the wire — the reply carries a trailing "\0" that
+      // `.trim()` does not touch (NUL is not whitespace), so "stream: OK\0"
+      // failed an `/OK$/` match and every clean scan misread as "error"
+      // until this was verified against a real clamd instance rather than
+      // just the timeout/unreachable paths, which never hit this line at all.
+      const line = reply.replace(/\u0000/g, "").trim();
       if (/FOUND$/.test(line)) {
         finish({ verdict: "infected", detail: line });
       } else if (/OK$/.test(line)) {
