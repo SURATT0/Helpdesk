@@ -43,7 +43,7 @@ beforeEach(async () => {
 });
 
 describe("an unmatched submission (no customer owns the domain)", () => {
-  it("lands on the system tenant, under its Other category, owned by the system account", async () => {
+  it("lands on the system tenant, under its Other category, with a real per-submitter requester", async () => {
     const outcome = await submitIntake(
       { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
       NO_FILES,
@@ -59,7 +59,13 @@ describe("an unmatched submission (no customer owns the domain)", () => {
 
     expect(ticket.customer.isSystemTenant).toBe(true);
     expect(ticket.category.code).toBe("OTHER");
-    expect(ticket.requester.isSystemAccount).toBe(true);
+    // A real row (findOrCreateRequester), not a shared account: scoped to the
+    // system tenant since nothing was matched, passwordless since nobody
+    // signed up, but genuinely THIS submitter's own row.
+    expect(ticket.requester.email).toBe("someone@no-such-domain-example.test");
+    expect(ticket.requester.customerId).toBe(ticket.customerId);
+    expect(ticket.requester.passwordHash).toBeNull();
+    expect(ticket.requester.role).toBe("user");
     expect(ticket.channel).toBe("web_intake");
     expect(ticket.status).toBe("new");
     expect(ticket.number).toBe(outcome.ticketNumber);
@@ -81,7 +87,7 @@ describe("an unmatched submission (no customer owns the domain)", () => {
 });
 
 describe("a submission whose domain matches a real customer", () => {
-  it("links to that customer's own Other category, but still uses the shared system account as requester", async () => {
+  it("links to that customer's own Other category, with a real requester scoped to THAT customer", async () => {
     const acme = await prisma.customer.update({
       where: { name: "Acme Corp" },
       data: { domains: { push: "acme.co.th" } },
@@ -103,15 +109,51 @@ describe("a submission whose domain matches a real customer", () => {
     expect(ticket.customerId).toBe(acme.id);
     expect(ticket.category.code).toBe("OTHER");
     expect(ticket.category.customerId).toBe(acme.id);
-    // Deliberate: the requester is the ONE shared system account, whose own
-    // customerId is the system tenant, not Acme — see intake.repository.ts.
-    expect(ticket.requester.isSystemAccount).toBe(true);
+    // A genuine new Acme user, not a shared placeholder — this is what makes
+    // ticketScopeWhere's ordinary `{requesterId: user.id}` rule work for a
+    // real person at Acme once they have (or are given) a way to sign in.
+    expect(ticket.requester.email).toBe("person@acme.co.th");
+    expect(ticket.requester.customerId).toBe(acme.id);
+    expect(ticket.requester.passwordHash).toBeNull();
 
     const submission = await prisma.intakeSubmission.findFirstOrThrow({
       where: { ticketId: ticket.id },
     });
     expect(submission.status).toBe("linked");
     expect(submission.matchedCustomerId).toBe(acme.id);
+  });
+
+  it("reuses an EXISTING Deskly account for the same email, rather than creating a second row", async () => {
+    const acme = await prisma.customer.update({
+      where: { name: "Acme Corp" },
+      data: { domains: { push: "acme.co.th" } },
+    });
+    const existing = await prisma.user.findFirstOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    // Give the existing seeded user an address matching the intake domain,
+    // so this test exercises the reuse path rather than the create path.
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { email: "person@acme.co.th" },
+    });
+
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "person@acme.co.th" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: outcome.ticketId },
+    });
+    expect(ticket.requesterId).toBe(existing.id);
+    expect(ticket.customerId).toBe(acme.id);
+    // The existing account's own row is untouched by the submission.
+    const stillReal = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } });
+    expect(stillReal.passwordHash).not.toBeNull();
   });
 
   it("matches case-insensitively and ignores a system-tenant domain by construction", async () => {

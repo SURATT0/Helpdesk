@@ -484,17 +484,6 @@ model User {
   // `Ticket.requesterId` is RESTRICT, so a person who ever raised a ticket can
   // never be removed without erasing their history with them.
   isActive               Boolean               @default(true) @map("is_active")
-  // The `requesterId` for a ticket nobody signed in to raise — public intake
-  // submissions, whose sender has no Deskly account. `Ticket.requesterId` is
-  // required and RESTRICT, so a ticket needs a real row here rather than a null;
-  // this flag is what tells the rest of the app that row is a placeholder rather
-  // than a person, so notifications addressed to the requester and the
-  // requester-only actions (cancel, confirm, reject) route around it instead of
-  // treating a fixed shared account as if one specific person were signed into
-  // it. `isActive` stays true and `passwordHash` stays null, which already keeps
-  // it from ever signing in — this flag is about what OTHER code does with it,
-  // not about locking the door twice.
-  isSystemAccount        Boolean               @default(false) @map("is_system_account")
   // Which language this person has CHOSEN to be written to in.
   //
   // Nullable, and deliberately without a default: null means "has never said",

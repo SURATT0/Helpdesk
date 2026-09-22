@@ -302,6 +302,21 @@ export const env = {
     // same inbox by both names; set SUPPORT_INBOX separately only where they
     // genuinely differ.
     supportInbox: process.env.SUPPORT_INBOX || undefined,
+    // Where the deployed form is served from when it is NOT this same origin
+    // (see app.ts's /intake static route for the same-origin case, which needs
+    // no CORS at all). Only ever grants a non-credentialed cross-origin POST
+    // to /api/public/tickets — never added to the main API's `corsOrigins`
+    // allow-list, which carries `credentials: true` for the refresh cookie.
+    formOrigin: process.env.PUBLIC_FORM_ORIGIN || undefined,
+    // Anti-spam budgets (design doc §09). Two independent IP windows — a burst
+    // guard and an hourly ceiling — plus a per-email ceiling with no example
+    // value in the design doc, so this one has no doc-mandated default; five
+    // an hour is generous for a real applicant and tight for a script.
+    rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MIN ?? 5),
+    rateLimitPerHour: Number(process.env.RATE_LIMIT_PER_HOUR ?? 20),
+    rateLimitPerEmailPerHour: Number(
+      process.env.RATE_LIMIT_PER_EMAIL_PER_HOUR ?? 5,
+    ),
   },
   // Outbound SMTP for agent reply emails. When SMTP_HOST is set the reply
   // endpoint sends real mail via nodemailer; otherwise a "log" transport records

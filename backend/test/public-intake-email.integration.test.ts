@@ -53,7 +53,7 @@ describe("queuing — happens inside the same transaction as the ticket", () => 
     expect(confirmation?.recipientEmail).toBe("someone@no-such-domain-example.test");
     expect(confirmation?.status).toBe("pending");
     expect(teamNotify?.status).toBe("pending");
-    // Both point at the ticket's own requester (the shared system account) —
+    // Both point at the ticket's own real requester (findOrCreateRequester) —
     // recipient_user_id only satisfies the NOT NULL column; delivery reads
     // recipient_email instead. See intake-mail.ts.
     const ticket = await prisma.ticket.findUniqueOrThrow({

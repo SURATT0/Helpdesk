@@ -54,14 +54,15 @@ export function replyTo(): string {
  * intent to mail commit together; the actual SMTP send happens later, off a
  * timer, against rows a rolled-back transaction would never have left behind.
  *
- * `systemUserId` is the ticket's own requester — see intake.repository.ts —
+ * `requesterId` is the ticket's own real requester (found or created by
+ * `emailRepository.findOrCreateRequester` — see intake.repository.ts),
  * reused here only to satisfy `email_outbox.recipient_user_id`, which is
  * NOT NULL. It plays no role in where either mail is actually delivered;
  * `recipientEmail` on each row is what `send()` uses.
  */
 export async function queueIntakeEmails(
   tx: Tx,
-  systemUserId: number,
+  requesterId: number,
   payload: IntakeMailPayload,
 ): Promise<void> {
   await tx.emailOutbox.createMany({
@@ -70,7 +71,7 @@ export async function queueIntakeEmails(
         ticketId: payload.ticketId,
         eventType: "intake.confirmation" satisfies EmailEvent,
         sourceRecordId: payload.ticketId,
-        recipientUserId: systemUserId,
+        recipientUserId: requesterId,
         recipientEmail: payload.businessEmail,
         lang: "th",
         payload: payload as unknown as Prisma.InputJsonValue,
@@ -79,7 +80,7 @@ export async function queueIntakeEmails(
         ticketId: payload.ticketId,
         eventType: "intake.team_notify" satisfies EmailEvent,
         sourceRecordId: payload.ticketId,
-        recipientUserId: systemUserId,
+        recipientUserId: requesterId,
         recipientEmail: replyTo(),
         lang: "th",
         payload: payload as unknown as Prisma.InputJsonValue,

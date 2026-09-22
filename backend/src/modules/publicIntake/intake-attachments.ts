@@ -13,7 +13,6 @@ import {
 } from "../attachments/attachment.naming";
 import { RENDERABLE_MIMES, verifyUpload } from "../attachments/attachment.sniff";
 import { scanBuffer } from "./fileScan";
-import { SystemAccountMissingError } from "./intake.repository";
 
 const BYTES_PER_MB = 1024 * 1024;
 
@@ -94,15 +93,10 @@ export function validateIntakeAttachments(
 export async function persistIntakeAttachments(
   ticketId: number,
   submissionId: number,
+  uploaderId: number,
   files: UploadedFile[],
 ): Promise<AttachmentDto[]> {
   if (files.length === 0) return [];
-
-  const systemUser = await prisma.user.findFirst({
-    where: { isSystemAccount: true },
-    select: { id: true },
-  });
-  if (!systemUser) throw new SystemAccountMissingError();
 
   const storageProvider = env.storageDriver === "s3" ? "s3" : "disk";
   const created: AttachmentDto[] = [];
@@ -145,7 +139,7 @@ export async function persistIntakeAttachments(
     const row = await attachmentRepository.create({
       ticketId,
       submissionId,
-      uploaderId: systemUser.id,
+      uploaderId,
       filename: file.originalname,
       displayName: buildDisplayName({
         ticketId,

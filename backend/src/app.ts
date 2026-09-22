@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -35,6 +36,7 @@ import { auditRoutes } from "./modules/audit/audit.routes";
 import { settingsRoutes } from "./modules/settings/settings.routes";
 import { integrationRoutes } from "./modules/integrations/integration.routes";
 import { emailWebhookRoutes } from "./modules/integrations/email/email.routes";
+import { publicIntakeRoutes } from "./modules/publicIntake/intake.routes";
 import { healthRoutes } from "./modules/health/health.routes";
 
 export function createApp() {
@@ -60,14 +62,30 @@ export function createApp() {
     }),
   );
 
+  app.use(express.json({ limit: "1mb" }));
+  app.use(cookieParser());
+
+  // Public intake form + its API, mounted BEFORE the credentialed CORS policy
+  // below so THIS route's own non-credentialed, PUBLIC_FORM_ORIGIN-scoped
+  // policy (intake.cors.ts) is what answers its preflight — the `cors`
+  // package resolves an OPTIONS request itself, ending it right there, so
+  // whichever `cors()` middleware a request reaches FIRST is the one that
+  // decides it. Reversing this order would let the general allow-list (which
+  // carries `credentials: true` for the refresh cookie) answer for a public
+  // form's origin instead of this route's own policy.
+  //
+  // The static form itself needs no CORS at all — a browser navigating to
+  // `/intake` is a same-origin GET — but lives in this same block since both
+  // are "public, no auth" surfaces with their own rules.
+  app.use(`${API_PREFIX}/public/tickets`, publicIntakeRoutes);
+  app.use("/intake", express.static(path.join(__dirname, "../public/intake")));
+
   // The allow-list, not the canonical address: one deployment is often reachable
   // by several names at once (localhost for the developer and the E2E suite, a
   // LAN address for a phone on the same Wi-Fi). `credentials: true` means the
   // matching origin is reflected back, so this stays an allow-list rather than a
   // wildcard — the refresh cookie depends on that.
   app.use(cors({ origin: env.corsOrigins, credentials: true }));
-  app.use(express.json({ limit: "1mb" }));
-  app.use(cookieParser());
 
   // Liveness (/health) + readiness (/ready) probes — public, no auth.
   app.use(API_PREFIX, healthRoutes);

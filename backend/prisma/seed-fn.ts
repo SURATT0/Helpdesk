@@ -781,17 +781,21 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
  * (20260921100000_public_intake_schema) writes once — for the same reason
  * `seedRolePermissions` above re-writes the role/permission matrix that a
  * migration also inserted: `resetDb()`'s `TRUNCATE ... CASCADE` takes
- * `categories` and `users` with it on every integration-test reset, and
- * Postgres's CASCADE follows the foreign-key graph outward regardless of a
- * migration ever having run, so the system tenant's starter categories and its
- * system user do not survive a reset even though `customers` itself (not in
- * the truncate list) does.
+ * `categories` with it on every integration-test reset, and Postgres's
+ * CASCADE follows the foreign-key graph outward regardless of a migration
+ * ever having run, so the system tenant's starter categories do not survive
+ * a reset even though `customers` itself (not in the truncate list) does.
  *
  * The customer row is asserted to already exist rather than created here —
  * unlike `seedRolePermissions`, which has nowhere else to get its data from,
  * this one DOES have an owner (the migration), and a database this runs
  * against without that migration having been applied has a problem seeding
  * cannot paper over.
+ *
+ * Does NOT seed a system requester account any more — see migration
+ * 20260922120000_intake_requester_findorcreate. Every intake ticket's
+ * requester is now a real, per-submitter row created (or reused) on demand
+ * by `emailRepository.findOrCreateRequester`, the same as email intake.
  */
 const SYSTEM_TENANT_NAME = "Unmatched — Public Intake";
 
@@ -821,27 +825,6 @@ async function seedSystemIntakeTenant(prisma: PrismaClient): Promise<void> {
       },
     });
   }
-
-  await prisma.user.upsert({
-    where: { email: "public-intake@system.deskly.internal" },
-    update: {
-      customerId: tenant.id,
-      role: "user",
-      status: "suspended",
-      isActive: true,
-      isSystemAccount: true,
-    },
-    create: {
-      name: "Public Intake",
-      email: "public-intake@system.deskly.internal",
-      role: "user",
-      customerId: tenant.id,
-      status: "suspended",
-      isActive: true,
-      isSystemAccount: true,
-      passwordHash: null,
-    },
-  });
 }
 
 /**

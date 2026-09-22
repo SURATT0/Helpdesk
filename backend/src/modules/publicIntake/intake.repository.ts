@@ -1,8 +1,10 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { env } from "../../config/env";
 import { prisma } from "../../shared/db";
 import { TEXT_MAX } from "../../shared/text";
 import { storedCategoryOther } from "../../shared/category-other";
 import { computeDueAt } from "../tickets/sla";
+import { emailRepository } from "../integrations/email/email.repository";
 import { matchCustomerByDomain } from "./customerMatch";
 import { queueIntakeEmails } from "./intake-mail";
 import { issueTicketNumber } from "./ticket-number";
@@ -31,16 +33,6 @@ const CONSENT_TEXT =
  */
 const CONSENT_VERSION = process.env.PDPA_CONSENT_VERSION ?? "2026-09-21";
 
-export class SystemAccountMissingError extends Error {
-  constructor() {
-    super(
-      "No user is flagged is_system_account — the public-intake bootstrap migration " +
-        "(20260921100000_public_intake_schema) has not run, or its row was deleted.",
-    );
-    this.name = "SystemAccountMissingError";
-  }
-}
-
 export class OtherCategoryMissingError extends Error {
   constructor(customerId: number) {
     super(`Customer #${customerId} has no "Other" category — every tenant should.`);
@@ -52,6 +44,7 @@ export type PersistedIntake = {
   ticketId: number;
   ticketNumber: string;
   submissionId: number;
+  requesterId: number;
   /** Whether the email domain matched an existing customer. */
   linked: boolean;
 };
@@ -101,16 +94,28 @@ async function runOnce(
   meta: { ip: string | null; userAgent: string | null },
 ): Promise<PersistedIntake> {
   return prisma.$transaction(async (tx) => {
-    const systemUser = await tx.user.findFirst({
-      where: { isSystemAccount: true },
-      select: { id: true },
-    });
-    if (!systemUser) throw new SystemAccountMissingError();
-
     const matched = await matchCustomerByDomain(tx, data.businessEmail);
     const targetCustomerId = matched
       ? matched.id
       : await systemTenantId(tx);
+
+    // The same "reuse an existing account, else create a passwordless
+    // correspondent" logic email intake already uses for an unknown sender
+    // (email.repository.ts) — reused rather than reinvented, and for the
+    // same reason: a matched submitter who already has a Deskly login gets
+    // THEIR OWN ticket attached to their own account, so they see it under
+    // ticketScopeWhere's ordinary `{requesterId: user.id}` rule with no
+    // special case needed. A genuinely new submitter gets a real row under
+    // the resolved tenant instead of one shared account absorbing everyone.
+    // `findOrCreateRequester` was widened (an optional `db`/`via`) rather
+    // than duplicated for this — see its own comment in email.repository.ts.
+    const requester = await emailRepository.findOrCreateRequester(
+      data.businessEmail,
+      data.name,
+      targetCustomerId,
+      tx,
+      "web-intake",
+    );
 
     const otherCategory = await tx.category.findFirst({
       where: { customerId: targetCustomerId, code: "OTHER" },
@@ -131,7 +136,7 @@ async function runOnce(
         description: data.message,
         status: "new",
         priority: DEFAULT_INTAKE_PRIORITY,
-        requesterId: systemUser.id,
+        requesterId: requester.id,
         customerId: targetCustomerId,
         categoryId: otherCategory.id,
         categoryOther: storedCategoryOther({
@@ -153,7 +158,7 @@ async function runOnce(
         ticketId: ticket.id,
         fromStatus: null,
         toStatus: "new",
-        changedById: systemUser.id,
+        changedById: requester.id,
       },
     });
 
@@ -193,7 +198,7 @@ async function runOnce(
     // (design doc §03 step 8) means the intent to mail commits WITH the
     // ticket. The actual SMTP send happens later, off `sweepIntakeMail`'s own
     // timer, against a row a rolled-back attempt would never have left behind.
-    await queueIntakeEmails(tx, systemUser.id, {
+    await queueIntakeEmails(tx, requester.id, {
       ticketId: ticket.id,
       ticketNumber,
       name: data.name,
@@ -209,9 +214,71 @@ async function runOnce(
       ticketId: ticket.id,
       ticketNumber,
       submissionId: submission.id,
+      requesterId: requester.id,
       linked: matched != null,
     };
   });
+}
+
+/**
+ * What the honeypot caught: no ticket, nobody mailed, but the submission is
+ * still written down — deliberately (design doc §03 step 2 and the schema's
+ * own comment on `IntakeStatus.spam`), because the only way to tell a tuned
+ * honeypot from a broken one is to look at what it caught.
+ *
+ * Deliberately lenient rather than running the real field validator: a bot's
+ * payload is not expected to be well-formed, and the point of this path is to
+ * still answer 201 with a plausible-looking number so it does not learn it
+ * was caught — rejecting malformed spam with a 400 would do exactly that.
+ * Every field is coerced to a bounded, NUL-free string with a fallback, since
+ * every intake_submissions text column is NOT NULL.
+ */
+export async function recordSpamSubmission(
+  raw: Record<string, unknown>,
+  meta: { ip: string | null; userAgent: string | null },
+): Promise<string> {
+  const safe = (value: unknown, max: number, fallback: string): string => {
+    const asString =
+      typeof value === "string" ? value : value == null ? "" : String(value);
+    // eslint-disable-next-line no-control-regex -- stripping the one byte Postgres text columns refuse (SQLSTATE 22021)
+    const cleaned = asString.replace(/\u0000/g, "").trim().slice(0, max);
+    return cleaned.length > 0 ? cleaned : fallback;
+  };
+
+  await prisma.intakeSubmission.create({
+    data: {
+      ticketId: null,
+      name: safe(raw.name, 200, "(unknown)"),
+      businessEmail: safe(raw.businessEmail, 254, "unknown@spam.invalid"),
+      companyName: safe(raw.companyName, 200, "(unknown)"),
+      phone: safe(raw.phone, 30, "-"),
+      service: safe(raw.service, 100, "-"),
+      message: safe(raw.message, 2000, "-"),
+      source: safe(raw.source, 100, "unknown"),
+      status: "spam",
+      isFreeMail: false,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      // The server's own clock, not the caller's claimed `submittedAt` — a
+      // bot's payload is not trusted for anything, timing included.
+      submittedAt: new Date(),
+    },
+  });
+
+  return fakeTicketNumber();
+}
+
+/**
+ * A number shaped exactly like a real one but never issued from
+ * `ticket_number_counters` — spam must not consume a real sequence value
+ * (real numbers would visibly skip), and answering with anything obviously
+ * fake would tell the sender their submission was caught.
+ */
+function fakeTicketNumber(): string {
+  const now = new Date();
+  const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const seq = Math.floor(1000 + Math.random() * 9000);
+  return `${env.publicIntake.ticketPrefix}-${day}-${seq}`;
 }
 
 /**
