@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import type { UploadedFile } from "../src/modules/attachments/attachment.service";
 import { submitIntake } from "../src/modules/publicIntake/intake.service";
 import { issueTicketNumber } from "../src/modules/publicIntake/ticket-number";
 import { prisma, resetDb } from "./db";
 
 /**
- * The write path behind the public intake form (steps 2-3 of the phase-2
+ * The write path behind the public intake form (steps 2-4 of the phase-2
  * plan): validate, resolve a tenant/category/requester for a submission that
- * has no signed-in account behind it, and commit the one transaction that
- * opens the ticket.
+ * has no signed-in account behind it, commit the ticket, and — separately —
+ * validate and store any attached files.
  */
 
 const VALID: Record<string, unknown> = {
@@ -22,6 +23,20 @@ const VALID: Record<string, unknown> = {
 };
 
 const META = { ip: "203.0.113.1", userAgent: "vitest" };
+const NO_FILES: UploadedFile[] = [];
+
+/** A real PNG signature — enough for `verifyUpload`'s magic-byte check. */
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0]);
+
+function fakeFile(overrides: Partial<UploadedFile> = {}): UploadedFile {
+  return {
+    originalname: "photo.png",
+    mimetype: "image/png",
+    size: PNG_BYTES.length,
+    buffer: PNG_BYTES,
+    ...overrides,
+  };
+}
 
 beforeEach(async () => {
   await resetDb();
@@ -31,6 +46,7 @@ describe("an unmatched submission (no customer owns the domain)", () => {
   it("lands on the system tenant, under its Other category, owned by the system account", async () => {
     const outcome = await submitIntake(
       { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      NO_FILES,
       META,
     );
     expect(outcome.kind).toBe("created");
@@ -73,6 +89,7 @@ describe("a submission whose domain matches a real customer", () => {
 
     const outcome = await submitIntake(
       { ...VALID, businessEmail: "person@acme.co.th" },
+      NO_FILES,
       META,
     );
     expect(outcome.kind).toBe("created");
@@ -105,6 +122,7 @@ describe("a submission whose domain matches a real customer", () => {
 
     const outcome = await submitIntake(
       { ...VALID, businessEmail: "Person@ACME.CO.TH" },
+      NO_FILES,
       META,
     );
     expect(outcome.kind).toBe("created");
@@ -123,6 +141,7 @@ describe("consent — the one gate that writes nothing at all", () => {
     const before = await prisma.intakeSubmission.count();
     const outcome = await submitIntake(
       { ...withoutConsent, businessEmail: "someone@no-such-domain-example.test" },
+      NO_FILES,
       META,
     );
     expect(outcome).toEqual({ kind: "consent_required" });
@@ -139,6 +158,7 @@ describe("field validation failures write nothing", () => {
         businessEmail: "someone@no-such-domain-example.test",
         message: "too short",
       },
+      NO_FILES,
       META,
     );
     expect(outcome.kind).toBe("invalid");
@@ -166,15 +186,107 @@ describe("ticket numbering — atomic under concurrency, never count(*)+1", () =
   it("gives two submissions on the same day two different ticket numbers", async () => {
     const first = await submitIntake(
       { ...VALID, businessEmail: "one@no-such-domain-example.test" },
+      NO_FILES,
       META,
     );
     const second = await submitIntake(
       { ...VALID, businessEmail: "two@no-such-domain-example.test" },
+      NO_FILES,
       META,
     );
     expect(first.kind).toBe("created");
     expect(second.kind).toBe("created");
     if (first.kind !== "created" || second.kind !== "created") return;
     expect(first.ticketNumber).not.toBe(second.ticketNumber);
+  });
+});
+
+describe("attachments — validated before anything is written, stored as pending after", () => {
+  it("rejects the whole submission (no ticket written) when a file's bytes don't match its declared type", async () => {
+    const before = await prisma.ticket.count();
+    const badFile = fakeFile({
+      buffer: Buffer.from("not actually a png"),
+      mimetype: "image/png",
+    });
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [badFile],
+      META,
+    );
+    expect(outcome.kind).toBe("file_rejected");
+    expect(outcome.kind === "file_rejected" && outcome.reason).toBe("unsupported_type");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+
+  it("rejects the whole submission when there are more files than MAX_FILES", async () => {
+    const before = await prisma.ticket.count();
+    const tooMany = Array.from({ length: 6 }, () => fakeFile());
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      tooMany,
+      META,
+    );
+    expect(outcome.kind).toBe("file_rejected");
+    expect(outcome.kind === "file_rejected" && outcome.reason).toBe("too_many");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+
+  it("rejects a single file over the per-file size cap", async () => {
+    const before = await prisma.ticket.count();
+    const huge = fakeFile({ size: 11 * 1024 * 1024 }); // MAX_FILE_MB defaults to 10
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [huge],
+      META,
+    );
+    expect(outcome.kind).toBe("file_rejected");
+    expect(outcome.kind === "file_rejected" && outcome.reason).toBe("too_large");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+
+  it("stores a valid attachment against the new ticket AND its submission, scanStatus pending", async () => {
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [fakeFile()],
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+    expect(outcome.attachments).toBe(1);
+
+    const submission = await prisma.intakeSubmission.findFirstOrThrow({
+      where: { ticketId: outcome.ticketId },
+    });
+    const attachment = await prisma.attachment.findFirstOrThrow({
+      where: { ticketId: outcome.ticketId },
+    });
+    expect(attachment.submissionId).toBe(submission.id);
+    expect(attachment.contentType).toBe("image/png");
+    expect(attachment.scanStatus).toBe("pending");
+    expect(attachment.checksum).toHaveLength(64); // sha256 hex
+    expect(attachment.storageKey).toMatch(/^attachments\//);
+  });
+
+  it("leaves the attachment pending rather than erroring when ClamAV is unreachable", async () => {
+    // No clamav service runs in this test environment (that is step 7's job),
+    // so CLAMAV_HOST is unset and every scan resolves "error" -- which must
+    // leave the row exactly where it started, per design doc §08.3.
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [fakeFile()],
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    // Give the fire-and-forget scan a moment to finish attempting (and
+    // failing) to connect before asserting on its aftermath.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const attachment = await prisma.attachment.findFirstOrThrow({
+      where: { ticketId: outcome.ticketId },
+    });
+    expect(attachment.scanStatus).toBe("pending");
+    expect(attachment.scannedAt).toBeNull();
   });
 });

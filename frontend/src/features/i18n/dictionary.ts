@@ -1214,6 +1214,7 @@ const en: Dict = {
   "error.UNSUPPORTED_FILE_TYPE": "Files of type {mimetype} cannot be attached.",
   "error.NOT_AN_IMAGE": "That attachment is not an image.",
   "error.ATTACHMENT_GONE": "That file is no longer in storage.",
+  "error.ATTACHMENT_NOT_READY": "This file is still being scanned for viruses — try again shortly.",
 
   // Comments.
   "error.INTERNAL_NOTES_ARE_FOR_AGENTS":
@@ -2341,6 +2342,7 @@ const th: Dict = {
   "error.UNSUPPORTED_FILE_TYPE": "ไม่รองรับไฟล์ประเภท {mimetype}",
   "error.NOT_AN_IMAGE": "ไฟล์แนบนี้ไม่ใช่รูปภาพ",
   "error.ATTACHMENT_GONE": "ไฟล์นี้ไม่อยู่ในระบบจัดเก็บแล้ว",
+  "error.ATTACHMENT_NOT_READY": "ไฟล์นี้กำลังสแกนไวรัสอยู่ ลองใหม่อีกครั้งในอีกสักครู่",
 
   "error.INTERNAL_NOTES_ARE_FOR_AGENTS":
     "เฉพาะเจ้าหน้าที่เท่านั้นที่เพิ่มบันทึกภายในได้",

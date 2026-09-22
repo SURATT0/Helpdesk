@@ -537,6 +537,20 @@ export const AttachmentGone = () =>
     "Attachment file is no longer available in storage",
   );
 
+/**
+ * A file that arrived through public intake and has not cleared the virus
+ * scanner yet (`scanStatus` is `pending`, `infected` or `error` — see the
+ * column's own comment). 423, not 404: the row exists and the requester did
+ * nothing wrong: the file just is not safe to hand over yet, which is a
+ * different fact from "there is no such attachment".
+ */
+export const AttachmentNotReady = () =>
+  new AppError(
+    423,
+    "ATTACHMENT_NOT_READY",
+    "This file has not finished virus scanning and is not available yet",
+  );
+
 /* ------------------------------------------------------------------------- *
  * Comments
  * ------------------------------------------------------------------------- */

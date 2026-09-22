@@ -278,6 +278,23 @@ export const env = {
     // Prefix on the public reference `tickets.number` carries — `BF-YYYYMMDD-####`.
     // Not the ticket identifier; see the field comment on Ticket.number.
     ticketPrefix: process.env.TICKET_PREFIX ?? "BF",
+    // Per-file, file-count and combined-size ceilings for an intake submission's
+    // attachments (design doc §08.1). Independent of any ticket-attachment limit
+    // configured elsewhere — a stranger's unauthenticated upload is bounded more
+    // tightly on principle, even though both happen to default the same today.
+    maxFileMb: Number(process.env.MAX_FILE_MB ?? 10),
+    maxFiles: Number(process.env.MAX_FILES ?? 5),
+    maxTotalMb: Number(process.env.MAX_TOTAL_MB ?? 25),
+    // ClamAV (clamd), spoken over its own line protocol (INSTREAM) rather than a
+    // client library — see fileScan.ts for why, matching attachment.sniff.ts's
+    // own stance on hand-rolling something this small. Unset host = scanning
+    // unavailable: every scan then answers "error" and the file stays `pending`
+    // rather than failing the upload outright (design doc §08.3).
+    clamav: {
+      host: process.env.CLAMAV_HOST || undefined,
+      port: Number(process.env.CLAMAV_PORT ?? 3310),
+      timeoutMs: Number(process.env.CLAMAV_TIMEOUT_MS ?? 15_000),
+    },
   },
   // Outbound SMTP for agent reply emails. When SMTP_HOST is set the reply
   // endpoint sends real mail via nodemailer; otherwise a "log" transport records
