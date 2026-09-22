@@ -997,6 +997,25 @@ export const ticketRepository = {
   },
 
   /**
+   * Resolve a public-intake reference (`tickets.number`, e.g. `BF-20260921-0042`)
+   * to the ticket's real id. Null if unknown — an unrecognised or stale
+   * reference is not an error (see `email.service.ts`'s own comment on this):
+   * the caller falls through to opening a new ticket rather than refusing the
+   * mail.
+   *
+   * Exact match, case-sensitive: the format `parseTicketRef` reads is exactly
+   * what `issueTicketNumber` writes, uppercase throughout, so there is no
+   * ambiguity to normalise away — unlike an email address, which a human types.
+   */
+  async findIdByNumber(number: string): Promise<number | null> {
+    const row = await prisma.ticket.findFirst({
+      where: { number },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  },
+
+  /**
    * A prospective requester's id and tenant — the facts `mayImportForRequester`
    * needs to decide whether the importer may file a ticket for them.
    *

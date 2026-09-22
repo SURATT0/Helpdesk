@@ -11,6 +11,7 @@ import {
 import { ticketService } from "../src/modules/tickets/ticket.service";
 import { emailOutboxService } from "../src/modules/emails/email-outbox.service";
 import { authService } from "../src/modules/auth/auth.service";
+import { submitIntake } from "../src/modules/publicIntake/intake.service";
 import { prisma, resetDb, tenantSuperAdmin } from "./db";
 
 const app = createApp();
@@ -3521,6 +3522,55 @@ describe("email-to-ticket threading", () => {
     });
     expect(back.body.data.kind).toBe("comment");
     expect(back.body.data.ticketId).toBe(1042);
+  });
+
+  // A reply to a public-intake confirmation carries ONLY the public reference
+  // ([BF-20260921-0042]) -- there is no numeric [#id] tag anywhere on that
+  // mail (intake-mail.ts's renderConfirmation) -- so this exercises the
+  // resolution path parseTicketRef's ticketNumber + ticketRepository.
+  // findIdByNumber were added for, end to end through the real webhook.
+  it("threads a reply to a public-intake ticket via its BF-... reference, not a numeric tag", async () => {
+    const outcome = await submitIntake(
+      {
+        name: "สุรัตน์ ใจดี",
+        businessEmail: "intake-reply-test@no-such-domain-example.test",
+        companyName: "บริษัท ทดสอบ จำกัด",
+        phone: "0812345678",
+        service: "rpa-consult",
+        message: "อยากปรึกษาเรื่องวางระบบ RPA ให้ทีมงานติดต่อกลับด้วยครับ",
+        consent: true,
+        source: "web-intake-form",
+        submittedAt: new Date().toISOString(),
+      },
+      [],
+      { ip: "203.0.113.1", userAgent: "vitest" },
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    const before = await commentsOn(outcome.ticketId);
+    const res = await post({
+      // The real submitter's address -- findOrCreateRequester (the fix from
+      // the earlier RBAC pass) is what makes this sender recognised as the
+      // ticket's own requester rather than a stranger.
+      from: "intake-reply-test@no-such-domain-example.test",
+      subject: `Re: [${outcome.ticketNumber}] รับเรื่องแล้ว — rpa-consult`,
+      text: "ขอบคุณครับ รอทีมงานติดต่อกลับ",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("comment");
+    expect(res.body.data.ticketId).toBe(outcome.ticketId);
+    expect(await commentsOn(outcome.ticketId)).toHaveLength(before.length + 1);
+  });
+
+  it("still opens a new ticket for a BF-... reference that does not exist", async () => {
+    const res = await post({
+      from: "marcus.chen@acme.com",
+      subject: "Re: [BF-20200101-9999] something that was never real",
+      text: "x",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.kind).toBe("ticket");
   });
 });
 
