@@ -209,6 +209,12 @@ describe("the static form", () => {
   it("serves index.html at /intake with the API endpoint as a relative path", async () => {
     const res = await request(app).get("/intake/");
     expect(res.status).toBe(200);
-    expect(res.text).toContain('const ENDPOINT = "/api/public/tickets"');
+    // Asserted against the same `API` this file's own requests use, not a
+    // hand-copied literal — the form's ENDPOINT drifting one prefix segment
+    // away from where the route is actually mounted (as it once did: a
+    // "/api/public/tickets" that 404s against the real "/api/v1/public/tickets"
+    // mount) is exactly the silent breakage a hardcoded string here would
+    // have kept missing.
+    expect(res.text).toContain(`const ENDPOINT = "${API}"`);
   });
 });

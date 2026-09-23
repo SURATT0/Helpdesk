@@ -414,7 +414,7 @@
 // path สัมพัทธ์ เพราะฟอร์มนี้ถูก serve จากโดเมนเดียวกับ API (ดู backend/src/app.ts,
 // mount ที่ /intake) ห้ามใส่ URL เต็มที่นี่ — ถ้าจะ host ฟอร์มไว้คนละโดเมน ให้ตั้ง
 // PUBLIC_FORM_ORIGIN ฝั่ง backend สำหรับ CORS แล้วค่อยเปลี่ยนบรรทัดนี้เป็น URL เต็ม
-const ENDPOINT = "/api/public/tickets";
+const ENDPOINT = "/api/v1/public/tickets";
 // ─────────────────────────────────────────────────────────────────
 
 const form = document.getElementById('intake');

@@ -305,7 +305,7 @@ export const env = {
     // Where the deployed form is served from when it is NOT this same origin
     // (see app.ts's /intake static route for the same-origin case, which needs
     // no CORS at all). Only ever grants a non-credentialed cross-origin POST
-    // to /api/public/tickets — never added to the main API's `corsOrigins`
+    // to /api/v1/public/tickets — never added to the main API's `corsOrigins`
     // allow-list, which carries `credentials: true` for the refresh cookie.
     formOrigin: process.env.PUBLIC_FORM_ORIGIN || undefined,
     // Anti-spam budgets (design doc §09). Two independent IP windows — a burst

@@ -2,7 +2,7 @@ import cors from "cors";
 import { env } from "../../config/env";
 
 /**
- * A SEPARATE, non-credentialed CORS policy for `/api/public/tickets` alone —
+ * A SEPARATE, non-credentialed CORS policy for `/api/v1/public/tickets` alone —
  * never added to `env.corsOrigins`, the main API's allow-list, which carries
  * `credentials: true` for the refresh-token cookie.
  *
