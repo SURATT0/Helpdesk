@@ -25,6 +25,12 @@ COPY prisma ./prisma
 # (computeDueAt in src/modules/tickets/sla). Ship src so seeding works inside the
 # container (used by the e2e CI job and for initial demo data).
 COPY --from=build /app/src ./src
+# The public intake form (served at /intake, app.ts) and the service catalog
+# config it and the seed script both read (see
+# docs/adding-a-service.md) — served straight from disk via express.static,
+# so they need to exist in the runtime image itself, not just the build one.
+COPY public ./public
+COPY config ./config
 EXPOSE 4000
 # Apply migrations, then start the API.
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
