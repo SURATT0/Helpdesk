@@ -16,6 +16,12 @@ type TicketLike = {
   assignee: string | null;
   assigneeId: number | null;
   /**
+   * The public-intake form's service code, or null for every other channel.
+   * Optional for the same reason the SLA fields below are: callers and tests
+   * that predate the facet don't have to supply it.
+   */
+  serviceCode?: string | null;
+  /**
    * Optional for the same reason the SLA timestamps below are: callers that do
    * not filter by tenant — and the tests that predate the facet — should not
    * have to supply it. Absent simply never matches a customer selection.
@@ -56,6 +62,9 @@ type SearchValue = {
    */
   customers: Set<number>;
   toggleCustomer: (id: number) => void;
+  /** Empty = no service filter. `"other"` is a real, selectable value here. */
+  serviceCodes: Set<string>;
+  toggleServiceCode: (code: string) => void;
   slaStates: Set<SlaState>;
   toggleSla: (s: SlaState) => void;
   /** Replace the SLA selection outright — the summary tiles jump straight to one. */
@@ -78,6 +87,9 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
   );
   const [customers, setCustomers] = React.useState<Set<number>>(() => new Set());
   const [assignees, setAssignees] = React.useState<Set<AssigneeKey>>(
+    () => new Set(),
+  );
+  const [serviceCodes, setServiceCodes] = React.useState<Set<string>>(
     () => new Set(),
   );
   const [slaStates, setSlaStates] = React.useState<Set<SlaState>>(
@@ -116,6 +128,14 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const toggleServiceCode = React.useCallback((code: string) => {
+    setServiceCodes((prev) => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  }, []);
+
   const toggleSla = React.useCallback((s: SlaState) => {
     setSlaStates((prev) => {
       const next = new Set(prev);
@@ -137,6 +157,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     setPriorities(new Set());
     setAssignees(new Set());
     setCustomers(new Set());
+    setServiceCodes(new Set());
     setSlaStates(new Set());
   }, []);
 
@@ -152,6 +173,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       toggleAssignee,
       customers,
       toggleCustomer,
+      serviceCodes,
+      toggleServiceCode,
       slaStates,
       toggleSla,
       setSlaOnly,
@@ -161,6 +184,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
         priorities.size +
         assignees.size +
         customers.size +
+        serviceCodes.size +
         slaStates.size,
     }),
     [
@@ -173,6 +197,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       toggleAssignee,
       customers,
       toggleCustomer,
+      serviceCodes,
+      toggleServiceCode,
       slaStates,
       toggleSla,
       setSlaOnly,
@@ -214,7 +240,11 @@ export function matchesFilters(
   f: Pick<
     SearchValue,
     "query" | "statuses" | "priorities" | "assignees"
-  > & { slaStates?: Set<SlaState>; customers?: Set<number> },
+  > & {
+    slaStates?: Set<SlaState>;
+    customers?: Set<number>;
+    serviceCodes?: Set<string>;
+  },
   now: number = Date.now(),
 ): boolean {
   if (!matchesQuery(t, f.query)) return false;
@@ -230,6 +260,12 @@ export function matchesFilters(
     // A ticket always has a customer, so there is no "none" bucket here — unlike
     // the assignee facet, where unassigned is a real thing to filter for.
     if (t.customer == null || !f.customers.has(t.customer.id)) return false;
+  }
+  if (f.serviceCodes && f.serviceCodes.size > 0) {
+    // Every ticket from a channel other than the intake form carries no
+    // service code at all, so — like the customer facet — there is no "none"
+    // bucket: a selection can only ever narrow to tickets that HAVE one.
+    if (t.serviceCode == null || !f.serviceCodes.has(t.serviceCode)) return false;
   }
   if (f.slaStates && f.slaStates.size > 0) {
     const { state } = judgeSla(

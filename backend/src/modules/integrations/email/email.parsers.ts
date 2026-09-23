@@ -58,6 +58,24 @@ export function ticketRef(ticketId: number): string {
 const TICKET_REF_PATTERN = /\[(?:Deskly\s*)?#(\d{1,10})\]/;
 
 /**
+ * The public-intake reference (`[BF-20260921-0042]` — see
+ * `publicIntake/intake-mail.ts`'s `renderConfirmation`/`renderTeamNotify`,
+ * the only writers of this tag). A SEPARATE pattern from the one above,
+ * never merged into it: that tag's captured digits ARE the ticket id, so
+ * reading it needs no database; this one is a public reference that has no
+ * relationship to the id at all, so resolving it is necessarily a lookup
+ * (`ticketRepository.findIdByNumber`, called from `email.service.ts` — this
+ * file stays a pure parser with no database access of its own).
+ *
+ * The prefix is intentionally NOT pinned to today's `TICKET_PREFIX` (default
+ * `BF`): a deployment that changes it must keep matching replies to numbers
+ * it issued under the old one, and every issued number is still sitting
+ * verbatim in `tickets.number` regardless of what the current env says — the
+ * lookup, not this regex, is what actually decides whether it is real.
+ */
+const PUBLIC_TICKET_REF_PATTERN = /\[([A-Z]{2,10}-\d{8}-\d{4})\]/;
+
+/**
  * Guarantee a subject carries its ticket reference, without duplicating one that
  * is already correct (a long `Re: Re:` chain must not accrete tags).
  *
@@ -75,24 +93,48 @@ export function ensureTicketRef(subject: string, ticketId: number): string {
 
 /**
  * Pull a ticket reference out of a subject line — the read side of
- * `TICKET_REF_PATTERN`, and what makes a mailed reply land on its existing
- * ticket instead of opening a duplicate. Returns the id and the subject with
- * the tag removed.
+ * `TICKET_REF_PATTERN` and `PUBLIC_TICKET_REF_PATTERN`, and what makes a
+ * mailed reply land on its existing ticket instead of opening a duplicate.
+ *
+ * Tries the numeric tag FIRST. Both patterns are bracketed, but a
+ * public-intake subject only ever carries the `BF-...` form (see
+ * `PUBLIC_TICKET_REF_PATTERN`'s own comment) so there is nothing to prefer
+ * between them in practice — this is only about which one a caller reads
+ * when both happen to be present, which a staff reply CAN produce (see
+ * `ensureTicketRef`: it does not strip an existing public tag when adding
+ * the numeric one).
+ *
+ * At most one of `ticketId` / `ticketNumber` is ever non-null. `ticketId` is
+ * the ticket's real id, ready to use. `ticketNumber` is NOT: it is a public
+ * reference with no relationship to the id, so the caller (`email.service.ts`)
+ * still has to resolve it — see `PUBLIC_TICKET_REF_PATTERN`'s comment on why
+ * that lookup does not belong in this file.
  */
 export function parseTicketRef(subject: string): {
   ticketId: number | null;
+  ticketNumber: string | null;
   subject: string;
 } {
   const m = subject.match(TICKET_REF_PATTERN);
-  if (!m) return { ticketId: null, subject: subject.trim() };
-  const ticketId = Number(m[1]);
-  if (!Number.isSafeInteger(ticketId) || ticketId <= 0) {
-    return { ticketId: null, subject: subject.trim() };
+  if (m) {
+    const ticketId = Number(m[1]);
+    if (Number.isSafeInteger(ticketId) && ticketId > 0) {
+      return {
+        ticketId,
+        ticketNumber: null,
+        subject: subject.replace(m[0], "").replace(/\s{2,}/g, " ").trim(),
+      };
+    }
   }
-  return {
-    ticketId,
-    subject: subject.replace(m[0], "").replace(/\s{2,}/g, " ").trim(),
-  };
+  const p = subject.match(PUBLIC_TICKET_REF_PATTERN);
+  if (p) {
+    return {
+      ticketId: null,
+      ticketNumber: p[1],
+      subject: subject.replace(p[0], "").replace(/\s{2,}/g, " ").trim(),
+    };
+  }
+  return { ticketId: null, ticketNumber: null, subject: subject.trim() };
 }
 
 const asString = (v: unknown): string =>

@@ -37,6 +37,14 @@ export type AttachmentDto = {
   hasThumbnail: boolean;
   createdAt: string;
   uploader: { id: number; name: string };
+  /**
+   * Where this file stands with the virus scanner. Null for every attachment
+   * uploaded by a signed-in person (never subject to scanning) and for every
+   * row written before this column existed — see the schema's own comment on
+   * `AttachmentScanStatus`. A client that shows a "scanning…" state keys off
+   * `"pending"` specifically; null is not that, it is "not applicable".
+   */
+  scanStatus: "pending" | "clean" | "infected" | "error" | null;
 };
 
 /**
@@ -58,6 +66,7 @@ export function toAttachmentDto(row: AttachmentRow): AttachmentDto {
     hasThumbnail: row.thumbKey != null,
     createdAt: row.createdAt.toISOString(),
     uploader: row.uploader,
+    scanStatus: row.scanStatus,
   };
 }
 
@@ -113,6 +122,12 @@ export const attachmentRepository = {
     thumbKey?: string | null;
     width?: number | null;
     height?: number | null;
+    /** The public-form submission this file arrived with. Undefined/null for
+     * every ordinary ticket upload — see the field's own schema comment. */
+    submissionId?: number | null;
+    checksum?: string | null;
+    scanStatus?: "pending" | "clean" | "infected" | "error" | null;
+    storageProvider?: "disk" | "s3" | null;
   }): Promise<AttachmentDto> {
     return prisma.$transaction(async (tx) => {
       const created = await tx.attachment.create({

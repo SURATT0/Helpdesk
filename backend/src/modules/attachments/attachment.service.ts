@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { AttachmentGone, BadRequest, NotFound } from "../../shared/errors";
+import {
+  AttachmentGone,
+  AttachmentNotReady,
+  BadRequest,
+  NotFound,
+} from "../../shared/errors";
 import type { AuthUser } from "../../shared/auth";
 import { logger } from "../../shared/logger";
 import { storage } from "../../shared/storage";
@@ -162,6 +167,14 @@ export const attachmentService = {
     // Row scope via the parent ticket: its requester, or staff inside the same
     // customer. Anyone else gets a 404 from here, never the bytes.
     await ticketService.get(att.ticketId, user);
+
+    // Null means "never subject to scanning" (every attachment a signed-in
+    // person uploads) and is safe to serve; "clean" is a scanner saying so.
+    // Everything else — pending, infected, error — is refused, per the design
+    // doc's own rule for public-intake files: not usable until scan passes.
+    if (att.scanStatus != null && att.scanStatus !== "clean") {
+      throw AttachmentNotReady();
+    }
 
     const wantThumb = variant === "thumb" && att.thumbKey != null;
     let data: Buffer;

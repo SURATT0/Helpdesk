@@ -1,0 +1,366 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import type { UploadedFile } from "../src/modules/attachments/attachment.service";
+import { submitIntake } from "../src/modules/publicIntake/intake.service";
+import { issueTicketNumber } from "../src/modules/publicIntake/ticket-number";
+import { prisma, resetDb } from "./db";
+
+/**
+ * The write path behind the public intake form (steps 2-4 of the phase-2
+ * plan): validate, resolve a tenant/category/requester for a submission that
+ * has no signed-in account behind it, commit the ticket, and — separately —
+ * validate and store any attached files.
+ */
+
+const VALID: Record<string, unknown> = {
+  name: "สุรัตน์ ใจดี",
+  companyName: "บริษัท ตัวอย่าง จำกัด",
+  phone: "081-234-5678",
+  service: "rpa-consult",
+  message: "อยากปรึกษาเรื่องวางระบบ RPA ให้ทีมงานติดต่อกลับด้วยครับ",
+  consent: true,
+  source: "web-intake-form",
+  submittedAt: "2026-09-21T09:30:00.000Z",
+};
+
+const META = { ip: "203.0.113.1", userAgent: "vitest" };
+const NO_FILES: UploadedFile[] = [];
+
+/** A real PNG signature — enough for `verifyUpload`'s magic-byte check. */
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0]);
+
+function fakeFile(overrides: Partial<UploadedFile> = {}): UploadedFile {
+  return {
+    originalname: "photo.png",
+    mimetype: "image/png",
+    size: PNG_BYTES.length,
+    buffer: PNG_BYTES,
+    ...overrides,
+  };
+}
+
+beforeEach(async () => {
+  await resetDb();
+});
+
+describe("an unmatched submission (no customer owns the domain)", () => {
+  it("lands on the system tenant, under its Other category, with a real per-submitter requester", async () => {
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: outcome.ticketId },
+      include: { category: true, requester: true, customer: true },
+    });
+
+    expect(ticket.customer.isSystemTenant).toBe(true);
+    expect(ticket.category.code).toBe("OTHER");
+    // A real row (findOrCreateRequester), not a shared account: scoped to the
+    // system tenant since nothing was matched, passwordless since nobody
+    // signed up, but genuinely THIS submitter's own row.
+    expect(ticket.requester.email).toBe("someone@no-such-domain-example.test");
+    expect(ticket.requester.customerId).toBe(ticket.customerId);
+    expect(ticket.requester.passwordHash).toBeNull();
+    expect(ticket.requester.role).toBe("user");
+    expect(ticket.channel).toBe("web_intake");
+    expect(ticket.status).toBe("new");
+    expect(ticket.number).toBe(outcome.ticketNumber);
+    expect(ticket.number).toMatch(/^BF-\d{8}-\d{4}$/);
+    // reportedAt is the browser's submittedAt, not the server's insert time.
+    expect(ticket.reportedAt.toISOString()).toBe("2026-09-21T09:30:00.000Z");
+
+    const submission = await prisma.intakeSubmission.findFirstOrThrow({
+      where: { ticketId: ticket.id },
+    });
+    expect(submission.status).toBe("triage");
+    expect(submission.matchedCustomerId).toBeNull();
+
+    const consent = await prisma.consentLog.findFirstOrThrow({
+      where: { submissionId: submission.id },
+    });
+    expect(consent.granted).toBe(true);
+  });
+});
+
+describe("a submission whose domain matches a real customer", () => {
+  it("links to that customer's own Other category, with a real requester scoped to THAT customer", async () => {
+    const acme = await prisma.customer.update({
+      where: { name: "Acme Corp" },
+      data: { domains: { push: "acme.co.th" } },
+    });
+
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "person@acme.co.th" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: outcome.ticketId },
+      include: { category: true, requester: true },
+    });
+
+    expect(ticket.customerId).toBe(acme.id);
+    expect(ticket.category.code).toBe("OTHER");
+    expect(ticket.category.customerId).toBe(acme.id);
+    // A genuine new Acme user, not a shared placeholder — this is what makes
+    // ticketScopeWhere's ordinary `{requesterId: user.id}` rule work for a
+    // real person at Acme once they have (or are given) a way to sign in.
+    expect(ticket.requester.email).toBe("person@acme.co.th");
+    expect(ticket.requester.customerId).toBe(acme.id);
+    expect(ticket.requester.passwordHash).toBeNull();
+
+    const submission = await prisma.intakeSubmission.findFirstOrThrow({
+      where: { ticketId: ticket.id },
+    });
+    expect(submission.status).toBe("linked");
+    expect(submission.matchedCustomerId).toBe(acme.id);
+  });
+
+  it("reuses an EXISTING Deskly account for the same email, rather than creating a second row", async () => {
+    const acme = await prisma.customer.update({
+      where: { name: "Acme Corp" },
+      data: { domains: { push: "acme.co.th" } },
+    });
+    const existing = await prisma.user.findFirstOrThrow({
+      where: { email: "marcus.chen@acme.com" },
+    });
+    // Give the existing seeded user an address matching the intake domain,
+    // so this test exercises the reuse path rather than the create path.
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { email: "person@acme.co.th" },
+    });
+
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "person@acme.co.th" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: outcome.ticketId },
+    });
+    expect(ticket.requesterId).toBe(existing.id);
+    expect(ticket.customerId).toBe(acme.id);
+    // The existing account's own row is untouched by the submission.
+    const stillReal = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } });
+    expect(stillReal.passwordHash).not.toBeNull();
+  });
+
+  it("matches case-insensitively and ignores a system-tenant domain by construction", async () => {
+    await prisma.customer.update({
+      where: { name: "Acme Corp" },
+      data: { domains: { push: "acme.co.th" } },
+    });
+
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "Person@ACME.CO.TH" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: outcome.ticketId },
+    });
+    const acme = await prisma.customer.findFirstOrThrow({ where: { name: "Acme Corp" } });
+    expect(ticket.customerId).toBe(acme.id);
+  });
+});
+
+describe("consent — the one gate that writes nothing at all", () => {
+  it("writes no submission and no ticket when consent is missing", async () => {
+    const { consent: _drop, ...withoutConsent } = VALID;
+    const before = await prisma.intakeSubmission.count();
+    const outcome = await submitIntake(
+      { ...withoutConsent, businessEmail: "someone@no-such-domain-example.test" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome).toEqual({ kind: "consent_required" });
+    expect(await prisma.intakeSubmission.count()).toBe(before);
+  });
+});
+
+describe("field validation failures write nothing", () => {
+  it("writes no row when a required field fails validation", async () => {
+    const before = await prisma.ticket.count();
+    const outcome = await submitIntake(
+      {
+        ...VALID,
+        businessEmail: "someone@no-such-domain-example.test",
+        message: "too short",
+      },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("invalid");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+});
+
+describe("ticket numbering — atomic under concurrency, never count(*)+1", () => {
+  it("issues strictly increasing numbers for the same day under concurrent callers", async () => {
+    const numbers = await Promise.all(
+      Array.from({ length: 10 }, () => prisma.$transaction((tx) => issueTicketNumber(tx))),
+    );
+    // All distinct — the whole point of the atomic counter.
+    expect(new Set(numbers).size).toBe(10);
+    const seqs = numbers
+      .map((n) => Number(n.split("-")[2]))
+      .sort((a, b) => a - b);
+    // Strictly consecutive: no gap, no repeat, whatever value they started at
+    // (the counter table is not reset between test files by design).
+    for (let i = 1; i < seqs.length; i++) {
+      expect(seqs[i]).toBe(seqs[i - 1] + 1);
+    }
+  });
+
+  it("gives two submissions on the same day two different ticket numbers", async () => {
+    const first = await submitIntake(
+      { ...VALID, businessEmail: "one@no-such-domain-example.test" },
+      NO_FILES,
+      META,
+    );
+    const second = await submitIntake(
+      { ...VALID, businessEmail: "two@no-such-domain-example.test" },
+      NO_FILES,
+      META,
+    );
+    expect(first.kind).toBe("created");
+    expect(second.kind).toBe("created");
+    if (first.kind !== "created" || second.kind !== "created") return;
+    expect(first.ticketNumber).not.toBe(second.ticketNumber);
+  });
+});
+
+describe("service catalog linkage", () => {
+  it("records the submitted code on the ticket when it matches the catalog", async () => {
+    const outcome = await submitIntake(
+      { ...VALID, service: "rpa-consult", businessEmail: "someone@no-such-domain-example.test" },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: outcome.ticketId } });
+    expect(ticket.serviceCode).toBe("rpa-consult");
+  });
+
+  it("still creates the ticket, filed as 'other', when the submitted code is not in the catalog", async () => {
+    const before = await prisma.ticket.count();
+    const outcome = await submitIntake(
+      {
+        ...VALID,
+        service: "not-a-real-service-code",
+        businessEmail: "someone@no-such-domain-example.test",
+      },
+      NO_FILES,
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    expect(await prisma.ticket.count()).toBe(before + 1);
+    if (outcome.kind !== "created") return;
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: outcome.ticketId } });
+    expect(ticket.serviceCode).toBe("other");
+  });
+});
+
+describe("attachments — validated before anything is written, stored as pending after", () => {
+  it("rejects the whole submission (no ticket written) when a file's bytes don't match its declared type", async () => {
+    const before = await prisma.ticket.count();
+    const badFile = fakeFile({
+      buffer: Buffer.from("not actually a png"),
+      mimetype: "image/png",
+    });
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [badFile],
+      META,
+    );
+    expect(outcome.kind).toBe("file_rejected");
+    expect(outcome.kind === "file_rejected" && outcome.reason).toBe("unsupported_type");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+
+  it("rejects the whole submission when there are more files than MAX_FILES", async () => {
+    const before = await prisma.ticket.count();
+    const tooMany = Array.from({ length: 6 }, () => fakeFile());
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      tooMany,
+      META,
+    );
+    expect(outcome.kind).toBe("file_rejected");
+    expect(outcome.kind === "file_rejected" && outcome.reason).toBe("too_many");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+
+  it("rejects a single file over the per-file size cap", async () => {
+    const before = await prisma.ticket.count();
+    const huge = fakeFile({ size: 11 * 1024 * 1024 }); // MAX_FILE_MB defaults to 10
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [huge],
+      META,
+    );
+    expect(outcome.kind).toBe("file_rejected");
+    expect(outcome.kind === "file_rejected" && outcome.reason).toBe("too_large");
+    expect(await prisma.ticket.count()).toBe(before);
+  });
+
+  it("stores a valid attachment against the new ticket AND its submission, scanStatus pending", async () => {
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [fakeFile()],
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+    expect(outcome.attachments).toBe(1);
+
+    const submission = await prisma.intakeSubmission.findFirstOrThrow({
+      where: { ticketId: outcome.ticketId },
+    });
+    const attachment = await prisma.attachment.findFirstOrThrow({
+      where: { ticketId: outcome.ticketId },
+    });
+    expect(attachment.submissionId).toBe(submission.id);
+    expect(attachment.contentType).toBe("image/png");
+    expect(attachment.scanStatus).toBe("pending");
+    expect(attachment.checksum).toHaveLength(64); // sha256 hex
+    expect(attachment.storageKey).toMatch(/^attachments\//);
+  });
+
+  it("leaves the attachment pending rather than erroring when ClamAV is unreachable", async () => {
+    // No clamav service runs in this test environment (that is step 7's job),
+    // so CLAMAV_HOST is unset and every scan resolves "error" -- which must
+    // leave the row exactly where it started, per design doc §08.3.
+    const outcome = await submitIntake(
+      { ...VALID, businessEmail: "someone@no-such-domain-example.test" },
+      [fakeFile()],
+      META,
+    );
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") return;
+
+    // Give the fire-and-forget scan a moment to finish attempting (and
+    // failing) to connect before asserting on its aftermath.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const attachment = await prisma.attachment.findFirstOrThrow({
+      where: { ticketId: outcome.ticketId },
+    });
+    expect(attachment.scanStatus).toBe("pending");
+    expect(attachment.scannedAt).toBeNull();
+  });
+});

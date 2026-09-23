@@ -7,6 +7,7 @@ import { auditRepository } from "../audit/audit.repository";
 import { mailSender } from "../integrations/email/mail-sender";
 import {
   assertAudience,
+  TICKET_EMAIL_EVENTS,
   type EmailEvent,
   type EmailPayload,
   type MessageSummary,
@@ -160,6 +161,10 @@ export const emailOutboxService = {
       cfg.batchLimit,
       Math.max(cfg.backoffBaseMs, 60_000),
       now,
+      // Public-intake mail lives in this same table but is claimed and
+      // rendered by its own sweep (publicIntake/intake-mail.ts) — see
+      // claimDue's own comment on why the two must partition the table.
+      TICKET_EMAIL_EVENTS,
     );
     if (claimed.length === 0) {
       return { sent: 0, failed: 0, suppressed: 0, collapsed: 0 };

@@ -21,8 +21,15 @@ export function TicketBoard() {
   // Includes the SLA facet: the board has no filter bar of its own, so a filter
   // set in the list view must keep applying when the view is switched — not
   // silently drop the one facet the board doesn't draw a chip for.
-  const { query, statuses, priorities, assignees, customers, slaStates } =
-    useSearch();
+  const {
+    query,
+    statuses,
+    priorities,
+    assignees,
+    customers,
+    serviceCodes,
+    slaStates,
+  } = useSearch();
   const { data, isLoading, isError, refetch } = useTickets();
   // Before the early returns below — it holds a ticking clock, and a hook that
   // only runs on some renders is not a hook.
@@ -38,6 +45,7 @@ export function TicketBoard() {
       priorities,
       assignees,
       customers,
+      serviceCodes,
       slaStates,
     }),
   );

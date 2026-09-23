@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{ -webkit-text-size-adjust:100% }body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>แจ้งเรื่อง Bluefish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Sans+Thai+Looped:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDF2F3;
+    --surface:#FFFFFF;
+    --deep:#0A2735;
+    --deep-2:#11384A;
+    --ink:#0A2233;
+    --ink-soft:#546C7C;
+    --line:#D2DDE2;
+    --field:#F7FAFB;
+    --accent:#1AA79A;
+    --accent-ink:#052A26;
+    --danger:#B23F35;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#061722;
+      --surface:#0D2534;
+      --deep:#061620;
+      --deep-2:#0E2C3C;
+      --ink:#E4EDF1;
+      --ink-soft:#9AB1BD;
+      --line:#1C3B4C;
+      --field:#0A1E2B;
+      --accent:#31C2B4;
+      --accent-ink:#04201D;
+      --danger:#E08076;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#061722;
+    --surface:#0D2534;
+    --deep:#061620;
+    --deep-2:#0E2C3C;
+    --ink:#E4EDF1;
+    --ink-soft:#9AB1BD;
+    --line:#1C3B4C;
+    --field:#0A1E2B;
+    --accent:#31C2B4;
+    --accent-ink:#04201D;
+    --danger:#E08076;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:16px;
+    line-height:1.6;
+    overflow-x:hidden;
+  }
+  .wrap{
+    max-width:1060px;
+    margin:0 auto;
+    padding-inline:clamp(16px,4vw,32px);
+    padding-block:clamp(20px,4vw,56px);
+  }
+  .board{
+    display:grid;
+    grid-template-columns:minmax(0,0.86fr) minmax(0,1.14fr);
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+  }
+  @media (max-width:860px){
+    .board{grid-template-columns:1fr;border-radius:14px}
+  }
+
+  /* ---------- left panel ---------- */
+  .panel{
+    background:var(--deep);
+    color:#DCE9EE;
+    padding:clamp(22px,3.4vw,40px);
+    display:flex;
+    flex-direction:column;
+    gap:clamp(18px,2.4vw,26px);
+    position:relative;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.01em;color:#fff}
+  .brand svg{display:block;flex:none}
+  .panel h1{
+    font-family:'IBM Plex Sans Thai Looped','IBM Plex Sans Thai',sans-serif;
+    font-weight:600;
+    font-size:clamp(1.05rem,3.2vw,1.6rem);
+    line-height:1.3;
+    margin:0;
+    color:#fff;
+    max-width:none;
+    white-space:nowrap;
+  }
+  .panel p{margin:0;color:#A9C2CD;max-width:38ch;overflow-wrap:break-word}
+  .flow{list-style:none;margin:0;padding:0;display:grid;gap:0}
+  .flow li{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:14px;
+    padding:12px 0;
+    border-top:1px solid rgba(255,255,255,.1);
+    align-items:baseline;
+  }
+  .flow li:first-child{border-top:0}
+  .flow b{color:#fff;font-weight:500;display:block}
+  .flow span{color:#96B2BF;font-size:.9rem}
+  .dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--accent);
+    transform:translateY(-2px);
+  }
+  .flow li:nth-child(2) .dot{background:#4E7C8E}
+  .flow li:nth-child(3) .dot{background:#2F5A6C}
+  .panel footer{margin-top:auto;font-size:.88rem;color:#8FAAB8}
+  .panel footer a{color:#CFE3EA}
+
+  /* ---------- form ---------- */
+  .form{padding:clamp(22px,3.4vw,40px);min-width:0}
+  .form h2{
+    font-family:'IBM Plex Sans Thai Looped','IBM Plex Sans Thai',sans-serif;
+    font-size:1.22rem;font-weight:600;margin:0 0 4px;
+  }
+  .lede{margin:0 0 22px;color:var(--ink-soft);font-size:.94rem}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:560px){ .grid{grid-template-columns:1fr} }
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field.full{grid-column:1/-1}
+  label{font-size:.9rem;font-weight:500;overflow-wrap:break-word}
+  .opt{color:var(--ink-soft);font-weight:400}
+  input,select,textarea{
+    font:inherit;
+    color:var(--ink);
+    background:var(--field);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:11px 13px;
+    width:100%;
+    max-width:100%;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  textarea{min-height:132px;resize:vertical;line-height:1.55}
+  select{
+    appearance:none;
+    -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23546C7C' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 13px center;
+    padding-right:36px;
+    text-overflow:ellipsis;
+  }
+  option,optgroup{background:var(--surface);color:var(--ink)}
+  optgroup{font-weight:600}
+  input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,167,154,.16)}
+  [aria-invalid="true"]{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 6%,var(--field))}
+  .err{color:var(--danger);font-size:.84rem;min-height:0;overflow-wrap:break-word}
+  .count{font-size:.8rem;color:var(--ink-soft);text-align:right;font-variant-numeric:tabular-nums}
+  .consent{
+    grid-column:1/-1;
+    display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;
+    font-size:.88rem;color:var(--ink-soft);
+    border-top:1px solid var(--line);
+    padding-top:18px;margin-top:4px;
+  }
+  .consent label{font-weight:400;line-height:1.5}
+  .consent input{width:18px;height:18px;margin-top:3px;flex:none;accent-color:var(--accent)}
+  .actions{grid-column:1/-1;display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:6px}
+  button{
+    font:inherit;font-weight:600;
+    background:var(--accent);color:var(--accent-ink);
+    border:0;border-radius:var(--radius);
+    padding:13px 26px;cursor:pointer;
+    min-height:48px;
+    transition:background .15s;
+  }
+  button:hover{background:color-mix(in srgb,var(--accent) 86%,#000)}
+  button[disabled]{opacity:.6;cursor:progress}
+  .note{font-size:.85rem;color:var(--ink-soft);flex:1 1 12rem;min-width:0}
+  .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  @media (max-width:560px){
+    .actions{flex-direction:column;align-items:stretch}
+    button{width:100%;text-align:center}
+    .note{text-align:center;flex:none}
+  }
+
+  /* ---------- file upload ---------- */
+  .drop{
+    border:1.5px dashed var(--line);
+    border-radius:var(--radius);
+    background:var(--field);
+    padding:16px;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop.drag{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--field))}
+  .file-native{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;padding:0;border:0}
+  .drop-inner{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .browse{
+    font:inherit;font-weight:600;font-size:.9rem;
+    background:transparent;color:var(--accent);
+    border:1px solid var(--accent);border-radius:8px;
+    padding:9px 16px;min-height:auto;cursor:pointer;flex:none;
+    transition:background .15s;
+  }
+  .browse:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  .drop-hint{font-size:.82rem;color:var(--ink-soft);flex:1 1 12rem;min-width:0}
+  .filelist{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .filelist li{
+    display:flex;align-items:center;gap:10px;
+    background:var(--field);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;font-size:.86rem;min-width:0;
+  }
+  .filelist .fi-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .filelist .fi-size{color:var(--ink-soft);font-size:.8rem;flex:none;font-variant-numeric:tabular-nums}
+  .filelist .fi-remove{
+    flex:none;width:26px;height:26px;min-height:auto;padding:0;
+    display:grid;place-items:center;border-radius:6px;
+    background:transparent;color:var(--ink-soft);border:1px solid var(--line);
+    font-size:1.05rem;line-height:1;cursor:pointer;
+  }
+  .filelist .fi-remove:hover{color:var(--danger);border-color:var(--danger);background:transparent}
+
+  /* ---------- success ---------- */
+  .done{display:none;padding:clamp(22px,3.4vw,40px);min-width:0}
+  .done.on{display:block}
+  .form.off{display:none}
+  .check{width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 18%,transparent);display:grid;place-items:center;margin-bottom:16px}
+  .done h2{font-family:'IBM Plex Sans Thai Looped','IBM Plex Sans Thai',sans-serif;font-size:1.3rem;margin:0 0 8px}
+  #doneLede{overflow-wrap:break-word}
+  .ref{
+    font-size:clamp(1.25rem,5vw,1.5rem);font-weight:600;letter-spacing:.02em;
+    background:var(--field);border:1px dashed var(--line);border-radius:var(--radius);
+    padding:14px 18px;margin:18px 0;display:inline-block;
+    max-width:100%;word-break:break-word;font-variant-numeric:tabular-nums;
+  }
+  .done ul{margin:0;padding-left:20px;color:var(--ink-soft);font-size:.94rem}
+  details{margin-top:24px;border-top:1px solid var(--line);padding-top:14px}
+  summary{cursor:pointer;font-size:.88rem;color:var(--ink-soft)}
+  pre{
+    background:var(--field);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;overflow-x:auto;font-size:.82rem;line-height:1.5;margin:12px 0 0;
+  }
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="board">
+
+    <section class="panel">
+      <div class="brand">
+        <svg width="32" height="24" viewBox="0 0 38 28" aria-hidden="true">
+          <defs>
+            <radialGradient id="gloss" cx="0.36" cy="0.27" r="0.82">
+              <stop offset="0" stop-color="#A9E0F6"/>
+              <stop offset="0.28" stop-color="#5BC0EC"/>
+              <stop offset="0.58" stop-color="#3596CD"/>
+              <stop offset="1" stop-color="#2C5B8C"/>
+            </radialGradient>
+            <linearGradient id="fin" x1="0" y1="0" x2="0.3" y2="1">
+              <stop offset="0" stop-color="#3D7BAE"/>
+              <stop offset="1" stop-color="#2A5182"/>
+            </linearGradient>
+            <radialGradient id="shade" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stop-color="#1C3C5E" stop-opacity="0.32"/>
+              <stop offset="1" stop-color="#1C3C5E" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <ellipse cx="19" cy="25.4" rx="9.4" ry="1.9" fill="url(#shade)"/>
+          <path d="M27.4 8.4C30.3 9.1 33.4 7.5 35.6 5.6 34.4 9.4 34.4 16.6 35.6 20.4 33.4 18.5 30.3 16.9 27.4 17.6Z" fill="url(#fin)"/>
+          <path d="M6.6 9.9C8.4 6.4 13 3.6 19 3.6 25.6 3.6 30.4 7.8 30.4 13.2 30.4 18.6 25.6 22.8 19 22.8 13.2 22.8 8.6 20 7.3 16.1L12.4 13.1Z" fill="url(#gloss)"/>
+          <ellipse cx="15" cy="8.6" rx="2.2" ry="1.3" fill="#FFFFFF" opacity="0.8" transform="rotate(-24 15 8.6)"/>
+        </svg>
+        Bluefish
+      </div>
+
+      <h1>แจ้งปัญหาหรือขอรับบริการ</h1>
+      <p>กรอกข้อมูลเบื้องต้น ระบบจะเปิดตั๋วในระบบ Helpdesk และส่งเลขที่ตั๋วกลับไปที่อีเมลของคุณ</p>
+
+      <ul class="flow">
+        <li><i class="dot"></i><div><b>ส่งเรื่อง</b><span>ได้เลขที่ตั๋วทันทีทางอีเมล</span></div></li>
+        <li><i class="dot"></i><div><b>ทีมรับเรื่อง</b><span>ตรวจสอบและจัดลำดับความสำคัญ ภายใน 1 วันทำการ</span></div></li>
+        <li><i class="dot"></i><div><b>ดำเนินการ</b><span>ติดตามสถานะและตอบกลับผ่านอีเมลเดิมได้ตลอด</span></div></li>
+      </ul>
+
+      <footer>
+        เรื่องด่วนที่กระทบการทำงาน โทร <a href="tel:+6620000000">02-000-0000</a> (จันทร์–ศุกร์ 9:00–18:00)
+      </footer>
+    </section>
+
+    <section class="form" id="formSide">
+      <h2>ข้อมูลผู้แจ้ง</h2>
+      <p class="lede">ช่องที่มีเครื่องหมาย * จำเป็นต้องกรอก</p>
+
+      <form id="intake" novalidate>
+        <div class="grid">
+          <div class="field">
+            <label for="name">ชื่อ-นามสกุล *</label>
+            <input id="name" name="name" type="text" autocomplete="name" placeholder="สุรัตน์ ใจดี" required>
+            <p class="err" id="err-name"></p>
+          </div>
+
+          <div class="field">
+            <label for="email">อีเมลบริษัท *</label>
+            <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@company.co.th" required>
+            <p class="err" id="err-email"></p>
+          </div>
+
+          <div class="field">
+            <label for="company">ชื่อบริษัท *</label>
+            <input id="company" name="company" type="text" autocomplete="organization" placeholder="บริษัท ตัวอย่าง จำกัด" required>
+            <p class="err" id="err-company"></p>
+          </div>
+
+          <div class="field">
+            <label for="phone">เบอร์ติดต่อกลับ *</label>
+            <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="081-234-5678 หรือ 02-000-0000 ต่อ 123" required>
+            <p class="err" id="err-phone"></p>
+          </div>
+
+          <div class="field full">
+            <label for="service">บริการที่ต้องการ *</label>
+            <!-- Options are built at load time from config/services.json (see
+                 the script block below and docs/adding-a-service.md) — this
+                 element carries only the placeholder until that runs. -->
+            <select id="service" name="service" required disabled>
+              <option value="" selected disabled>กำลังโหลดรายการบริการ…</option>
+            </select>
+            <p class="err" id="err-service"></p>
+          </div>
+
+          <div class="field full">
+            <label for="message">รายละเอียดปัญหาหรือสิ่งที่ต้องการ *</label>
+            <textarea id="message" name="message" required
+              placeholder="เล่าสั้น ๆ ว่าเกิดอะไรขึ้น เริ่มเมื่อไร ระบบหรือกระบวนการไหนที่ได้รับผลกระทบ และมีข้อความแจ้งเตือนอะไรขึ้นมาบ้าง"
+              aria-describedby="err-message count"></textarea>
+            <p class="count" id="count">0 / 2000</p>
+            <p class="err" id="err-message"></p>
+          </div>
+
+          <div class="field full">
+            <label for="files">แนบรูปหรือไฟล์ <span class="opt">(ไม่บังคับ · สูงสุด 10 MB ต่อไฟล์)</span></label>
+            <div class="drop" id="drop">
+              <input id="files" name="files" type="file" multiple class="file-native"
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                aria-describedby="err-files">
+              <div class="drop-inner">
+                <button type="button" class="browse" id="browse">เลือกไฟล์…</button>
+                <span class="drop-hint">หรือลากไฟล์มาวางที่นี่ · รองรับรูปภาพ, PDF, Word, Excel, ZIP</span>
+              </div>
+            </div>
+            <ul class="filelist" id="filelist"></ul>
+            <p class="err" id="err-files"></p>
+          </div>
+
+          <div class="consent">
+            <input id="consent" name="consent" type="checkbox" required>
+            <label for="consent">ยินยอมให้ Bluefish เก็บและใช้ข้อมูลนี้เพื่อติดต่อกลับและดำเนินการตามคำขอ <span class="opt">(ตาม PDPA)</span></label>
+            <p class="err" id="err-consent" style="grid-column:2"></p>
+          </div>
+
+          <div class="hp" aria-hidden="true">
+            <label for="website">Website</label>
+            <input id="website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="actions">
+            <button type="submit" id="submit">ส่งเรื่อง</button>
+            <span class="note" id="status">ระบบจะตอบกลับเลขที่ตั๋วภายในไม่กี่นาที</span>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="done" id="doneSide" aria-live="polite">
+      <div class="check">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <path d="M5 11.5 9 15.5 17 7" fill="none" stroke="#1AA79A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h2>รับเรื่องเรียบร้อย</h2>
+      <p class="lede" id="doneLede"></p>
+      <div class="ref" id="ticketRef"></div>
+      <ul>
+        <li>ตอบกลับอีเมลฉบับนี้เพื่อเพิ่มรายละเอียดหรือแนบไฟล์ได้ทันที</li>
+        <li>ทีมงานจะติดต่อกลับภายใน 1 วันทำการ</li>
+      </ul>
+      <details>
+        <summary>ข้อมูลที่ส่งเข้าระบบ (สำหรับผู้ดูแล)</summary>
+        <pre id="payload"></pre>
+      </details>
+      <p style="margin-top:22px"><button type="button" id="again">แจ้งเรื่องใหม่</button></p>
+    </section>
+
+  </div>
+</div>
+
+<script>
+// ── ตั้งค่าปลายทาง ────────────────────────────────────────────────
+// path สัมพัทธ์ เพราะฟอร์มนี้ถูก serve จากโดเมนเดียวกับ API (ดู backend/src/app.ts,
+// mount ที่ /intake) ห้ามใส่ URL เต็มที่นี่ — ถ้าจะ host ฟอร์มไว้คนละโดเมน ให้ตั้ง
+// PUBLIC_FORM_ORIGIN ฝั่ง backend สำหรับ CORS แล้วค่อยเปลี่ยนบรรทัดนี้เป็น URL เต็ม
+const ENDPOINT = "/api/v1/public/tickets";
+// ─────────────────────────────────────────────────────────────────
+
+const form = document.getElementById('intake');
+const formSide = document.getElementById('formSide');
+const doneSide = document.getElementById('doneSide');
+const btn = document.getElementById('submit');
+const statusEl = document.getElementById('status');
+const msg = document.getElementById('message');
+const countEl = document.getElementById('count');
+
+// ── รายการบริการ (service dropdown) ─────────────────────────────────
+// แหล่งเดียว: backend/config/services.json — ดึงมาตอนโหลดหน้า แทนที่จะฝัง
+// <option> ไว้ตรงนี้ เพื่อให้เพิ่ม/แก้ไข/retire บริการได้จากไฟล์เดียว โดยไม่ต้อง
+// แก้ฟอร์มนี้เลย (ดู docs/adding-a-service.md) รายการด้านล่างเป็นสำเนาสำรอง
+// เท่านั้น ใช้เมื่อโหลดไฟล์จริงไม่สำเร็จ (ออฟไลน์ชั่วคราว, deploy ผิดจังหวะ) —
+// dropdown ต้องไม่ว่างเปล่า ไม่งั้นลูกค้าจะส่งฟอร์มไม่ได้เลย
+const FALLBACK_SERVICES = [
+  { group: "3D — Document Management", order: 1, services: [
+    { code: "blue-digital", label: "Blue Digital", desc: "Scan and convert documents into digital files", active: true },
+    { code: "blue-document", label: "Blue Document", desc: "Document printing and processing", active: true },
+    { code: "blue-develop", label: "Blue Develop", desc: "Design and develop document workflow systems", active: true }
+  ]},
+  { group: "3S — Computer Media Management", order: 2, services: [
+    { code: "blue-swap", label: "Blue Swap", desc: "Media rotation and exchange", active: true },
+    { code: "blue-site", label: "Blue Site", desc: "Offsite storage for computer media", active: true },
+    { code: "blue-shield", label: "Blue Shield", desc: "Secure media destruction", active: true }
+  ]},
+  { group: "Box of Fish — Document Storage", order: 3, services: [
+    { code: "blue-box", label: "Blue Box", desc: "Box storage with pickup and delivery", active: true },
+    { code: "blue-file", label: "Blue File", desc: "Active file storage for records in daily use", active: true },
+    { code: "blue-destroys", label: "Blue Destroys", desc: "Secure document destruction", active: true }
+  ]},
+  { group: "RPA — Robotic Process Automation", order: 4, services: [
+    { code: "rpa-license", label: "RPA Enterprise License", desc: "Licensing for software robots", active: true },
+    { code: "rpa-consult", label: "RPA Consulting", desc: "Process assessment and rollout planning", active: true },
+    { code: "rpa-implement", label: "Bot Development & Support", desc: "Build, test and maintain your bots", active: true }
+  ]}
+];
+
+const serviceSelect = document.getElementById('service');
+
+// เฉพาะ active:true เท่านั้นที่ขึ้นในฟอร์ม — โค้ดที่ถูก retire ยังอยู่ในไฟล์
+// (และในฐานข้อมูล) เพื่อให้ตั๋วเก่าที่อ้างถึงโค้ดนั้นยังแสดงชื่อบริการได้ แค่ไม่
+// เสนอให้เลือกใหม่อีก "Other" ไม่ใช่ส่วนหนึ่งของ config เลย จึงต่อท้ายเสมอ
+// ไม่ว่า config หรือ fallback จะมีอะไรบ้าง
+function renderServiceOptions(config){
+  while (serviceSelect.options.length) serviceSelect.remove(0);
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.selected = true;
+  placeholder.disabled = true;
+  placeholder.textContent = 'เลือกบริการ';
+  serviceSelect.appendChild(placeholder);
+
+  config.slice().sort((a, b) => a.order - b.order).forEach(group => {
+    const active = group.services.filter(s => s.active);
+    if (!active.length) return;
+    const og = document.createElement('optgroup');
+    og.label = group.group;
+    active.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.code;
+      opt.textContent = s.label + ' — ' + s.desc;
+      og.appendChild(opt);
+    });
+    serviceSelect.appendChild(og);
+  });
+
+  const other = document.createElement('option');
+  other.value = 'other';
+  other.textContent = 'Other — not listed above';
+  serviceSelect.appendChild(other);
+}
+
+function setServiceLoading(loading){
+  serviceSelect.disabled = loading;
+  btn.disabled = loading;
+  statusEl.textContent = loading ? 'กำลังโหลดรายการบริการ…' : '';
+}
+
+setServiceLoading(true);
+fetch('./config/services.json')
+  .then(res => { if (!res.ok) throw new Error('bad status ' + res.status); return res.json(); })
+  .then(config => renderServiceOptions(config))
+  .catch(() => renderServiceOptions(FALLBACK_SERVICES))
+  .finally(() => setServiceLoading(false));
+
+const FREE_MAIL = ['gmail.com','hotmail.com','hotmail.co.th','yahoo.com','yahoo.co.th','outlook.com','live.com','icloud.com','msn.com','protonmail.com'];
+const MAX = 2000;
+
+msg.addEventListener('input', () => {
+  if (msg.value.length > MAX) msg.value = msg.value.slice(0, MAX);
+  countEl.textContent = msg.value.length + ' / ' + MAX;
+});
+
+// ── ไฟล์แนบ (สูงสุด 10 MB ต่อไฟล์) ──────────────────────────────
+const MAX_FILE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILES = 5;
+const fileInput = document.getElementById('files');
+const drop = document.getElementById('drop');
+const fileList = document.getElementById('filelist');
+const errFiles = document.getElementById('err-files');
+let attachments = [];
+
+function fmtSize(b){
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return Math.round(b / 1024) + ' KB';
+  return (b / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function renderFiles(){
+  fileList.innerHTML = '';
+  attachments.forEach((f, i) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'fi-name'; name.textContent = f.name;
+    const size = document.createElement('span');
+    size.className = 'fi-size'; size.textContent = fmtSize(f.size);
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'fi-remove';
+    rm.setAttribute('aria-label', 'ลบไฟล์ ' + f.name);
+    rm.textContent = '×';
+    rm.addEventListener('click', () => { attachments.splice(i, 1); renderFiles(); });
+    li.append(name, size, rm);
+    fileList.appendChild(li);
+  });
+}
+
+function addFiles(list){
+  const rejected = [];
+  Array.from(list).forEach(f => {
+    if (f.size > MAX_FILE) { rejected.push(f.name + ' (เกิน 10 MB)'); return; }
+    if (attachments.length >= MAX_FILES) { rejected.push(f.name + ' (แนบได้ไม่เกิน ' + MAX_FILES + ' ไฟล์)'); return; }
+    if (attachments.some(a => a.name === f.name && a.size === f.size)) return; // กันไฟล์ซ้ำ
+    attachments.push(f);
+  });
+  errFiles.textContent = rejected.length ? ('ข้ามไฟล์: ' + rejected.join(', ')) : '';
+  renderFiles();
+}
+
+drop.addEventListener('click', (e) => { if (e.target === fileInput) return; fileInput.click(); });
+fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('drag'); }));
+drop.addEventListener('dragleave', (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('drag'); });
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('drag');
+  if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+});
+
+function setError(id, text){
+  const field = document.getElementById(id);
+  const box = document.getElementById('err-' + id);
+  box.textContent = text || '';
+  if (text) field.setAttribute('aria-invalid','true');
+  else field.removeAttribute('aria-invalid');
+  field.setAttribute('aria-describedby', 'err-' + id);
+  return !text;
+}
+
+function validate(){
+  const v = id => document.getElementById(id).value.trim();
+  let ok = true, first = null;
+
+  ok = setError('name', v('name').length < 2 ? 'กรอกชื่อ-นามสกุลของผู้แจ้ง' : '') && ok;
+
+  const email = v('email').toLowerCase();
+  let emailErr = '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) emailErr = 'รูปแบบอีเมลไม่ถูกต้อง';
+  else if (FREE_MAIL.includes(email.split('@')[1])) emailErr = 'ใช้อีเมลของบริษัท เพื่อให้เราจับคู่กับสัญญาบริการได้';
+  ok = setError('email', emailErr) && ok;
+
+  ok = setError('company', v('company').length < 2 ? 'กรอกชื่อบริษัทหรือหน่วยงาน' : '') && ok;
+  const phone = v('phone');
+  const digits = phone.replace(/\D/g, '');
+  let phoneErr = '';
+  if (!phone) phoneErr = 'กรอกเบอร์ติดต่อกลับ';
+  else if (digits.length < 9 || digits.length > 15) phoneErr = 'ตรวจสอบเบอร์อีกครั้ง เช่น 081-234-5678 หรือ 02-000-0000 ต่อ 123';
+  ok = setError('phone', phoneErr) && ok;
+
+  ok = setError('service', v('service') ? '' : 'เลือกบริการที่ต้องการ') && ok;
+  ok = setError('message', v('message').length < 15 ? 'อธิบายเพิ่มอีกนิด อย่างน้อย 15 ตัวอักษร เพื่อให้ทีมงานเข้าใจปัญหา' : '') && ok;
+
+  const consent = document.getElementById('consent');
+  const cErr = consent.checked ? '' : 'ต้องยินยอมก่อนส่งเรื่อง';
+  document.getElementById('err-consent').textContent = cErr;
+  consent.setAttribute('aria-invalid', cErr ? 'true' : 'false');
+  if (cErr) ok = false;
+
+  if (!ok) {
+    first = form.querySelector('[aria-invalid="true"]');
+    if (first) first.focus();
+  }
+  return ok;
+}
+
+function mockRef(){
+  const d = new Date();
+  const ymd = d.getFullYear().toString() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const rnd = Math.floor(1000 + Math.random()*9000);
+  return 'BF-' + ymd + '-' + rnd;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (document.getElementById('website').value) return; // honeypot
+  if (!validate()) return;
+
+  const payload = {
+    name: document.getElementById('name').value.trim(),
+    businessEmail: document.getElementById('email').value.trim().toLowerCase(),
+    companyName: document.getElementById('company').value.trim(),
+    phone: document.getElementById('phone').value.trim(),
+    service: document.getElementById('service').value,
+    message: document.getElementById('message').value.trim(),
+    consent: true,
+    source: 'web-intake-form',
+    attachments: attachments.map(f => ({ name: f.name, size: f.size, type: f.type || 'application/octet-stream' })),
+    submittedAt: new Date().toISOString()
+  };
+
+  btn.disabled = true;
+  statusEl.textContent = 'กำลังส่ง…';
+
+  let ref = mockRef();
+  try {
+    if (ENDPOINT) {
+      let res;
+      if (attachments.length) {
+        // มีไฟล์แนบ → ส่งเป็น multipart/form-data
+        const fd = new FormData();
+        Object.keys(payload).forEach(k => {
+          if (k === 'attachments') return; // เมทาดาทาไฟล์อ่านจากตัวไฟล์เอง
+          fd.append(k, typeof payload[k] === 'object' ? JSON.stringify(payload[k]) : payload[k]);
+        });
+        attachments.forEach(f => fd.append('attachments', f, f.name));
+        res = await fetch(ENDPOINT, { method: 'POST', body: fd });
+      } else {
+        res = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json().catch(() => ({}));
+      ref = data.ticketNumber || data.ref || ref;
+    } else {
+      await new Promise(r => setTimeout(r, 700));
+    }
+  } catch (err) {
+    btn.disabled = false;
+    statusEl.textContent = 'ส่งไม่สำเร็จ ลองอีกครั้ง หรือส่งอีเมลมาที่ support@bluefishsolution.com';
+    return;
+  }
+
+  document.getElementById('ticketRef').textContent = ref;
+  document.getElementById('doneLede').textContent =
+    'เราส่งรายละเอียดไปที่ ' + payload.businessEmail + ' แล้ว เลขที่ตั๋วของคุณคือ';
+  document.getElementById('payload').textContent = JSON.stringify(payload, null, 2);
+  formSide.classList.add('off');
+  doneSide.classList.add('on');
+  doneSide.scrollIntoView({ behavior:'smooth', block:'nearest' });
+});
+
+document.getElementById('again').addEventListener('click', () => {
+  form.reset();
+  countEl.textContent = '0 / ' + MAX;
+  attachments = [];
+  renderFiles();
+  form.querySelectorAll('.err').forEach(el => el.textContent = '');
+  form.querySelectorAll('[aria-invalid]').forEach(el => el.removeAttribute('aria-invalid'));
+  btn.disabled = false;
+  statusEl.textContent = 'ระบบจะตอบกลับเลขที่ตั๋วภายในไม่กี่นาที';
+  doneSide.classList.remove('on');
+  formSide.classList.remove('off');
+  document.getElementById('name').focus();
+});
+</script>
+</body>
+</html>

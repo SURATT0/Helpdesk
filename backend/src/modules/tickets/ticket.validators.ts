@@ -61,6 +61,14 @@ export const listTicketsQuery = z.object({
   assigneeId: assigneeFilter.optional(),
   /** One project's tickets — what the project page lists. See TicketFilter. */
   projectId: z.coerce.number().int().positive().optional(),
+  /**
+   * One catalog code, or the literal `other` for a ticket whose submitted
+   * code the catalog never recognised — see `Ticket.serviceCode`. Free text,
+   * not `z.enum`: the catalog changes without a backend deploy, and a filter
+   * for a code retired since is still a fine question to ask ("show me the
+   * old fax-support tickets").
+   */
+  serviceCode: freeText({ max: TEXT_MAX.SUBJECT }).optional(),
 });
 
 /**
