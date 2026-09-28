@@ -4,6 +4,7 @@ import { logger } from "./shared/logger";
 import { bus } from "./shared/events";
 import { ticketService } from "./modules/tickets/ticket.service";
 import { emailOutboxService } from "./modules/emails/email-outbox.service";
+import { sweepIntakeMail } from "./modules/publicIntake/intake-mail";
 import { authService } from "./modules/auth/auth.service";
 
 // Fail fast on a misconfigured environment (missing DB URL, weak/default auth
@@ -107,6 +108,35 @@ if (env.notificationEmails) {
         }
       })
       .catch((err) => logger.error({ err }, "ticket email sweep failed"))
+      .finally(() => {
+        running = false;
+      });
+  };
+  sweep();
+  setInterval(sweep, 60 * 1000).unref();
+}
+
+// Background sweep: deliver the two public-intake mails (confirmation + team
+// notify). Same table, same interval, same overlap guard as the sweep above —
+// deliberately a SEPARATE sweep rather than folded into it, because
+// `claimDue`'s `eventTypeIn` is what keeps the two from claiming each other's
+// rows; see email.events.ts's comment on INTAKE_EMAIL_EVENTS for why the
+// rendering itself could not be shared either.
+if (env.notificationEmails) {
+  let running = false;
+  const sweep = () => {
+    if (running) {
+      logger.debug("public-intake email sweep still running; skipping this tick");
+      return;
+    }
+    running = true;
+    sweepIntakeMail()
+      .then(({ sent, failed }) => {
+        if (sent + failed > 0) {
+          logger.info({ sent, failed }, "public-intake email sweep");
+        }
+      })
+      .catch((err) => logger.error({ err }, "public-intake email sweep failed"))
       .finally(() => {
         running = false;
       });

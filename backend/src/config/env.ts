@@ -273,6 +273,51 @@ export const env = {
       process.env.EMAIL_AUTO_CLOSE_REMINDER_LEAD_MS ?? 24 * 60 * 60 * 1000,
     ),
   },
+  // Public intake form (design doc: docs/bluefish-intake-system-design_1.md).
+  publicIntake: {
+    // Prefix on the public reference `tickets.number` carries — `BF-YYYYMMDD-####`.
+    // Not the ticket identifier; see the field comment on Ticket.number.
+    ticketPrefix: process.env.TICKET_PREFIX ?? "BF",
+    // Per-file, file-count and combined-size ceilings for an intake submission's
+    // attachments (design doc §08.1). Independent of any ticket-attachment limit
+    // configured elsewhere — a stranger's unauthenticated upload is bounded more
+    // tightly on principle, even though both happen to default the same today.
+    maxFileMb: Number(process.env.MAX_FILE_MB ?? 10),
+    maxFiles: Number(process.env.MAX_FILES ?? 5),
+    maxTotalMb: Number(process.env.MAX_TOTAL_MB ?? 25),
+    // ClamAV (clamd), spoken over its own line protocol (INSTREAM) rather than a
+    // client library — see fileScan.ts for why, matching attachment.sniff.ts's
+    // own stance on hand-rolling something this small. Unset host = scanning
+    // unavailable: every scan then answers "error" and the file stays `pending`
+    // rather than failing the upload outright (design doc §08.3).
+    clamav: {
+      host: process.env.CLAMAV_HOST || undefined,
+      port: Number(process.env.CLAMAV_PORT ?? 3310),
+      timeoutMs: Number(process.env.CLAMAV_TIMEOUT_MS ?? 15_000),
+    },
+    // Reply-To on both intake mails (design doc §07), so a reply threads back
+    // in through email-to-ticket instead of bouncing off a noreply address.
+    // Falls back to the existing agent-reply identity (SMTP_FROM) rather than
+    // requiring a second address to configure — most deployments mean the
+    // same inbox by both names; set SUPPORT_INBOX separately only where they
+    // genuinely differ.
+    supportInbox: process.env.SUPPORT_INBOX || undefined,
+    // Where the deployed form is served from when it is NOT this same origin
+    // (see app.ts's /intake static route for the same-origin case, which needs
+    // no CORS at all). Only ever grants a non-credentialed cross-origin POST
+    // to /api/v1/public/tickets — never added to the main API's `corsOrigins`
+    // allow-list, which carries `credentials: true` for the refresh cookie.
+    formOrigin: process.env.PUBLIC_FORM_ORIGIN || undefined,
+    // Anti-spam budgets (design doc §09). Two independent IP windows — a burst
+    // guard and an hourly ceiling — plus a per-email ceiling with no example
+    // value in the design doc, so this one has no doc-mandated default; five
+    // an hour is generous for a real applicant and tight for a script.
+    rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MIN ?? 5),
+    rateLimitPerHour: Number(process.env.RATE_LIMIT_PER_HOUR ?? 20),
+    rateLimitPerEmailPerHour: Number(
+      process.env.RATE_LIMIT_PER_EMAIL_PER_HOUR ?? 5,
+    ),
+  },
   // Outbound SMTP for agent reply emails. When SMTP_HOST is set the reply
   // endpoint sends real mail via nodemailer; otherwise a "log" transport records
   // the message (so the feature works end-to-end in dev without a mail server).

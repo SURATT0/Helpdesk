@@ -5,7 +5,7 @@ import {
 } from "../../shared/auth";
 import { BadRequest, Forbidden, NotFound } from "../../shared/errors";
 import { prisma } from "../../shared/db";
-import { EMAIL_EVENTS } from "../emails/email.events";
+import { TICKET_EMAIL_EVENTS } from "../emails/email.events";
 import { auditRepository } from "../audit/audit.repository";
 import { settingsRepository } from "./settings.repository";
 import { isKnownEvent, type SettingsDto, type StoredSettings } from "./settings.types";
@@ -77,7 +77,7 @@ export const settingsService = {
 
     // An unknown event type would sit in the deny list doing nothing, and would
     // read as "this is switched off" on a screen that never mails it anyway.
-    const unknown = data.disabledEvents.filter((e) => !isKnownEvent(e, EMAIL_EVENTS));
+    const unknown = data.disabledEvents.filter((e) => !isKnownEvent(e, TICKET_EMAIL_EVENTS));
     if (unknown.length > 0) {
       throw BadRequest(`Unknown notification event: ${unknown.join(", ")}`);
     }

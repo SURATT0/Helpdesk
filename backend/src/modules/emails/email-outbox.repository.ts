@@ -99,12 +99,26 @@ export const emailOutboxRepository = {
    *   - `next_attempt_at` moves out by a lease, so a row whose worker vanishes
    *     silently becomes eligible again later instead of being stuck forever.
    */
+  /**
+   * `eventTypeIn` partitions the table between the ticket-lifecycle sweep and
+   * the public-intake sweep (see `TICKET_EMAIL_EVENTS`/`INTAKE_EMAIL_EVENTS`
+   * in `email.events.ts`), so two independent `setInterval` loops reading the
+   * same table with `SKIP LOCKED` do not compete for — or worse, one of them
+   * silently swallow — the other's rows. Omitted, this claims across every
+   * event type, which is correct only for a caller that can render all of
+   * them; nothing today does, so every caller passes it.
+   */
   async claimDue(
     limit: number,
     leaseMs: number,
     now: Date = new Date(),
+    eventTypeIn?: readonly string[],
   ): Promise<ClaimedEmail[]> {
     const leaseUntil = new Date(now.getTime() + leaseMs);
+    const eventFilter =
+      eventTypeIn && eventTypeIn.length > 0
+        ? Prisma.sql`AND "event_type" IN (${Prisma.join(eventTypeIn)})`
+        : Prisma.empty;
     const rows = await prisma.$queryRaw<ClaimedRow[]>(Prisma.sql`
       UPDATE "email_outbox"
          SET "attempts" = "attempts" + 1,
@@ -114,6 +128,7 @@ export const emailOutboxRepository = {
          SELECT "id" FROM "email_outbox"
           WHERE "status" = 'pending'
             AND "next_attempt_at" <= ${now}
+            ${eventFilter}
           ORDER BY "id" ASC
           LIMIT ${limit}
             FOR UPDATE SKIP LOCKED

@@ -8,9 +8,13 @@ import type {
 import { hashPassword } from "../src/modules/auth/auth.password";
 import type { Priority, TicketStatus } from "../src/shared/domain";
 import { computeDueAt } from "../src/modules/tickets/sla";
-import { categoryCode } from "../src/modules/categories/category.code";
+import {
+  categoryCode,
+  STARTER_CATEGORY_NAMES,
+} from "../src/modules/categories/category.code";
 import { INITIAL_ROLE_PERMISSIONS } from "../src/shared/permissions";
 import { KB_ARTICLES } from "./kb-seed-data";
+import { seedServiceCatalog } from "./seed-service-catalog";
 
 /**
  * The password every seeded account gets — read from the environment, never
@@ -770,6 +774,68 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   }
 
   await seedRolePermissions(prisma);
+  await seedSystemIntakeTenant(prisma);
+  // Unlike the two calls above, `service_catalog` references nothing and
+  // nothing references it, so resetDb()'s TRUNCATE never reaches it via
+  // CASCADE and this row set actually survives a reset on its own. Called
+  // here anyway, unconditionally: it is a cheap upsert, and it means a dev
+  // or test database always reflects whatever config/services.json
+  // currently says, even if someone edited that file between runs without
+  // remembering to reseed by hand. A real deployment never calls
+  // seedDatabase() at all; it runs `npm run db:seed:services` directly
+  // against config/services.json — see docs/adding-a-service.md.
+  await seedServiceCatalog(prisma);
+}
+
+/**
+ * Re-provisions what the public-intake bootstrap migration
+ * (20260921100000_public_intake_schema) writes once — for the same reason
+ * `seedRolePermissions` above re-writes the role/permission matrix that a
+ * migration also inserted: `resetDb()`'s `TRUNCATE ... CASCADE` takes
+ * `categories` with it on every integration-test reset, and Postgres's
+ * CASCADE follows the foreign-key graph outward regardless of a migration
+ * ever having run, so the system tenant's starter categories do not survive
+ * a reset even though `customers` itself (not in the truncate list) does.
+ *
+ * The customer row is asserted to already exist rather than created here —
+ * unlike `seedRolePermissions`, which has nowhere else to get its data from,
+ * this one DOES have an owner (the migration), and a database this runs
+ * against without that migration having been applied has a problem seeding
+ * cannot paper over.
+ *
+ * Does NOT seed a system requester account any more — see migration
+ * 20260922120000_intake_requester_findorcreate. Every intake ticket's
+ * requester is now a real, per-submitter row created (or reused) on demand
+ * by `emailRepository.findOrCreateRequester`, the same as email intake.
+ */
+const SYSTEM_TENANT_NAME = "Unmatched — Public Intake";
+
+async function seedSystemIntakeTenant(prisma: PrismaClient): Promise<void> {
+  // Found-or-created, not asserted to exist: `customers` is not in `resetDb`'s
+  // own TRUNCATE list, but it is truncated anyway as a CASCADE side effect of
+  // truncating `users` — `Customer.deletedById` is a foreign key TO `users`,
+  // which makes `customers` a child of `users` for Postgres's purposes despite
+  // reading like the other way around. So this row does not reliably survive a
+  // test reset either, and this function has to be able to remake it, not just
+  // find it — the same reason `seedRolePermissions` above creates rather than
+  // asserts.
+  const tenant = await prisma.customer.upsert({
+    where: { name: SYSTEM_TENANT_NAME },
+    update: { isSystemTenant: true },
+    create: { name: SYSTEM_TENANT_NAME, isSystemTenant: true },
+  });
+
+  for (const categoryName of STARTER_CATEGORY_NAMES) {
+    await prisma.category.upsert({
+      where: { customerId_name: { customerId: tenant.id, name: categoryName } },
+      update: { code: categoryCode(categoryName) },
+      create: {
+        name: categoryName,
+        code: categoryCode(categoryName),
+        customerId: tenant.id,
+      },
+    });
+  }
 }
 
 /**

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -17,6 +18,7 @@ import {
   attachmentRoutes,
 } from "./modules/attachments/attachment.routes";
 import { categoryRoutes } from "./modules/categories/category.routes";
+import { serviceCatalogRoutes } from "./modules/serviceCatalog/service-catalog.routes";
 import { customerRoutes } from "./modules/customers/customer.routes";
 import { permissionRoutes } from "./modules/permissions/permission.routes";
 import { assetRoutes } from "./modules/assets/asset.routes";
@@ -35,6 +37,7 @@ import { auditRoutes } from "./modules/audit/audit.routes";
 import { settingsRoutes } from "./modules/settings/settings.routes";
 import { integrationRoutes } from "./modules/integrations/integration.routes";
 import { emailWebhookRoutes } from "./modules/integrations/email/email.routes";
+import { publicIntakeRoutes } from "./modules/publicIntake/intake.routes";
 import { healthRoutes } from "./modules/health/health.routes";
 
 export function createApp() {
@@ -60,14 +63,38 @@ export function createApp() {
     }),
   );
 
+  app.use(express.json({ limit: "1mb" }));
+  app.use(cookieParser());
+
+  // Public intake form + its API, mounted BEFORE the credentialed CORS policy
+  // below so THIS route's own non-credentialed, PUBLIC_FORM_ORIGIN-scoped
+  // policy (intake.cors.ts) is what answers its preflight — the `cors`
+  // package resolves an OPTIONS request itself, ending it right there, so
+  // whichever `cors()` middleware a request reaches FIRST is the one that
+  // decides it. Reversing this order would let the general allow-list (which
+  // carries `credentials: true` for the refresh cookie) answer for a public
+  // form's origin instead of this route's own policy.
+  //
+  // The static form itself needs no CORS at all — a browser navigating to
+  // `/intake` is a same-origin GET — but lives in this same block since both
+  // are "public, no auth" surfaces with their own rules.
+  app.use(`${API_PREFIX}/public/tickets`, publicIntakeRoutes);
+  app.use("/intake", express.static(path.join(__dirname, "../public/intake")));
+  // Same single-source-of-truth file the seed script reads (see
+  // prisma/seed-service-catalog.ts) — served here so the form can build its
+  // service dropdown from it at load time rather than embedding a copy. `../
+  // config` (not `../public/intake/config`) because it is the same file
+  // backend/config/services.json is, not a copy of it. Mounted at
+  // `/intake/config` — a subpath of the form's own — so the form's fetch can
+  // stay a relative path (`./config/services.json`), same as its ENDPOINT.
+  app.use("/intake/config", express.static(path.join(__dirname, "../config")));
+
   // The allow-list, not the canonical address: one deployment is often reachable
   // by several names at once (localhost for the developer and the E2E suite, a
   // LAN address for a phone on the same Wi-Fi). `credentials: true` means the
   // matching origin is reflected back, so this stays an allow-list rather than a
   // wildcard — the refresh cookie depends on that.
   app.use(cors({ origin: env.corsOrigins, credentials: true }));
-  app.use(express.json({ limit: "1mb" }));
-  app.use(cookieParser());
 
   // Liveness (/health) + readiness (/ready) probes — public, no auth.
   app.use(API_PREFIX, healthRoutes);
@@ -100,6 +127,7 @@ export function createApp() {
   app.use(`${API_PREFIX}/comments`, requireAuth, commentRoutes);
   app.use(`${API_PREFIX}/attachments`, requireAuth, attachmentRoutes);
   app.use(`${API_PREFIX}/categories`, requireAuth, categoryRoutes);
+  app.use(`${API_PREFIX}/service-catalog`, requireAuth, serviceCatalogRoutes);
   app.use(`${API_PREFIX}/customers`, requireAuth, customerRoutes);
   app.use(`${API_PREFIX}/permissions`, requireAuth, permissionRoutes);
   app.use(`${API_PREFIX}/assets`, requireAuth, assetRoutes);

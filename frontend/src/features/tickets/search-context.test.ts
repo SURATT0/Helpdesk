@@ -21,6 +21,7 @@ const filters = (over: Partial<{
   statuses: Set<DisplayStatus>;
   priorities: Set<Priority>;
   assignees: Set<AssigneeKey>;
+  serviceCodes: Set<string>;
 }> = {}) => ({
   query: "",
   statuses: new Set<DisplayStatus>(),
@@ -79,6 +80,28 @@ describe("matchesFilters — assignee facet", () => {
     const f = filters({ assignees: new Set<AssigneeKey>([7]) });
     const sameName = ticket({ assigneeId: 9, assignee: "Dana Reyes" });
     expect(matchesFilters(sameName, f)).toBe(false);
+  });
+});
+
+describe("matchesFilters — service facet", () => {
+  it("passes everything when no service is selected", () => {
+    expect(matchesFilters(ticket(), filters())).toBe(true);
+    expect(matchesFilters(ticket({ serviceCode: null }), filters())).toBe(true);
+  });
+
+  it("matches a selected code, and never a ticket with no service at all", () => {
+    const f = filters({ serviceCodes: new Set(["rpa-consult"]) });
+    expect(matchesFilters(ticket({ serviceCode: "rpa-consult" }), f)).toBe(true);
+    expect(matchesFilters(ticket({ serviceCode: "blue-digital" }), f)).toBe(false);
+    // Every non-intake ticket carries null here — there is no "none" bucket to
+    // opt into, unlike the assignee facet's unassigned queue.
+    expect(matchesFilters(ticket({ serviceCode: null }), f)).toBe(false);
+  });
+
+  it("treats 'other' as an ordinary, selectable value", () => {
+    const f = filters({ serviceCodes: new Set(["other"]) });
+    expect(matchesFilters(ticket({ serviceCode: "other" }), f)).toBe(true);
+    expect(matchesFilters(ticket({ serviceCode: "rpa-consult" }), f)).toBe(false);
   });
 });
 

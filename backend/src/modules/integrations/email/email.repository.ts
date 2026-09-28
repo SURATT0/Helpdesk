@@ -1,6 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../shared/db";
 import { auditRepository } from "../../audit/audit.repository";
 import { senderMayReply } from "./email.scope";
+
+type Db = Prisma.TransactionClient | typeof prisma;
 
 export const emailRepository = {
   /**
@@ -87,18 +90,30 @@ export const emailRepository = {
    * equality — so such a ticket is invisible to all customer-bound staff, and only
    * a platform-wide super admin would ever find it.
    */
+  /**
+   * `via` and `db` widen this beyond its original email-only caller (see
+   * publicIntake/intake.repository.ts, which needs the SAME "reuse an
+   * existing account, else create a passwordless correspondent" logic for a
+   * web-form submitter): `db` lets the create happen inside the caller's own
+   * transaction rather than always against the bare `prisma` client, and
+   * `via` keeps the audit trail honest about which channel created the row.
+   * Both default to the original behaviour, so the email-ingest call site is
+   * unchanged.
+   */
   async findOrCreateRequester(
     email: string,
     name: string | undefined,
     customerId: number,
+    db: Db = prisma,
+    via: string = "email",
   ): Promise<{ id: number; created: boolean }> {
-    const existing = await prisma.user.findFirst({
+    const existing = await db.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" } },
       select: { id: true },
     });
     if (existing) return { id: existing.id, created: false };
 
-    const created = await prisma.user.create({
+    const created = await db.user.create({
       data: {
         name: name?.trim() || email.split("@")[0],
         email: email.toLowerCase(),
@@ -123,13 +138,16 @@ export const emailRepository = {
       },
       select: { id: true },
     });
-    await auditRepository.record({
-      userId: null,
-      action: "user.create",
-      entity: "user",
-      entityId: created.id,
-      meta: { via: "email", email, customerId },
-    });
+    await auditRepository.record(
+      {
+        userId: null,
+        action: "user.create",
+        entity: "user",
+        entityId: created.id,
+        meta: { via, email, customerId },
+      },
+      db,
+    );
     return { id: created.id, created: true };
   },
 

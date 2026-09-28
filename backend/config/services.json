@@ -1,0 +1,98 @@
+[
+  {
+    "group": "3D — Document Management",
+    "order": 1,
+    "services": [
+      {
+        "code": "blue-digital",
+        "label": "Blue Digital",
+        "desc": "Scan and convert documents into digital files",
+        "active": true
+      },
+      {
+        "code": "blue-document",
+        "label": "Blue Document",
+        "desc": "Document printing and processing",
+        "active": true
+      },
+      {
+        "code": "blue-develop",
+        "label": "Blue Develop",
+        "desc": "Design and develop document workflow systems",
+        "active": true
+      }
+    ]
+  },
+  {
+    "group": "3S — Computer Media Management",
+    "order": 2,
+    "services": [
+      {
+        "code": "blue-swap",
+        "label": "Blue Swap",
+        "desc": "Media rotation and exchange",
+        "active": true
+      },
+      {
+        "code": "blue-site",
+        "label": "Blue Site",
+        "desc": "Offsite storage for computer media",
+        "active": true
+      },
+      {
+        "code": "blue-shield",
+        "label": "Blue Shield",
+        "desc": "Secure media destruction",
+        "active": true
+      }
+    ]
+  },
+  {
+    "group": "Box of Fish — Document Storage",
+    "order": 3,
+    "services": [
+      {
+        "code": "blue-box",
+        "label": "Blue Box",
+        "desc": "Box storage with pickup and delivery",
+        "active": true
+      },
+      {
+        "code": "blue-file",
+        "label": "Blue File",
+        "desc": "Active file storage for records in daily use",
+        "active": true
+      },
+      {
+        "code": "blue-destroys",
+        "label": "Blue Destroys",
+        "desc": "Secure document destruction",
+        "active": true
+      }
+    ]
+  },
+  {
+    "group": "RPA — Robotic Process Automation",
+    "order": 4,
+    "services": [
+      {
+        "code": "rpa-license",
+        "label": "RPA Enterprise License",
+        "desc": "Licensing for software robots",
+        "active": true
+      },
+      {
+        "code": "rpa-consult",
+        "label": "RPA Consulting",
+        "desc": "Process assessment and rollout planning",
+        "active": true
+      },
+      {
+        "code": "rpa-implement",
+        "label": "Bot Development & Support",
+        "desc": "Build, test and maintain your bots",
+        "active": true
+      }
+    ]
+  }
+]

@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:create-super-admin": "tsx prisma/create-super-admin.ts",
     "db:backfill:display-names": "tsx prisma/backfill-display-names.ts",
+    "db:seed:services": "tsx prisma/seed-service-catalog.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts"

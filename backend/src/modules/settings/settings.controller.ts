@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { Unauthorized } from "../../shared/errors";
-import { EMAIL_EVENTS } from "../emails/email.events";
+import { TICKET_EMAIL_EVENTS } from "../emails/email.events";
 import { settingsService } from "./settings.service";
 import { LIMITS } from "./settings.types";
 import {
@@ -26,7 +26,11 @@ export const settingsController = {
   async get(req: Request, res: Response) {
     const { customerId } = customerQuery.parse(req.query);
     const data = await settingsService.get(currentUser(req), customerId);
-    res.json({ data, meta: { events: EMAIL_EVENTS, limits: LIMITS } });
+    // Public-intake mail is excluded on purpose: it is not addressed through
+    // any customer's own account-based recipients (see INTAKE_EMAIL_EVENTS'
+    // own comment), so a customer's disabledEvents policy has no way to reach
+    // it and listing it here would offer a toggle that does nothing.
+    res.json({ data, meta: { events: TICKET_EMAIL_EVENTS, limits: LIMITS } });
   },
 
   async update(req: Request, res: Response) {
