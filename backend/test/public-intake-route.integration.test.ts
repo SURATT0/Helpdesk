@@ -206,15 +206,24 @@ describe("rate limiting — per IP and per email (design doc §09)", () => {
 });
 
 describe("the static form", () => {
-  it("serves index.html at /intake with the API endpoint as a relative path", async () => {
+  it("serves index.html at /intake, wired to its own script module", async () => {
     const res = await request(app).get("/intake/");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<script type="module" src="./intake-app.js">');
+  });
+
+  it("serves intake-app.js with the API endpoint as a relative path", async () => {
+    const res = await request(app).get("/intake/intake-app.js");
     expect(res.status).toBe(200);
     // Asserted against the same `API` this file's own requests use, not a
     // hand-copied literal — the form's ENDPOINT drifting one prefix segment
     // away from where the route is actually mounted (as it once did: a
     // "/api/public/tickets" that 404s against the real "/api/v1/public/tickets"
     // mount) is exactly the silent breakage a hardcoded string here would
-    // have kept missing.
+    // have kept missing. Lives in intake-app.js, not index.html: the inline
+    // script was pulled out into its own module so the validation/payload/
+    // file-check logic it drives could be unit-tested directly (see
+    // backend/public/intake/intake-logic.test.js).
     expect(res.text).toContain(`const ENDPOINT = "${API}"`);
   });
 });
