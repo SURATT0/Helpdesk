@@ -389,7 +389,7 @@ export function AttachmentsPanel({ ticketId }: { ticketId: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5" data-testid="attachments-panel">
       {isLoading ? (
         <div className="text-caption text-faint">{t("common.loading")}</div>
       ) : isError ? (
