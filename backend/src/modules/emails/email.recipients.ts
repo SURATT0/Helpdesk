@@ -66,6 +66,14 @@ const AUDIENCE_OF: Record<EmailEvent, Audience> = {
   "queue.ticket_unassigned": "staff",
   "queue.requester_replied": "staff",
   "digest.bulk_assigned": "staff",
+
+  // Required for Record<EmailEvent, Audience> completeness, not consulted in
+  // practice: public intake never calls `queue()` (there is no Deskly account
+  // to resolve a recipient from) — see `publicIntake/intake-mail.ts`. The
+  // values are the true answer regardless: a submitter is told about their
+  // own request, the team inbox gets the internal view.
+  "intake.confirmation": "requester",
+  "intake.team_notify": "staff",
 };
 
 export function audienceOf(event: EmailEvent): Audience {

@@ -4,7 +4,7 @@ import {
   emailRecipients,
   type RecipientContext,
 } from "./email.recipients";
-import { EMAIL_EVENTS, type EmailEvent } from "./email.events";
+import { TICKET_EMAIL_EVENTS, type EmailEvent } from "./email.events";
 
 /**
  * Recipient rules — the safety property of the whole feature.
@@ -153,7 +153,7 @@ describe("the requester never receives internal traffic", () => {
   // Belt and braces on the table itself: every staff event must be declared
   // staff, so adding one without thinking cannot quietly make it outbound.
   it("only the acknowledgement-style events are addressed to the requester", () => {
-    const outward = EMAIL_EVENTS.filter(
+    const outward = TICKET_EMAIL_EVENTS.filter(
       (e: EmailEvent) => audienceOf(e) === "requester",
     );
     expect([...outward].sort()).toEqual(

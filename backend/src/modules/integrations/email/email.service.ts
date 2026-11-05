@@ -24,9 +24,11 @@ export const emailService = {
    * ticket.
    *
    * Reply path — the subject carries a `[#123]` tag (our own outbound replies
-   * put it there, so it round-trips through the correspondent's mail client) AND
-   * the sender is allowed to append to that ticket. The mail becomes a public
-   * comment with `channel: "email"`, so web and email messages share ONE ordered
+   * put it there, so it round-trips through the correspondent's mail client),
+   * OR a public-intake reference like `[BF-20260921-0042]` (the only tag on a
+   * reply to an intake confirmation — see `parseTicketRef`) — AND the sender
+   * is allowed to append to that ticket. The mail becomes a public comment
+   * with `channel: "email"`, so web and email messages share ONE ordered
    * thread; the channel is only a badge, never a filter.
    *
    * Ticket path — everything else. The sender becomes the requester (created on
@@ -86,16 +88,30 @@ export const emailService = {
 
     // --- reply path ---
     //
-    // Two ways to name a ticket, and the header wins when both are present. The
-    // subject tag is the one that survives every client, but it is also the one
-    // a person edits, deletes, or has rewritten by an app tidying up prefixes;
-    // the header is only there when a client quoted our own headers back, and
-    // when it is, it is unambiguous.
+    // Three ways to name a ticket now, tried in this order:
     //
-    // Neither is TRUSTED — both are attacker-supplied strings — which is why the
-    // decision below is still `senderMayReply`, not the identifier.
+    //   1. `ticketIdHeader` — X-Deskly-Ticket-Id, present only when a client
+    //      quoted our own headers back. Unambiguous when it is there.
+    //   2. `ref.ticketId` — the numeric `[Deskly #123]` / `[#123]` tag, which
+    //      IS the id (see TICKET_REF_PATTERN's own comment).
+    //   3. `ref.ticketNumber` — the public-intake reference
+    //      (`[BF-20260921-0042]`, see PUBLIC_TICKET_REF_PATTERN), which is
+    //      NOT the id and needs this one extra lookup to become one. A
+    //      reply to an intake confirmation carries only this form; there is
+    //      no numeric tag on that mail for (1) or (2) to have found.
+    //
+    // The subject tag is what survives every client, but it is also the one a
+    // person edits, deletes, or has rewritten by an app tidying up prefixes;
+    // the header is only there when a client quoted ours back.
+    //
+    // NONE of these three are TRUSTED — all are attacker-supplied strings —
+    // which is why the decision below is still `senderMayReply`, not the
+    // identifier.
     const ref = parseTicketRef(mail.subject);
-    const targetTicketId = mail.ticketIdHeader ?? ref.ticketId;
+    let targetTicketId = mail.ticketIdHeader ?? ref.ticketId;
+    if (targetTicketId == null && ref.ticketNumber != null) {
+      targetTicketId = await ticketRepository.findIdByNumber(ref.ticketNumber);
+    }
     if (targetTicketId != null) {
       const target = await emailRepository.findReplyTarget(
         targetTicketId,

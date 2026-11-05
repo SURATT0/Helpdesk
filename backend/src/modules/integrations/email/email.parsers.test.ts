@@ -180,6 +180,7 @@ describe("ensureTicketRef", () => {
     const subject = ensureTicketRef("Cannot print", 1234);
     expect(parseTicketRef(subject)).toEqual({
       ticketId: 1234,
+      ticketNumber: null,
       subject: "Cannot print",
     });
   });
@@ -194,6 +195,7 @@ describe("parseTicketRef", () => {
     // Everything we send carries `[Deskly #id]` — this is the round-trip case.
     expect(parseTicketRef("Re: [Deskly #1042] VPN drops")).toEqual({
       ticketId: 1042,
+      ticketNumber: null,
       subject: "Re: VPN drops",
     });
   });
@@ -205,6 +207,7 @@ describe("parseTicketRef", () => {
   it("still finds the older unbranded tag", () => {
     expect(parseTicketRef("Re: [#1042] VPN drops")).toEqual({
       ticketId: 1042,
+      ticketNumber: null,
       subject: "Re: VPN drops",
     });
   });
@@ -227,6 +230,7 @@ describe("parseTicketRef", () => {
   it("returns null when there is no tag", () => {
     expect(parseTicketRef("Printer is broken")).toEqual({
       ticketId: null,
+      ticketNumber: null,
       subject: "Printer is broken",
     });
   });
@@ -240,5 +244,60 @@ describe("parseTicketRef", () => {
   it("rejects an id too long to be a real ticket", () => {
     // Guards against a subject crafted to overflow into an unsafe integer.
     expect(parseTicketRef("[#99999999999999999999] x").ticketId).toBeNull();
+  });
+
+  // A reply to a public-intake confirmation carries ONLY this tag — there is
+  // no numeric `[#id]` anywhere on that mail (see intake-mail.ts's
+  // renderConfirmation), so this is the sole way such a reply threads.
+  describe("the public-intake reference (e.g. [BF-20260921-0042])", () => {
+    it("finds it and reports it as ticketNumber, not ticketId", () => {
+      expect(
+        parseTicketRef("Re: [BF-20260921-0042] รับเรื่องแล้ว — rpa-consult"),
+      ).toEqual({
+        ticketId: null,
+        ticketNumber: "BF-20260921-0042",
+        subject: "Re: รับเรื่องแล้ว — rpa-consult",
+      });
+    });
+
+    it("survives the prefixes mail clients pile on, same as the numeric tag", () => {
+      for (const s of [
+        "RE: RE: [BF-20260921-0042] thing",
+        "Fwd: Re: [BF-20260921-0042] thing",
+      ]) {
+        expect(parseTicketRef(s).ticketNumber).toBe("BF-20260921-0042");
+      }
+    });
+
+    it("is not tied to today's TICKET_PREFIX — any letters-dash-8digits-dash-4digits shape matches", () => {
+      // The lookup (ticketRepository.findIdByNumber) is what decides whether
+      // it is real; this parser only recognises the SHAPE, so a deployment
+      // that changed TICKET_PREFIX still threads replies to numbers issued
+      // under the old one.
+      expect(parseTicketRef("[ACME-20260101-0001] x").ticketNumber).toBe(
+        "ACME-20260101-0001",
+      );
+    });
+
+    it("ignores things that merely look like the shape", () => {
+      for (const s of [
+        "[bf-20260921-0042] x", // lowercase
+        "[BF-2026092-0042] x", // 7-digit date
+        "[BF-20260921-042] x", // 3-digit sequence
+        "BF-20260921-0042 x", // no brackets
+      ]) {
+        expect(parseTicketRef(s).ticketNumber).toBeNull();
+      }
+    });
+
+    it("never sets both ticketId and ticketNumber at once", () => {
+      const numeric = parseTicketRef("[Deskly #42] x");
+      expect(numeric.ticketId).toBe(42);
+      expect(numeric.ticketNumber).toBeNull();
+
+      const publicRef = parseTicketRef("[BF-20260921-0042] x");
+      expect(publicRef.ticketId).toBeNull();
+      expect(publicRef.ticketNumber).toBe("BF-20260921-0042");
+    });
   });
 });

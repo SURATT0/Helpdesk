@@ -10,6 +10,7 @@ import { useAuth } from "@/features/auth/context";
 import { useI18n } from "@/features/i18n/context";
 import { useUsers } from "@/features/users/queries";
 import { useCustomers } from "@/features/customers/queries";
+import { useServiceCatalog } from "@/features/serviceCatalog/queries";
 import { PRIORITIES } from "@/lib/domain";
 import { hasPermission, maySeeTeamWorkload } from "@/lib/permissions";
 import { DISPLAY_STATUSES } from "@/lib/ticket-status";
@@ -195,6 +196,8 @@ export function FilterBar() {
     toggleAssignee,
     customers: selectedCustomers,
     toggleCustomer,
+    serviceCodes,
+    toggleServiceCode,
     slaStates,
     toggleSla,
     clearFilters,
@@ -220,6 +223,21 @@ export function FilterBar() {
   const customerName = React.useMemo(
     () => new Map(customerOptions.map((c) => [c.id, c.name])),
     [customerOptions],
+  );
+
+  const { data: serviceCatalog = [] } = useServiceCatalog();
+  // `"other"` is not a catalog row — it is the form's own fallback option, and
+  // any ticket whose submitted code the catalog never recognised is filed
+  // under it (see backend intake.repository.ts) — so it is offered here too,
+  // appended rather than sourced from the API like every other option.
+  const serviceLabel = React.useMemo(() => {
+    const map = new Map(serviceCatalog.map((s) => [s.code, s.label]));
+    map.set("other", t("filter.serviceOther"));
+    return map;
+  }, [serviceCatalog, t]);
+  const serviceOptions = React.useMemo(
+    () => [...serviceCatalog.map((s) => s.code), "other"],
+    [serviceCatalog],
   );
 
   // Anyone who can hold a queue. Requesters raise tickets, they don't own them.
@@ -301,6 +319,20 @@ export function FilterBar() {
             // instead of ending in an ellipsis.
             <span className="min-w-0 truncate text-body text-ink">
               {customerName.get(id)}
+            </span>
+          )}
+        />
+      ) : null}
+
+      {serviceOptions.length > 1 ? (
+        <FacetDropdown
+          label={t("filter.service")}
+          options={serviceOptions}
+          selected={serviceCodes}
+          onToggle={toggleServiceCode}
+          renderOption={(code) => (
+            <span className="min-w-0 truncate text-body text-ink">
+              {serviceLabel.get(code) ?? code}
             </span>
           )}
         />
