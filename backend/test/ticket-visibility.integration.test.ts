@@ -186,8 +186,17 @@ describe("a ticket the desk raised for itself", () => {
     expect(res.body.error.message).toMatch(/internal note/);
     // Refused before anything was written: a reply that half-happened would
     // leave the message in the thread while the agent was told it failed.
-    const comments = await prisma.comment.count({ where: { ticketId: id } });
-    expect(comments).toBe(0);
+    //
+    // Counted as "nothing was ADDED" rather than "the thread is empty": a
+    // ticket now opens with its description as a real comment, so the empty
+    // thread this used to assert no longer exists for any ticket. The opening
+    // message is internal here, because Kai is staff and a staff-raised ticket
+    // has no external side — which is the same reason the reply above was
+    // refused.
+    const comments = await prisma.comment.findMany({ where: { ticketId: id } });
+    expect(comments).toHaveLength(1);
+    expect(comments[0].isOpening).toBe(true);
+    expect(comments[0].internal).toBe(true);
   });
 
   it("still sends a reply on a requester's ticket", async () => {

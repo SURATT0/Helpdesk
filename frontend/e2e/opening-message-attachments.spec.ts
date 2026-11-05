@@ -19,11 +19,28 @@ import { DEMO, loginAs } from "./helpers";
 
 const REQUESTER = "marcus.chen@acme.com";
 
+/**
+ * A ticket from the seed — which is to say, one that predates the opening
+ * comment, since the migration backfills none of them. Its description is what
+ * the first bubble is built from, so it is also how that bubble is found.
+ */
+const SEEDED = {
+  id: 1042,
+  description: "VPN drops every 10 minutes after 4.2 update (seeded demo ticket).",
+};
+
 /** A real 1x1 PNG — the server checks magic bytes, not the declared type. */
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
   "base64",
 );
+
+/**
+ * Enough of a PDF to be one. The sniff reads the leading `%PDF`, so this is a
+ * genuine document as far as the server is concerned — which is the point: a
+ * file that is not an image must not be handed an `<img>`.
+ */
+const PDF = Buffer.from("%PDF-1.4\n% a one-line document\n%%EOF\n", "latin1");
 
 test("the agent sees the screenshot the requester raised the ticket with", async ({
   page,
@@ -73,6 +90,43 @@ test("the agent sees the screenshot the requester raised the ticket with", async
   await expect(page.getByText("raised-with.png")).toBeVisible();
 });
 
+test("a ticket from before the opening message was a row still shows its files", async ({
+  page,
+}) => {
+  // The fallback, and the only place it is exercised. The migration backfills
+  // nothing, so every ticket raised before it — which is every ticket that
+  // already exists — still has its description drawn from `ticket.description`
+  // rather than from a comment. A file belonging to the TICKET rather than to
+  // any message has to appear on that bubble, or for those tickets it goes back
+  // to appearing nowhere, which is the bug.
+  //
+  // The rail's upload is how one is made: it attaches to the ticket, not to a
+  // message, on any ticket at all.
+  await loginAs(page, DEMO.email);
+  await page.goto(`/tickets/${SEEDED.id}`);
+  await expect(page.getByText(SEEDED.description)).toBeVisible();
+
+  const name = `rail-${Date.now()}.png`;
+  await page
+    .getByTestId("attachments-panel")
+    .locator('input[type="file"]:not([capture])')
+    .setInputFiles({ name, mimeType: "image/png", buffer: PNG });
+
+  // The rail renames what it stores — `T<id>-<seq>-<slug>.<ext>` — so the slug
+  // is the part to look for, not the name as it was uploaded.
+  await expect(page.getByText(new RegExp(name.replace(/\.png$/, "")))).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Inside the FIRST bubble, not merely somewhere on the page: this ticket is
+  // shared with other specs that post images of their own into the thread, so
+  // "the conversation has a picture in it" would pass without the fallback.
+  const opening = page.getByText(SEEDED.description).locator("xpath=..");
+  await expect(opening.locator("[data-image-grid]")).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
 test("a ticket raised with no files draws no empty attachment row", async ({
   page,
 }) => {
@@ -91,4 +145,72 @@ test("a ticket raised with no files draws no empty attachment row", async ({
   await expect(
     page.getByTestId("chat-scroll").locator("[data-image-grid]"),
   ).toHaveCount(0);
+});
+
+test("a document raised with the ticket is a card to download, not a torn image", async ({
+  page,
+}) => {
+  // The opening bubble takes whatever was attached, and not everything attached
+  // is a picture. `isImage` comes from the server's own sniff, so a PDF has to
+  // land in the file list rather than being given an `<img>` that can only fail.
+  await loginAs(page, REQUESTER);
+  await page.goto("/tickets");
+  await page.getByRole("button", { name: "New ticket" }).click();
+
+  const body = `A document, not a picture ${Date.now()}`;
+  await page.getByLabel("Subject").fill(`Opening document ${Date.now()}`);
+  await page.getByLabel("Description").fill(body);
+  await page.setInputFiles('[role="dialog"] input[type="file"]:not([capture])', {
+    name: "report.pdf",
+    mimeType: "application/pdf",
+    buffer: PDF,
+  });
+  await page.getByRole("button", { name: "Create ticket" }).click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/, { timeout: 15_000 });
+  // Read BEFORE signing in as the agent: `loginAs` navigates, so by the time it
+  // returns `page.url()` is the dashboard and re-visiting it goes nowhere.
+  const url = page.url();
+
+  await loginAs(page, DEMO.email);
+  await page.goto(url);
+
+  const opening = page.getByText(body).locator("xpath=..");
+  // Named by the file it downloads, which is also how a screen reader finds it.
+  await expect(
+    opening.getByRole("button", { name: /report\.pdf/ }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(opening.locator("[data-image-grid]")).toHaveCount(0);
+});
+
+test("the opening bubble's picture fits a phone", async ({ page }) => {
+  // 375px is the narrowest width the product is built for, and the grid caps its
+  // own width rather than the cell's — so a bubble that behaves on a desktop can
+  // still push the conversation sideways here.
+  await page.setViewportSize({ width: 375, height: 720 });
+  await loginAs(page, REQUESTER);
+  await page.goto("/tickets");
+  await page.getByRole("button", { name: "New ticket" }).click();
+
+  const body = `Narrow screen ${Date.now()}`;
+  await page.getByLabel("Subject").fill(`Phone width ${Date.now()}`);
+  await page.getByLabel("Description").fill(body);
+  await page.setInputFiles('[role="dialog"] input[type="file"]:not([capture])', {
+    name: "on-a-phone.png",
+    mimeType: "image/png",
+    buffer: PNG,
+  });
+  await page.getByRole("button", { name: "Create ticket" }).click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/, { timeout: 15_000 });
+
+  const opening = page.getByText(body).locator("xpath=..");
+  const grid = opening.locator("[data-image-grid]");
+  await expect(grid).toBeVisible({ timeout: 15_000 });
+
+  // The whole document, not the grid alone: an overflowing child is only a bug
+  // if it is what makes the page scroll sideways, and that is the thing a person
+  // actually experiences.
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
 });

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { Priority, Role } from "../../shared/domain";
+import { isInternalThread, type Priority, type Role } from "../../shared/domain";
 import {
   canTransition,
   getDisplayStatus,
@@ -140,6 +140,15 @@ export type Ticket = {
    * see more than one — for everyone else it is the same value on every row.
    */
   customer: { id: number; name: string } | null;
+  /**
+   * The message this ticket was raised with — its description as a real row.
+   *
+   * Null for every ticket raised before that became a row. They are not
+   * backfilled, so this is how a reader tells "no opening message exists" from
+   * "no description was given", and the thread renders `description` itself in
+   * that case.
+   */
+  openingCommentId: number | null;
   slaDue: string;
   slaState: SlaState;
   /**
@@ -265,6 +274,24 @@ const ticketInclude = {
   requester: true,
   assignee: true,
   category: true,
+  /**
+   * The id of the message this ticket was raised with, if it has one.
+   *
+   * Two readers need it and both need it cheaply: the form that raises a ticket
+   * uploads its files against this comment, and the thread uses its ABSENCE to
+   * know it is looking at a ticket from before the opening message was a row —
+   * those are not backfilled, so the view falls back to rendering
+   * `tickets.description` for them.
+   *
+   * `take: 1` over an indexed `ticket_id`, selecting one column. It rides along
+   * on the list queries too, which is a small cost for not having a DTO whose
+   * shape depends on which endpoint built it.
+   */
+  comments: {
+    where: { isOpening: true },
+    select: { id: true },
+    take: 1,
+  },
   project: { select: { id: true, name: true } },
   customer: { select: { id: true, name: true } },
   problem: { select: { id: true, title: true, status: true } },
@@ -349,6 +376,7 @@ function toTicketDto(
     categoryOther: row.categoryOther,
     project: row.project,
     customer: row.customer,
+    openingCommentId: row.comments[0]?.id ?? null,
     slaDue,
     slaState,
     dueAt: row.dueAt?.toISOString() ?? null,
@@ -724,7 +752,7 @@ export const ticketRepository = {
         // A ticket belongs to its requester's customer (the tenant boundary).
         const requester = await tx.user.findUnique({
           where: { id: input.requesterId },
-          select: { customerId: true },
+          select: { customerId: true, role: true },
         });
 
         // Refuse rather than file the ticket outside every tenant. users.customerId is
@@ -845,6 +873,43 @@ export const ticketRepository = {
           include: ticketInclude,
         });
 
+        /**
+         * The description, written again as the thread's first message.
+         *
+         * Not a duplicate for its own sake: an attachment belongs to a COMMENT,
+         * and the form that raises a ticket picks its files before any message
+         * exists — so they were stored against the ticket alone and had no
+         * bubble to appear in. This is the row they belong to.
+         *
+         * `tx.comment.create` directly, NOT `commentRepository.create`: that one
+         * queues mail in the same transaction, so routing the opening message
+         * through it would send a "new message" notification on top of the
+         * `ticket.created` one queued a few lines below. One event, one email.
+         *
+         * `createdAt: now` ties it to the ticket rather than to whenever this
+         * statement ran, so the thread cannot open with a message dated after
+         * the ticket it opens.
+         */
+        const opening = await tx.comment.create({
+          data: {
+            ticketId: created.id,
+            authorId: input.requesterId,
+            body: input.description,
+            /**
+             * The same coercion `commentService.create` applies: a ticket raised
+             * by staff has no external side, so its whole thread is notes (see
+             * `isInternalThread`). Writing the row directly skips that service,
+             * and skipping the rule with it would have put one public message at
+             * the top of a conversation the product shows as internal-only.
+             */
+            internal: isInternalThread(requester.role),
+            channel: "web",
+            isOpening: true,
+            createdAt: now,
+          },
+          select: { id: true },
+        });
+
         await tx.ticketStatusHistory.create({
           data: { ticketId: created.id, fromStatus: null, toStatus: "new", changedById: actorId },
         });
@@ -912,7 +977,17 @@ export const ticketRepository = {
           }
         }
 
-        return toTicketDto(created);
+        // Re-read rather than mapping `created`: `ticketInclude` pulls the
+        // opening comment, and `created` was loaded a few statements BEFORE
+        // that comment was written — so its `comments` is empty and the DTO
+        // would report `openingCommentId: null` on the one response that most
+        // needs the id, the create the form uploads its files against.
+        return toTicketDto(
+          await tx.ticket.findUniqueOrThrow({
+            where: { id: created.id },
+            include: ticketInclude,
+          }),
+        );
       });
     } catch (err) {
       // Lost the insert race with a request carrying the same key. The winner's
